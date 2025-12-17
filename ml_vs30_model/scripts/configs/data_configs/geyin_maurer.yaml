@@ -1,0 +1,13 @@
+vs30_values_ffp: cleaned_vs30_data/geyin_maurer_vs30.csv
+
+input_variables: 
+  - roughness
+  - topographic_slope
+  - compound_topographic_index
+  - geomorphon
+  - profile_curvature
+  - tangential_curvature
+  - terrain_ruggedness_index
+  - topographic_position_index
+  - vector_ruggedness_measure
+

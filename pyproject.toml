@@ -1,12 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ml-vs30-model"
-version = "0.1.0"
+# version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
+authors = [{name = "Claudio Schill"}]
+dynamic = ["version"]
 requires-python = ">=3.13,<3.14"
-dependencies = [
-    "matplotlib>=3.10.8",
-    "numpy>=2.3.5",
-    "pandas>=2.3.3",
-    "plotly>=6.5.0",
-]
+# dependencies = []
+
+[tool.setuptools_scm]
+fallback_version = "v0.0.0"
+
+[tool.setuptools.package-dir]
+ml_vs30_model = "ml_vs30_model"
