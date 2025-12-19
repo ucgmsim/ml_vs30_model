@@ -10,4 +10,10 @@ input_variables:
   - terrain_ruggedness_index
   - topographic_position_index
   - vector_ruggedness_measure
+  - landform_shannon_index
+  - landform_entropy
+  - landform_uniformity
+  - absolute_depth_to_bedrock
+  - depth_to_groundwater
+
 

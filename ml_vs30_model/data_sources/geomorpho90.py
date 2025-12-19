@@ -10,7 +10,8 @@ import rasterio
 from rclone_python import rclone
 from tqdm import tqdm
 
-from . import constants
+from .. import constants
+from .. import utils
 
 
 logger = logging.getLogger(__name__)
@@ -19,9 +20,16 @@ logger = logging.getLogger(__name__)
 class GeoMorpho90:
     """Class for accessing GeoMorpho90 data."""
 
-    SUPPORTED_INPUT_VARIABLES = [
+    SUPPORTED_VARIABLES = [
         constants.InputVariable.Roughness,
         constants.InputVariable.TopographicSlope,
+        constants.InputVariable.CompoundTopgraphicIndex,
+        constants.InputVariable.Geomorphon,
+        constants.InputVariable.ProfileCurvature,
+        constants.InputVariable.TangentialCurvature,
+        constants.InputVariable.TerrainRuggednessIndex,
+        constants.InputVariable.TopographicPositionIndex,
+        constants.InputVariable.VectorRuggednessMeasure,
     ]
 
     S3_VAR_NAME_MAP = {
@@ -40,17 +48,49 @@ class GeoMorpho90:
     S3_BASE_PATH = "opentopo:dataspace/OTDS.012020.4326.1/raster"
     REGEX_PATTERN = r"\w+_\d+M_([ns])(\d+)([ew])(\d+)\.(?:tif|tar\.gz)"
 
-    def __init__(self, base_raw_data_dir: Path | None = None):
-        self.base_data_dir = (
-            base_raw_data_dir or constants.BASE_DATA_DIR / "input_data" / "raw"
-        )
+    def __init__(
+        self, base_raw_data_dir: Path = constants.BASE_DATA_DIR / "input_data" / "raw"
+    ):
+        self.base_raw_data_dir = base_raw_data_dir
 
         rclone.set_config_file(self.RCLONE_CONFIG_FFP)
 
         # Cache variables
         self.variable_file_dfs_cache: dict[constants.InputVariable, list[str]] = {}
 
-    def get_tif_filenames(
+    def get_values(
+        self, coords: np.ndarray, variable: constants.InputVariable
+    ) -> np.ndarray:
+        """Get the values of the specified variable at the given lat/lon coordinates."""
+        if variable not in self.SUPPORTED_VARIABLES:
+            utils.raise_log(
+                ValueError,
+                f"Variable {variable} is not supported by GeoMorpho90.",
+                logger,
+            )
+
+        data_dir = self.base_raw_data_dir / variable
+
+        values = None
+        filenames = self._get_tif_filenames(coords, variable)
+
+        unique_filenames = np.unique(filenames)
+
+        for filename in tqdm(unique_filenames):
+            # Download files if not already present
+            if not (data_dir / filename).exists():
+                self._download_tif_file(str(filename), variable)
+
+            # Get values
+            mask = filenames == filename
+            cur_values = self._get_values(coords[mask], data_dir / filename)
+            if values is None:
+                values = np.empty(coords.shape[0], dtype=cur_values.dtype)
+            values[mask] = cur_values
+
+        return values
+
+    def _get_tif_filenames(
         self, coords: np.ndarray, variable: constants.InputVariable
     ) -> np.ndarray:
         """Get the filename of the GeoMorpho90 TIFF file for the given lat/lon and variable."""
@@ -82,51 +122,14 @@ class GeoMorpho90:
 
         return np.array(filenames)
 
-    def get_value(self, lon: float, lat: float, variable: constants.InputVariable) -> float:
-        """Get the value of the specified variable at the given latitude and longitude."""
-        filename = self.get_tif_filenames(np.array([[lon, lat]]), variable)[0]
-
-        if not (ffp := self.base_data_dir / variable / filename).exists():
-            raise FileNotFoundError(f"Data file not found: {filename}")
-
-        with rasterio.open(ffp) as dataset:
-            assert (
-                dataset.crs.to_epsg() == constants.WGS84_EPSG
-            ), "Dataset CRS is not WGS84"
-
-            return next(dataset.sample([(lon, lat)]))[0]
-
-    def get_values(
-        self, coords: np.ndarray, variable: constants.InputVariable
-    ) -> np.ndarray:
-        """Get the values of the specified variable at the given lat/lon coordinates."""
-        data_dir = self.base_data_dir / variable
-
-        values = None
-        filenames = self.get_tif_filenames(coords, variable)
-
-        unique_filenames = np.unique(filenames)
-
-        for filename in tqdm(unique_filenames):
-            # Download files if not already present
-            if not (data_dir / filename).exists():
-                self._download_tif_file(str(filename), variable)
-
-            # Get values
-            mask = filenames == filename
-            cur_values = self._get_values(coords[mask], data_dir / filename)
-            if values is None:
-                values = np.empty(coords.shape[0], dtype=cur_values.dtype)
-            values[mask] = cur_values
-
-        return values
-
     def _get_values(self, coords: np.ndarray, tif_ffp: Path) -> np.ndarray:
         """Get the values from the TIFF file at the specified coordinates."""
         if not tif_ffp.exists():
-            error_msg = f"Data file not found: {tif_ffp.name}"
-            logger.error(error_msg)
-            raise FileNotFoundError(error_msg)
+            utils.raise_log(
+                FileNotFoundError,
+                f"TIF file not found at {tif_ffp}.",
+                logger,
+            )
 
         with rasterio.open(tif_ffp) as dataset:
             assert (
@@ -135,7 +138,9 @@ class GeoMorpho90:
 
             return np.concatenate(list(dataset.sample(coords)))
 
-    def _download_tif_file(self, tif_filename: str, variable: constants.InputVariable) -> None:
+    def _download_tif_file(
+        self, tif_filename: str, variable: constants.InputVariable
+    ) -> None:
         """Download and extract the correct gzip file for the specified TIFF filename and variable."""
         files_df = self._get_files_df(variable)
 
@@ -144,17 +149,25 @@ class GeoMorpho90:
         query = self._nsew_lat_lon_from_filename(tif_filename)
 
         query_dlat = query[1] if query[0] == "n" else -query[1]
-        query_dlon = query[3] if query[2] == "e" else  -query[3]
-        mask = (files_df.ns == query[0]) & (files_df.ew == query[2]) & (files_df.dlat <= query_dlat) & (files_df.dlon <= query_dlon)
+        query_dlon = query[3] if query[2] == "e" else -query[3]
+        mask = (
+            (files_df.ns == query[0])
+            & (files_df.ew == query[2])
+            & (files_df.dlat <= query_dlat)
+            & (files_df.dlon <= query_dlon)
+        )
 
-        gzip_filename = ((query_dlat - files_df.loc[mask].dlat) + (query_dlon - files_df.loc[mask].dlon)).idxmin()
+        gzip_filename = (
+            (query_dlat - files_df.loc[mask].dlat)
+            + (query_dlon - files_df.loc[mask].dlon)
+        ).idxmin()
 
         # Ensure output directory exists
-        (out_dir := self.base_data_dir / variable).mkdir(exist_ok=True)
+        (out_dir := self.base_raw_data_dir / variable).mkdir(exist_ok=True)
         logger.info(f"Downloading {gzip_filename} to {out_dir}")
         rclone.copy(
             self.S3_BASE_PATH + f"/{self.S3_VAR_NAME_MAP[variable]}/" + gzip_filename,
-            out_dir,        
+            out_dir,
             show_progress=False,
         )
 
@@ -200,8 +213,12 @@ class GeoMorpho90:
             files_df = pd.DataFrame.from_dict(
                 file_dict, orient="index", columns=["ns", "lat", "ew", "lon"]
             )
-            files_df["dlon"] = np.where(files_df["ew"] == "w", files_df["lon"] * -1, files_df["lon"])
-            files_df["dlat"] = np.where(files_df["ns"] == "s", files_df["lat"] * -1, files_df["lat"])   
+            files_df["dlon"] = np.where(
+                files_df["ew"] == "w", files_df["lon"] * -1, files_df["lon"]
+            )
+            files_df["dlat"] = np.where(
+                files_df["ns"] == "s", files_df["lat"] * -1, files_df["lat"]
+            )
             self.variable_file_dfs_cache[variable] = files_df
 
         return self.variable_file_dfs_cache[variable]

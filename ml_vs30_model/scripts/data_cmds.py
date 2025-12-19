@@ -11,13 +11,8 @@ app = typer.Typer(pretty_exceptions_short=True, pretty_exceptions_show_locals=Fa
 
 @app.command("gen-dataset")
 def gen_dataset(config_ffp: Path, out_ffp: Path, log_ffp: Path | None = None):
-    logger = mlt.utils.setup_logging(log_file=log_ffp)
+    mlt.utils.setup_logging(log_file=log_ffp)
     logging.getLogger("rclone").setLevel(logging.WARNING)
-
-    if out_ffp.exists():
-        vs30.utils.raise_log(
-            FileExistsError, f"Output file already exists: {out_ffp}", logger
-        )
 
     config = vs30.DataConfig.from_yaml(config_ffp)
     vs30.data.gen_dataset(config, out_ffp)
