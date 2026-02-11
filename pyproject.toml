@@ -10,7 +10,16 @@ readme = "README.md"
 authors = [{name = "Claudio Schill"}]
 dynamic = ["version"]
 requires-python = ">=3.13,<3.14"
-# dependencies = []
+dependencies = [
+    "ngboost",
+    "pandas",
+    "numpy",
+    "scipy",
+    "xarray",
+    "matplotlib",
+    "seaborn",
+    "einops",
+]
 
 [tool.setuptools_scm]
 fallback_version = "v0.0.0"

@@ -7,7 +7,7 @@ import pandas as pd
 import ml_tools as mlt
 
 from . import constants
-from . import data_sources
+from . import data_loaders
 from . import utils
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,10 @@ class DataConfig:
     
 
 def gen_dataset(data_config: DataConfig, out_ffp: Path) -> None:
-
+    """
+    Generates a dataset containing Vs30 values and additional input variables, 
+    based on the given data configuration.
+    """
     if out_ffp.exists():
         utils.raise_log(
             FileExistsError, f"Output file already exists: {out_ffp}", logger
@@ -63,21 +66,21 @@ def gen_dataset(data_config: DataConfig, out_ffp: Path) -> None:
 
         if data_source == constants.DataSource.GeoMorpho90:
             logger.info(f"Using GeoMorpho90 data source for variable: {variable.value}")
-            geomorpho90 = data_sources.GeoMorpho90()
+            geomorpho90 = data_loaders.GeoMorpho90()
             values = geomorpho90.get_values(
                 vs30_values_df[["lon", "lat"]].to_numpy(), variable
             )
             df[variable.value] = values
         elif data_source == constants.DataSource.TIFLoader:
             logger.info(f"Using TIFLoader data source for variable: {variable.value}")
-            tif_loader = data_sources.TIFLoader()
+            tif_loader = data_loaders.TIFLoader()
             values = tif_loader.get_values(
                 vs30_values_df[["lon", "lat"]].to_numpy(), variable
             )
             df[variable.value] = values
         elif data_source == constants.DataSource.GlobalGWT:
             logger.info(f"Using GlobalGWT data source for variable: {variable.value}")
-            global_gwt = data_sources.GlobalGWT()
+            global_gwt = data_loaders.GlobalGWT()
             values = global_gwt.get_values(
                 vs30_values_df[["lon", "lat"]].to_numpy(), variable
             )

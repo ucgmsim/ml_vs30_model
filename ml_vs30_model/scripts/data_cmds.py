@@ -11,6 +11,10 @@ app = typer.Typer(pretty_exceptions_short=True, pretty_exceptions_show_locals=Fa
 
 @app.command("gen-dataset")
 def gen_dataset(config_ffp: Path, out_ffp: Path, log_ffp: Path | None = None):
+    """
+    Creates a dataset for training a VS30 model,
+    based on the provided configuration file.
+    """
     mlt.utils.setup_logging(log_file=log_ffp)
     logging.getLogger("rclone").setLevel(logging.WARNING)
 
