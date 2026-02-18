@@ -1,12 +1,8 @@
-rel_vs30_values_ffp: cleaned_vs30_data/geyin_maurer_vs30.csv
-index_col: None
+seed: 42
+model_type: ngboost
 
-apply_vs30_weighting: true
-max_vs30_weight: 5
-
-total_max_weight: 10
-
-input_variables: 
+rel_dataset_ffp: datasets/geyin_maurer_dataset.parquet
+input_variables:
   - roughness
   - topographic_slope
   - compound_topographic_index
@@ -23,3 +19,4 @@ input_variables:
   - depth_to_groundwater
 
 
+n_cv_folds: 5

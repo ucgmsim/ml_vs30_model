@@ -10,10 +10,10 @@ import numpy as np
 
 
 
-from .model_config import ModelConfig
+from .configs import RunConfig
 
 
-def cv_train(config: ModelConfig) -> None:
+def cv_train(config: RunConfig) -> None:
     df = pd.read_parquet(config.dataset_ffp)
 
 

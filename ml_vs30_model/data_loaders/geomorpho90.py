@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from .. import constants
 from .. import utils
+from .tif_loader import find_nearest_valid
 
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ class GeoMorpho90:
         constants.InputVariable.VectorRuggednessMeasure: "vrm",
     }
 
-    RCLONE_CONFIG_FFP = Path(__file__).parent.parent / "resources" / "rclone.conf"
+    RCLONE_CONFIG_FFP = Path(__file__).parent.parent.parent / "resources" / "rclone.conf"
     S3_BASE_PATH = "opentopo:dataspace/OTDS.012020.4326.1/raster"
     REGEX_PATTERN = r"\w+_\d+M_([ns])(\d+)([ew])(\d+)\.(?:tif|tar\.gz)"
 
@@ -76,7 +77,7 @@ class GeoMorpho90:
 
         unique_filenames = np.unique(filenames)
 
-        for filename in tqdm(unique_filenames):
+        for filename in unique_filenames:
             # Download files if not already present
             if not (data_dir / filename).exists():
                 self._download_tif_file(str(filename), variable)
@@ -87,6 +88,16 @@ class GeoMorpho90:
             if values is None:
                 values = np.empty(coords.shape[0], dtype=cur_values.dtype)
             values[mask] = cur_values
+
+            missing_mask = values == -9999    
+            if np.any(missing_mask):
+                logger.info(
+                    f"Found {np.sum(missing_mask)}/{coords.shape[0]} missing values for variable {variable}. "
+                    f"Using nearest non-missing value."
+                )
+                values[missing_mask] = find_nearest_valid(
+                    data_dir / filename, coords[missing_mask], lambda v: v != -9999, values.dtype
+                )
 
         return values
 

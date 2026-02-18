@@ -22,9 +22,30 @@ def gen_dataset(config_ffp: Path, out_ffp: Path, log_ffp: Path | None = None):
     vs30.data.gen_dataset(config, out_ffp)
 
 
-@app.command("placeholder")
-def placeholder(config_ffp: Path):
-    print("wtf")
+@app.command("create-nz-input-grid")
+def create_nz_input_grid(
+    resolution: float,
+    output_dir: Path,
+    variables: list[vs30.constants.InputVariable],
+    tolerance: int | None = None,
+    min_area: int | None = None,
+    n_procs: int = 1,
+):
+    """
+    Creates a grid of input variable values for New Zealand,
+    based on the provided resolution (in degrees).
+    """
+    mlt.utils.setup_logging()
+
+    vs30.data.create_nz_input_grid(
+        vs30.constants.NZ_BOUNDING_BOX,
+        resolution,
+        output_dir,
+        variables,
+        tolerance=tolerance,
+        min_area=min_area,
+        n_procs=n_procs,
+    )
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
-model_type: ngboost
+seed: 42
+model_type: catboost
 
-rel_dataset_ffp: datasets/geyin_maurer_dataset.parquet
 input_variables:
   - roughness
   - topographic_slope
@@ -19,3 +19,6 @@ input_variables:
 
 
 n_cv_folds: 5
+
+
+rel_results_dir: results

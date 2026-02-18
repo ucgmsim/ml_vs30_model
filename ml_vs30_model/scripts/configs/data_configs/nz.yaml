@@ -1,5 +1,5 @@
-rel_vs30_values_ffp: cleaned_vs30_data/geyin_maurer_vs30.csv
-index_col: None
+rel_vs30_values_ffp: cleaned_vs30_data/nzgmdb_site_table_Q1Q2Q3.csv
+index_col: "sta"
 
 apply_vs30_weighting: true
 max_vs30_weight: 5
@@ -21,5 +21,6 @@ input_variables:
   - landform_uniformity
   - absolute_depth_to_bedrock
   - depth_to_groundwater
+  - nz_geology_category
 
 

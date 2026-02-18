@@ -67,13 +67,13 @@ class TIFLoader:
                     f"Using nearest non-zero value."
                 )
 
-                values[mask] = _find_nearest_valid(
+                values[mask] = find_nearest_valid(
                     tif_ffp, coords[mask], lambda v: v >= 0, values.dtype
                 )
 
-            return values
+        return values
 
-def _find_nearest_valid(
+def find_nearest_valid(
     tif_ffp: Path,
     invalid_coords: np.ndarray,
     valid_check: Callable[[np.ndarray], np.ndarray],
@@ -121,7 +121,7 @@ def _find_nearest_valid(
         valid_mask = valid_check(meshgrid_values)
         if np.any(valid_mask):
             nearest_idx = np.argmin(meshgrid_dist[valid_mask])
-            logger.info(
+            logger.debug(
                 f"Replacing value at coords {invalid_coords[i]} with nearest valid value "
                 f"at distance {meshgrid_dist[valid_mask][nearest_idx]:.2f} m."
             )
