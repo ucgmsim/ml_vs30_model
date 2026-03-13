@@ -110,3 +110,45 @@ VS30_WEIGHTING_BIN_NAMES = [
 
 
 NZ_BOUNDING_BOX = [166.3, 179, -47.4, -36.0]
+
+
+# Default figure settings
+FIG_SIZE = (16, 10)
+if (env_figsize := os.environ.get("fig_size")) is not None:
+    FIG_SIZE = [float(x) for x in env_figsize.split(",")]
+
+FIG_FORMAT = "png"
+if (env_fig_format := os.environ.get("fig_format")) is not None:
+    FIG_FORMAT = env_fig_format
+
+FIG_DPI = 300
+if (env_fig_dpi := os.environ.get("fig_dpi")) is not None:
+    FIG_DPI = int(env_fig_dpi)
+
+FIG_FONT_SIZE = None
+if (env_fig_font_size := os.environ.get("fig_font_size")) is not None:
+    FIG_FONT_SIZE = int(env_fig_font_size)
+
+FIG_LINEWIDTH = None
+if (env_fig_linewidth := os.environ.get("fig_linewidth")) is not None:
+    FIG_LINEWIDTH = float(env_fig_linewidth)
+
+FIG_GROUP_LINEWIDTH = None
+if (env_fig_group_linewidth := os.environ.get("fig_group_linewidth")) is not None:
+    FIG_GROUP_LINEWIDTH = float(env_fig_group_linewidth)
+
+GMT_FIG_FONT_LABEL = "14p,Helvetica,black"
+if (env_gmt_fig_font_label := os.environ.get("gmt_fig_font_label")) is not None:
+    GMT_FIG_FONT_LABEL = env_gmt_fig_font_label
+
+GMT_FIG_BOLD_FONT_LABEL = "14p,Helvetica-Bold,black"
+if (env_gmt_fig_bold_font_label := os.environ.get("gmt_fig_bold_font_label")) is not None:
+    GMT_FIG_BOLD_FONT_LABEL = env_gmt_fig_bold_font_label
+
+GMT_FIG_FONT_ANNOT_PRIMARY = "11p,Helvetica,black"
+if (env_gmt_fig_font_annot_primary := os.environ.get("gmt_fig_font_annot_primary")) is not None:
+    GMT_FIG_FONT_ANNOT_PRIMARY = env_gmt_fig_font_annot_primary
+
+GMT_SHOW_CB_LABEL = True
+if (env_gmt_show_cb_label := os.environ.get("gmt_show_cb_label")) is not None:
+    GMT_SHOW_CB_LABEL = env_gmt_show_cb_label.lower() in ("1", "true", "yes")

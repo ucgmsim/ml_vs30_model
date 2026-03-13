@@ -7,11 +7,12 @@ from sklearn import model_selection as ms
 from catboost import CatBoostRegressor
 from .configs import RunConfig
 from . import pre_processing
+from . import post_processing
 
 logger = logging.getLogger(__name__)
 
 
-def cv_train(run_config: RunConfig, base_out_dir: Path) -> None:
+def cv_train(run_config: RunConfig, base_out_dir: Path, run_post_processing: bool = True) -> None:
     logger.info(f"Loading dataset from {run_config.dataset_ffp}")
     dataset_df = pd.read_parquet(run_config.dataset_ffp)
     logger.info(f"Dataset loaded with {len(dataset_df)} samples")
@@ -31,6 +32,18 @@ def cv_train(run_config: RunConfig, base_out_dir: Path) -> None:
         logger.info(f"Completed fold {i+1}/{run_config.n_cv_folds}")
 
     logger.info("Cross-validation training completed")
+
+    # Combine model results into a single file
+    val_results_dfs = []
+    for i in range(run_config.n_cv_folds):
+        fold_val_results_ffp = base_out_dir / f"cv_{i:02d}" / "val_results.parquet"
+        fold_val_results_df = pd.read_parquet(fold_val_results_ffp)
+        val_results_dfs.append(fold_val_results_df)
+    pd.concat(val_results_dfs).to_parquet(base_out_dir / "val_results.parquet")
+
+    if run_post_processing:
+        logger.info("Running post-processing")
+        post_processing.gen_model_perfomance_plots(base_out_dir)
 
 
 def run_model_training(
