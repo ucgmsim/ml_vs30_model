@@ -102,4 +102,44 @@ def nz_site_database_map(df: pd.DataFrame, output_ffp: Path, markersize: int =8)
 
     fig.write_html(output_ffp)
 
-    
+def nz_site_residuals_map(results_df: pd.DataFrame, output_ffp: Path) -> None:
+    """
+    Generates a map showing the locations of sites in the NZ Site Database,
+    colored by ln(vs30) - ln(pred_vs30), and saves it to the specified output file path.
+    """
+    fig = go.Figure()
+    fig.update_layout(
+        margin=dict(l=10, r=10, t=30, b=10),
+        map=dict(zoom=3, center=dict(lat=results_df.lat.mean(), lon=results_df.lon.mean())),
+        showlegend=False,
+    )
+
+    hover_columns = ["station", "lon", "lat", "vs30", "pred_vs30", "ln_residual"]
+    hover_template = [
+        f"{col}: %{{customdata[{i}]}}"
+        for i, col in enumerate(hover_columns)
+    ]
+    hover_template = "<br>".join(hover_template) + "<extra></extra>"
+
+    fig.add_trace(
+        go.Scattermap(
+            lon=results_df["lon"],
+            lat=results_df["lat"],
+            name="Sites",
+            mode="markers",
+            marker=dict(
+                size=8,
+                color=results_df["ln_residual"],
+                colorscale="RdBu",
+                colorbar_title="ln(vs30) - ln(pred_vs30)",
+                cmin=-1.0, 
+                cmax=1.0,  
+            ),
+            hovertemplate=hover_template,
+            customdata=results_df[hover_columns].values,
+        )
+    )
+
+    fig.write_html(output_ffp)
+
+

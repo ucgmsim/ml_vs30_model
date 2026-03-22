@@ -15,11 +15,12 @@ def get_vs30_weights(df: pd.DataFrame, max_weight: int) -> pd.DataFrame:
     Computes the additional sample weight due to Vs30,
     to be added to the base weight of one.
     """
-    df["vs30_bin"] = pd.cut(
-        df.vs30,
-        constants.VS30_WEIGHTING_BINS,
-        labels=constants.VS30_WEIGHTING_BIN_NAMES,
-    )
+    if "vs30_bin" not in df.columns:
+        df["vs30_bin"] = pd.cut(
+            df.vs30,
+            constants.VS30_WEIGHTING_BINS,
+            labels=constants.VS30_WEIGHTING_BIN_NAMES,
+        )
 
     vs30_bin_counts = df.vs30_bin.value_counts().sort_index()
 

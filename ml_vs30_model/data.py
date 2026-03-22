@@ -28,9 +28,9 @@ class DataConfig:
     rel_vs30_values_ffp: str
     index_col: str | None
 
-    apply_vs30_weighting: bool
-    max_vs30_weight: int
-    total_max_weight: int
+    # apply_vs30_weighting: bool
+    # max_vs30_weight: int
+    # total_max_weight: int
 
     input_variables: list[constants.InputVariable]
 
@@ -83,16 +83,25 @@ def gen_dataset(data_config: DataConfig, out_ffp: Path) -> None:
     for variable in data_config.input_variables:
         df[variable.value] = get_input_values(df[["lon", "lat"]].to_numpy(), variable)
 
-    # Add sample weighting
-    if data_config.apply_vs30_weighting:
-        logger.info("Applying Vs30 weighting to dataset")
-        df = utils.get_vs30_weights(df, max_weight=data_config.max_vs30_weight)
+    if (df["vs30"] < 0.0).any():
+        raise ValueError("Vs30 values must be non-negative.")
+    if (zero_mask := (df["vs30"].values == 0.0)).any():
+        df = df.loc[~zero_mask, :]
+        logger.warning(
+            f"{zero_mask.sum()} Vs30 values of 0.0 found, dropped from dataset."
+        )
 
-    # Compute combined weight
-    df["weight"] = 1.0
-    if data_config.apply_vs30_weighting:
-        df["weight"] += df["vs30_weight"]
-    df["weight"] = df["weight"].clip(upper=data_config.total_max_weight)
+    df["vs30_bin"] = pd.cut(
+        df.vs30,
+        constants.VS30_WEIGHTING_BINS,
+        labels=constants.VS30_WEIGHTING_BIN_NAMES,
+    )
+
+    df["dense_vs30_bin"] = pd.cut(
+        df.vs30,
+        constants.DENSE_VS30_BINS,
+        labels=constants.DENSE_VS30_BIN_NAMES,
+    )
 
     df.to_parquet(out_ffp)
     logger.info(f"Dataset saved to {out_ffp}")
@@ -128,6 +137,10 @@ def get_input_values(points: np.ndarray, variable: constants.InputVariable):
         logger.info(f"Using ShapeLoader data source for variable: {variable.value}")
         shape_loader = data_loaders.ShapeLoader()
         values = shape_loader.get_values(points, variable)
+    elif data_source == constants.DataSource.NZDistanceToCoast:
+        logger.info(f"Using NZDistanceToCoast data source for variable: {variable.value}")
+        dist_to_coast_loader = data_loaders.NZDistanceToCoast()
+        values = dist_to_coast_loader.get_values(points, variable)
     else:
         error_msg = f"Data source for variable {variable} not implemented."
         logger.error(error_msg)
@@ -162,8 +175,10 @@ def _get_variable_da(
             dims=["lat", "lon"],
         )
     else:
-        raise ValueError(f"Unsupported data type for variable {variable}: {variable_values.dtype}")
-    
+        raise ValueError(
+            f"Unsupported data type for variable {variable}: {variable_values.dtype}"
+        )
+
     variable_da.values[land_mask] = variable_values
 
     return variable, variable_da
@@ -216,7 +231,9 @@ def create_nz_input_grid(
     if n_procs == 1:
         for variable in variables:
             logger.info(f"Processing variable: {variable.value}")
-            _, variable_da = _get_variable_da(land_points, land_mask, lat_coords, lon_coords, variable)
+            _, variable_da = _get_variable_da(
+                land_points, land_mask, lat_coords, lon_coords, variable
+            )
             grid_dataset[variable.value] = variable_da
     else:
         with mp.Pool(processes=n_procs) as p:
@@ -225,12 +242,12 @@ def create_nz_input_grid(
                 [
                     (land_points, land_mask, lat_coords, lon_coords, variable)
                     for variable in variables
-                ]
+                ],
             )
 
             for variable, variable_da in results:
                 grid_dataset[variable.value] = variable_da
-            
+
     # Create output directory if it doesn't exist
     output_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving grid dataset to {output_dir}")
@@ -238,8 +255,8 @@ def create_nz_input_grid(
 
     logger.info("Saving variable TIFF files for tiling.")
     transform = rasterio.transform.from_bounds(
-                    min_lon, min_lat, max_lon, max_lat, width, height
-                )
+        min_lon, min_lat, max_lon, max_lat, width, height
+    )
 
     for variable in variables:
         cur_data = grid_dataset[variable.value].values
@@ -250,12 +267,16 @@ def create_nz_input_grid(
         elif np.issubdtype(cur_data.dtype, np.integer):
             valid_mask = cur_data != -9999
         else:
-            raise ValueError(f"Unsupported data type for variable {variable}: {cur_data.dtype}")
-        
+            raise ValueError(
+                f"Unsupported data type for variable {variable}: {cur_data.dtype}"
+            )
+
         # Normalize & convert to RGBA
-        norm = Normalize(vmin=np.min(cur_data[valid_mask]), vmax=np.max(cur_data[valid_mask]))
+        norm = Normalize(
+            vmin=np.min(cur_data[valid_mask]), vmax=np.max(cur_data[valid_mask])
+        )
         normalized_data = norm(cur_data)
-        rgba_data = plt.get_cmap('viridis')(normalized_data)
+        rgba_data = plt.get_cmap("viridis")(normalized_data)
         rgba_uint8 = (rgba_data * 255).astype(np.uint8)
         rgba_uint8[~valid_mask, 3] = 0
 
@@ -277,35 +298,3 @@ def create_nz_input_grid(
             dst.write(rgba_uint8[:, :, 1], 2)  # Green channel
             dst.write(rgba_uint8[:, :, 2], 3)  # Blue channel
             dst.write(rgba_uint8[:, :, 3], 4)  # Alpha channel
-
-    # # Save landmask geotiff ready for tiling
-    # with rasterio.open(
-    #     output_dir / "on_land.tif",
-    #     "w",
-    #     driver="GTiff",
-    #     height=land_mask.shape[0],
-    #     width=land_mask.shape[1],
-    #     count=4,  # RGBA
-    #     dtype=rasterio.uint8,
-    #     transform=transform,
-    #     # transform=rasterio.transform.from_bounds(
-    #         # min_lon, min_lat, max_lon, max_lat, width, height
-    #     # ),
-    #     crs="EPSG:4326",
-    #     tiled=True,
-    #     blockxsize=256,
-    #     blockysize=256,
-    # ) as dst:
-    #     mask = land_mask.astype(rasterio.uint8)
-
-    #     red = mask * 255
-    #     green = np.zeros_like(mask)
-    #     blue = np.zeros_like(mask)
-    #     alpha = mask * 255
-
-    #     dst.write(red, 1)
-    #     dst.write(green, 2)
-    #     dst.write(blue, 3)
-    #     dst.write(alpha, 4)
-
-

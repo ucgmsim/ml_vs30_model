@@ -10,6 +10,7 @@ class DataSource(StrEnum):
     TIFLoader = "tif_loader"
     GlobalGWT = "global_gwt" # Global Groundwater Table
     ShapeLoader = "shape_loader"
+    NZDistanceToCoast = "nz_distance_to_coast"
 
 class InputVariable(StrEnum):
     Roughness = "roughness"
@@ -27,6 +28,7 @@ class InputVariable(StrEnum):
     AbsoluteDepthToBedrock = "absolute_depth_to_bedrock"
     DepthToGroundwater = "depth_to_groundwater"
     NZGeologyCategory = "nz_geology_category"
+    NZDistanceToCoast = "nz_distance_to_coast"
 
 
 INPUT_VARIABLE_SOURCE_MAPPING = {
@@ -45,6 +47,7 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.AbsoluteDepthToBedrock: DataSource.TIFLoader,
     InputVariable.DepthToGroundwater: DataSource.GlobalGWT,
     InputVariable.NZGeologyCategory: DataSource.ShapeLoader,
+    InputVariable.NZDistanceToCoast: DataSource.NZDistanceToCoast,
 }
 
 INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
@@ -67,6 +70,7 @@ INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
 
 CATEGORIAL_VARIABLES = [
     InputVariable.Geomorphon,
+    InputVariable.NZGeologyCategory,
 ]
 
 WGS84_EPSG_STR = "EPSG:4326"    
@@ -99,17 +103,36 @@ MIN_MAX_SCALE_PARAMS = {
     InputVariable.LandformEntropy: (0, 3.0),
     InputVariable.LandformUniformity: (0, 1.0),
     InputVariable.LandformShannonIndex: (0, 3.0),
+    InputVariable.NZDistanceToCoast: (0, 100_000),  
 }
 
 
 VS30_WEIGHTING_BINS = np.asarray([0, 180, 360, 760, 1600])
 VS30_WEIGHTING_BIN_NAMES = [
-    f"{VS30_WEIGHTING_BINS[i]}_{VS30_WEIGHTING_BINS[i + 1]}"
+    f"{VS30_WEIGHTING_BINS[i]}-{VS30_WEIGHTING_BINS[i + 1]}"
     for i in range(len(VS30_WEIGHTING_BINS) - 1)
 ]
+V30_BIN_COLORS = ["blue", "green", "orange", "red"]
 
+DENSE_VS30_BINS = np.asarray([0, 180, 260, 360, 540, 760, 1000, 1600, 3000])
+DENSE_VS30_BIN_NAMES = [
+    f"{DENSE_VS30_BINS[i]}-{DENSE_VS30_BINS[i + 1]}"
+    for i in range(len(DENSE_VS30_BINS) - 1)
+]
 
 NZ_BOUNDING_BOX = [166.3, 179, -47.4, -36.0]
+
+# Geyin & Maurer model MAE values for Vs30 bins
+# Table 2 of Geyin & Maurer (2023) 
+GEYIN_MAURER_MODEL_MAE = {
+    90: 55,
+    220: 55,
+    310: 77,
+    448.5: 98,
+    648.5: 148,
+    955: 296,
+    1575: 531,
+}
 
 
 # Default figure settings

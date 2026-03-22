@@ -62,7 +62,7 @@ class GlobalGWT:
 
     def get_values(
         self, coords: np.ndarray, variable: constants.InputVariable
-    ):
+    ) -> np.ndarray:
         if variable not in self.SUPPORTED_VARIABLES:
             utils.raise_log(
                 ValueError,

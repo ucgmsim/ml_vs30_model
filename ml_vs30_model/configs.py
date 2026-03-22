@@ -23,6 +23,9 @@ class RunConfig:
     rel_dataset_ffp: str
     input_variables: list[str]  
 
+    apply_vs30_sample_weights: bool
+    max_vs30_weight: float
+
     n_cv_folds: int 
 
     rel_results_dir: str
@@ -108,6 +111,7 @@ class RunConfig:
             "rel_results_dir": str(self.rel_results_dir),
             "scale_params": self._scale_params,
         }
+        return config_dict
 
     def to_yaml(self, ffp: Path):
         """Save the RunConfig to a YAML file."""

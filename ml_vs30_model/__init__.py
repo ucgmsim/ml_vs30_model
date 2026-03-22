@@ -5,6 +5,7 @@ from .data import DataConfig
 from .configs import RunConfig
 from . import ngboost_model
 from . import catboost_model
+from . import post_processing
 from . import utils
 from . import plotting
 
@@ -16,6 +17,7 @@ __all__ = [
     "DataConfig",
     "data",
     "utils",
+    "post_processing",
     "RunConfig",
     "ngboost_model",
     "catboost_model",

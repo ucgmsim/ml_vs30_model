@@ -5,7 +5,7 @@ import typer
 
 import ml_vs30_model as vs30
 
-app = typer.Typer(pretty_exceptions_short=True, pretty_exceptions_show_locals=False)
+app = typer.Typer(pretty_exceptions_short=True, pretty_exceptions_show_locals=False, add_completion=False)
 
 
 @app.command("dataset-locations-map")

@@ -1,5 +1,6 @@
-rel_vs30_values_ffp: cleaned_vs30_data/nzgmdb_site_table_Q1Q2Q3.csv
-index_col: "sta"
+# US dataset based on Geyin & Maurer dataset
+rel_vs30_values_ffp: cleaned_vs30_data/geyin_maurer_vs30.csv
+index_col: null
 
 input_variables: 
   - roughness
@@ -16,7 +17,5 @@ input_variables:
   - landform_uniformity
   - absolute_depth_to_bedrock
   - depth_to_groundwater
-  - nz_geology_category
-  - nz_distance_to_coast
 
 

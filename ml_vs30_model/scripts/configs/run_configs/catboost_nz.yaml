@@ -1,6 +1,10 @@
 seed: 42
 model_type: catboost
 
+
+apply_vs30_sample_weights: true
+max_vs30_weight: 2.5
+
 input_variables:
   - roughness
   - topographic_slope
@@ -16,9 +20,9 @@ input_variables:
   - landform_uniformity
   - absolute_depth_to_bedrock
   - depth_to_groundwater
+  - nz_geology_category
+  - nz_distance_to_coast
 
-
-n_cv_folds: 5
-
+n_cv_folds: 25
 
 rel_results_dir: results

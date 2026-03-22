@@ -84,20 +84,23 @@ class GeoMorpho90:
 
             # Get values
             mask = filenames == filename
-            cur_values = self._get_values(coords[mask], data_dir / filename)
+            cur_coords = coords[mask]
+            cur_values = self._get_values(cur_coords, data_dir / filename)
+
             if values is None:
                 values = np.empty(coords.shape[0], dtype=cur_values.dtype)
-            values[mask] = cur_values
 
-            missing_mask = values == -9999    
+            missing_mask = cur_values == -9999 
             if np.any(missing_mask):
                 logger.info(
-                    f"Found {np.sum(missing_mask)}/{coords.shape[0]} missing values for variable {variable}. "
-                    f"Using nearest non-missing value."
+                    f"Found {np.sum(missing_mask)}/{cur_values.shape[0]} missing values for variable {variable} "
+                    f"for filename {filename}. Using nearest non-missing value."
                 )
-                values[missing_mask] = find_nearest_valid(
-                    data_dir / filename, coords[missing_mask], lambda v: v != -9999, values.dtype
+                cur_values[missing_mask] = find_nearest_valid(
+                    data_dir / filename, cur_coords[missing_mask], lambda v: v != -9999, cur_values.dtype
                 )
+
+            values[mask] = cur_values
 
         return values
 

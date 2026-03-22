@@ -6,7 +6,7 @@ import typer
 import ml_tools as mlt
 import ml_vs30_model as vs30
 
-app = typer.Typer(pretty_exceptions_short=True, pretty_exceptions_show_locals=False)
+app = typer.Typer(pretty_exceptions_short=True, pretty_exceptions_show_locals=False, add_completion=False)
 
 
 @app.command("gen-dataset")
