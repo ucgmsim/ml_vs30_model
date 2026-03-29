@@ -125,6 +125,10 @@ def get_input_values(points: np.ndarray, variable: constants.InputVariable):
         logger.info(f"Using GeoMorpho90 data source for variable: {variable.value}")
         geomorpho90 = data_loaders.GeoMorpho90()
         values = geomorpho90.get_values(points, variable)
+    elif data_source == constants.DataSource.SRTMGL1:
+        logger.info(f"Using SRTMGL1 data source for variable: {variable.value}")
+        srtm_loader = data_loaders.SRTMGL1()
+        values = srtm_loader.get_values(points, variable)
     elif data_source == constants.DataSource.TIFLoader:
         logger.info(f"Using TIFLoader data source for variable: {variable.value}")
         tif_loader = data_loaders.TIFLoader()

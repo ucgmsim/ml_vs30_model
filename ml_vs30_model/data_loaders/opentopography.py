@@ -1,5 +1,4 @@
 from pathlib import Path
-from enum import StrEnum
 import re
 import tarfile
 import logging
@@ -8,7 +7,6 @@ import pandas as pd
 import numpy as np
 import rasterio
 from rclone_python import rclone
-from tqdm import tqdm
 
 from .. import constants
 from .. import utils
@@ -18,7 +16,154 @@ from .tif_loader import find_nearest_valid
 logger = logging.getLogger(__name__)
 
 
-class GeoMorpho90:
+class OpenTopographyS3Loader:
+    """Class for accessing geospatial data from OpenTopography S3 bucket."""
+
+    RCLONE_CONFIG_FFP = (
+        Path(__file__).parent.parent.parent / "resources" / "rclone.conf"
+    )
+
+    def __init__(self, base_input_data_dir: Path):
+        self.base_base_input_data_dir = base_input_data_dir
+
+        rclone.set_config_file(self.RCLONE_CONFIG_FFP)
+
+        # Cache variables
+        self.variable_file_dfs_cache: dict[constants.InputVariable, list[str]] = {}
+
+    def get_values(
+        self, coords: np.ndarray, variable: constants.InputVariable
+    ) -> np.ndarray:
+        """Get the values of the specified variable at the given lat/lon coordinates."""
+        data_dir = self.base_base_input_data_dir / variable
+
+        values = None
+        filenames = self._get_tif_filenames(coords, variable)
+
+        unique_filenames = np.unique(filenames)
+
+        for filename in unique_filenames:
+            # Download files if not already present
+            if not (data_dir / filename).exists():
+                self._download_tif_file(str(filename), variable)
+
+            # Get values
+            mask = filenames == filename
+            cur_coords = coords[mask]
+            cur_values = self._get_values(cur_coords, data_dir / filename)
+
+            if values is None:
+                values = np.empty(coords.shape[0], dtype=cur_values.dtype)
+
+            missing_mask = cur_values == -9999
+            if np.any(missing_mask):
+                logger.info(
+                    f"Found {np.sum(missing_mask)}/{cur_values.shape[0]} missing values for variable {variable} "
+                    f"for filename {filename}. Using nearest non-missing value."
+                )
+                cur_values[missing_mask] = find_nearest_valid(
+                    data_dir / filename,
+                    cur_coords[missing_mask],
+                    lambda v: v != -9999,
+                    cur_values.dtype,
+                )
+
+            values[mask] = cur_values
+
+        return values
+
+    def _download_tif_file(
+        self, tif_filename: str, variable: constants.InputVariable
+    ) -> None:
+        raise NotImplementedError(
+            "Subclasses must implement _download_tif_file method."
+        )
+
+    def _get_values(self, coords: np.ndarray, tif_ffp: Path) -> np.ndarray:
+        """Get the values from the TIFF file at the specified coordinates."""
+        if not tif_ffp.exists():
+            utils.raise_log(
+                FileNotFoundError,
+                f"TIF file not found at {tif_ffp}.",
+                logger,
+            )
+
+        with rasterio.open(tif_ffp) as dataset:
+            assert (
+                dataset.crs.to_epsg() == constants.WGS84_EPSG
+            ), "Dataset CRS is not WGS84"
+
+            return np.concatenate(list(dataset.sample(coords)))
+
+
+class SRTMGL1(OpenTopographyS3Loader):
+    """Class for accessing SRTM GL1 data."""
+
+    SUPPORTED_VARIABLES = [
+        constants.InputVariable.Elevation,
+    ]
+
+    S3_BASE_PATH = "opentopo:raster/SRTM_GL1/SRTM_GL1_srtm"
+
+    def __init__(
+        self, base_input_data_dir: Path = constants.BASE_DATA_DIR / "input_data" / "raw"
+    ):
+        super().__init__(base_input_data_dir)
+
+    def get_values(
+        self, coords: np.ndarray, variable: constants.InputVariable
+    ) -> np.ndarray:
+        if variable not in self.SUPPORTED_VARIABLES:
+            utils.raise_log(
+                ValueError,
+                f"Variable {variable} is not supported by SRTMGL1.",
+                logger,
+            )
+
+        return super().get_values(coords, variable)
+
+    def _download_tif_file(
+        self, tif_filename: str, variable: constants.InputVariable
+    ) -> None:
+        """Download the specified TIFF file for SRTM GL1."""
+        assert (
+            variable == constants.InputVariable.Elevation
+        ), "SRTMGL1 only supports Elevation variable."
+
+        # Ensure output directory exists
+        (out_dir := self.base_base_input_data_dir / variable).mkdir(exist_ok=True)
+        logger.info(f"Downloading {tif_filename} to {out_dir}")
+        rclone.copy(
+            self.S3_BASE_PATH + f"/{tif_filename}",
+            out_dir,
+            show_progress=False,
+        )
+
+    def _get_tif_filenames(
+        self, coords: np.ndarray, variable: constants.InputVariable
+    ) -> np.ndarray:
+        """Get the filename of the SRTM GL1 TIFF file for the given lat/lon."""
+        assert (
+            variable == constants.InputVariable.Elevation
+        ), "SRTMGL1 only supports Elevation variable."
+        lon_values, lat_values = coords[:, 0], coords[:, 1]
+
+        filenames = []
+        for lat, lon in zip(lat_values, lon_values):
+            lat_prefix = "N" if lat >= 0 else "S"
+            lon_prefix = "E" if lon >= 0 else "W"
+
+            lat_idx = int(abs(np.floor(lat)))
+            lon_idx = int(abs(np.floor(lon)))
+
+            filenames.append(
+                f"{lat_prefix}{lat_idx:02d}{lon_prefix}{lon_idx:03d}.tif"
+            )
+
+        return np.array(filenames)
+
+
+class GeoMorpho90(OpenTopographyS3Loader):
     """Class for accessing GeoMorpho90 data."""
 
     SUPPORTED_VARIABLES = [
@@ -45,24 +190,17 @@ class GeoMorpho90:
         constants.InputVariable.VectorRuggednessMeasure: "vrm",
     }
 
-    RCLONE_CONFIG_FFP = Path(__file__).parent.parent.parent / "resources" / "rclone.conf"
     S3_BASE_PATH = "opentopo:dataspace/OTDS.012020.4326.1/raster"
     REGEX_PATTERN = r"\w+_\d+M_([ns])(\d+)([ew])(\d+)\.(?:tif|tar\.gz)"
 
     def __init__(
-        self, base_raw_data_dir: Path = constants.BASE_DATA_DIR / "input_data" / "raw"
+        self, base_input_data_dir: Path = constants.BASE_DATA_DIR / "input_data" / "raw"
     ):
-        self.base_raw_data_dir = base_raw_data_dir
-
-        rclone.set_config_file(self.RCLONE_CONFIG_FFP)
-
-        # Cache variables
-        self.variable_file_dfs_cache: dict[constants.InputVariable, list[str]] = {}
+        super().__init__(base_input_data_dir)
 
     def get_values(
         self, coords: np.ndarray, variable: constants.InputVariable
     ) -> np.ndarray:
-        """Get the values of the specified variable at the given lat/lon coordinates."""
         if variable not in self.SUPPORTED_VARIABLES:
             utils.raise_log(
                 ValueError,
@@ -70,39 +208,7 @@ class GeoMorpho90:
                 logger,
             )
 
-        data_dir = self.base_raw_data_dir / variable
-
-        values = None
-        filenames = self._get_tif_filenames(coords, variable)
-
-        unique_filenames = np.unique(filenames)
-
-        for filename in unique_filenames:
-            # Download files if not already present
-            if not (data_dir / filename).exists():
-                self._download_tif_file(str(filename), variable)
-
-            # Get values
-            mask = filenames == filename
-            cur_coords = coords[mask]
-            cur_values = self._get_values(cur_coords, data_dir / filename)
-
-            if values is None:
-                values = np.empty(coords.shape[0], dtype=cur_values.dtype)
-
-            missing_mask = cur_values == -9999 
-            if np.any(missing_mask):
-                logger.info(
-                    f"Found {np.sum(missing_mask)}/{cur_values.shape[0]} missing values for variable {variable} "
-                    f"for filename {filename}. Using nearest non-missing value."
-                )
-                cur_values[missing_mask] = find_nearest_valid(
-                    data_dir / filename, cur_coords[missing_mask], lambda v: v != -9999, cur_values.dtype
-                )
-
-            values[mask] = cur_values
-
-        return values
+        return super().get_values(coords, variable)
 
     def _get_tif_filenames(
         self, coords: np.ndarray, variable: constants.InputVariable
@@ -110,11 +216,8 @@ class GeoMorpho90:
         """Get the filename of the GeoMorpho90 TIFF file for the given lat/lon and variable."""
         # Convert lat/lon to filename using MERIT-DEM tiling system
         # Each tile is 5x5 degrees, named by lower left corner
-        lon_values = coords[:, 0]
-        lat_values = coords[:, 1]
-
-        lon_lower_values = (lon_values // 5).astype(int) * 5
-        lat_lower_values = (lat_values // 5).astype(int) * 5
+        lon_lower_values = (coords[:, 0] // 5).astype(int) * 5
+        lat_lower_values = (coords[:, 1] // 5).astype(int) * 5
 
         filenames = []
         for lon_lower, lat_lower in zip(lon_lower_values, lat_lower_values):
@@ -135,22 +238,6 @@ class GeoMorpho90:
             )
 
         return np.array(filenames)
-
-    def _get_values(self, coords: np.ndarray, tif_ffp: Path) -> np.ndarray:
-        """Get the values from the TIFF file at the specified coordinates."""
-        if not tif_ffp.exists():
-            utils.raise_log(
-                FileNotFoundError,
-                f"TIF file not found at {tif_ffp}.",
-                logger,
-            )
-
-        with rasterio.open(tif_ffp) as dataset:
-            assert (
-                dataset.crs.to_epsg() == constants.WGS84_EPSG
-            ), "Dataset CRS is not WGS84"
-
-            return np.concatenate(list(dataset.sample(coords)))
 
     def _download_tif_file(
         self, tif_filename: str, variable: constants.InputVariable
@@ -177,7 +264,7 @@ class GeoMorpho90:
         ).idxmin()
 
         # Ensure output directory exists
-        (out_dir := self.base_raw_data_dir / variable).mkdir(exist_ok=True)
+        (out_dir := self.base_base_input_data_dir / variable).mkdir(exist_ok=True)
         logger.info(f"Downloading {gzip_filename} to {out_dir}")
         rclone.copy(
             self.S3_BASE_PATH + f"/{self.S3_VAR_NAME_MAP[variable]}/" + gzip_filename,

@@ -7,6 +7,7 @@ import numpy as np
 
 class DataSource(StrEnum):
     GeoMorpho90 = "geomorpho90"
+    SRTMGL1 = "srtmgl1"
     TIFLoader = "tif_loader"
     NZTMTIFLoader = "nztm_tif_loader"
     GlobalGWT = "global_gwt" # Global Groundwater Table
@@ -29,6 +30,7 @@ class InputVariable(StrEnum):
     LandformUniformity = "landform_uniformity"
     AbsoluteDepthToBedrock = "absolute_depth_to_bedrock"
     DepthToGroundwater = "depth_to_groundwater"
+    Elevation = "elevation"                     # SRTMGL1 elevation data (30m)
     # NZ 
     NZGeologyCategory = "nz_geology_category"   # Foster et al.
     NZDistanceToCoast = "nz_distance_to_coast"  # Manually computed
@@ -65,6 +67,7 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.LandformUniformity: DataSource.TIFLoader,
     InputVariable.AbsoluteDepthToBedrock: DataSource.TIFLoader,
     InputVariable.DepthToGroundwater: DataSource.GlobalGWT,
+    InputVariable.Elevation: DataSource.SRTMGL1,    
     InputVariable.NZGeologyCategory: DataSource.ShapeLoader,
     InputVariable.NZDistanceToCoast: DataSource.NZDistanceToCoast,
     InputVariable.NZEnvDSDistanceRivers: DataSource.NZTMTIFLoader,
@@ -86,6 +89,7 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
 }
 
 INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
+    InputVariable.Elevation: "Elevation",
     InputVariable.Roughness: "Roughness",
     InputVariable.TopographicSlope: "Topographic Slope",
     InputVariable.CompoundTopgraphicIndex: "Compound Topographic Index",

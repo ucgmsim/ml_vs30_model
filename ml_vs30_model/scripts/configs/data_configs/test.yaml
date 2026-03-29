@@ -1,0 +1,7 @@
+rel_vs30_values_ffp: cleaned_vs30_data/nzgmdb_site_table_Q1Q2Q3.csv
+index_col: "sta"
+
+input_variables: 
+  - elevation
+
+
