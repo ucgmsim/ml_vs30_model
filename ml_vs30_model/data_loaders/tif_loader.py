@@ -4,7 +4,7 @@ from typing import Callable
 
 import einops
 import numpy as np
-from pyproj import Geod
+from pyproj import Geod, Transformer
 
 import rasterio
 
@@ -21,21 +21,63 @@ class TIFLoader:
         constants.InputVariable.LandformEntropy,
         constants.InputVariable.LandformUniformity,
         constants.InputVariable.AbsoluteDepthToBedrock,
+        # constants.InputVariable.NZEnvDSDistanceRivers,
+        # constants.InputVariable.NZEnvDSDistanceRiversVertical,
+        # constants.InputVariable.NZEnvDSPrecipAnn,
+        # constants.InputVariable.NZEnvDSSlopeDeg,
+        # constants.InputVariable.NZEnvDSSoilAcidP,
+        # constants.InputVariable.NZEnvDSSoilAge,
+        # constants.InputVariable.NZEnvDSSoilDrainage,
+        # constants.InputVariable.NZEnvDSSoilInduration,
+        # constants.InputVariable.NZEnvDSSoilParticleSize,
+        # constants.InputVariable.NZEnvDSTopoGeomorphons,
+        # constants.InputVariable.NZEnvDSTopoNormalisedHeight,
+        # constants.InputVariable.NZEnvDSTopoPosition,
+        # constants.InputVariable.NZEnvDSTopoRoughness,
+        # constants.InputVariable.NZEnvDSTopoRuggedness,
+        # constants.InputVariable.NZEnvDSTopoValleyDepth,
+        # constants.InputVariable.NZEnvDSTopoWetness,
     }
 
     VAR_TO_FILENAME_MAP = {
-        constants.InputVariable.LandformShannonIndex: "geom_1KMsha_GMTEDmd.tif",
-        constants.InputVariable.LandformEntropy: "geom_1KMent_GMTEDmd.tif",
-        constants.InputVariable.LandformUniformity: "geom_1KMuni_GMTEDmd.tif",
-        constants.InputVariable.AbsoluteDepthToBedrock: "absolute_depth_to_bedrock/BDTICM_M_250m_ll.tif",
+        constants.InputVariable.LandformShannonIndex: "raw/geom_1KMsha_GMTEDmd.tif",
+        constants.InputVariable.LandformEntropy: "raw/geom_1KMent_GMTEDmd.tif",
+        constants.InputVariable.LandformUniformity: "raw/geom_1KMuni_GMTEDmd.tif",
+        constants.InputVariable.AbsoluteDepthToBedrock: "raw/absolute_depth_to_bedrock/BDTICM_M_250m_ll.tif",
+        # constants.InputVariable.NZEnvDSDistanceRivers: "nzenvds_v1p1_nztm/final_layers_nztm/distance_rivers.tif",
+        # constants.InputVariable.NZEnvDSDistanceRiversVertical: "nzenvds_v1p1_nztm/final_layers_nztm/distance_riversVertical.tif",
+        # constants.InputVariable.NZEnvDSPrecipAnn: "nzenvds_v1p1_nztm/final_layers_nztm/precip_ann.tif",
+        # constants.InputVariable.NZEnvDSSlopeDeg: "nzenvds_v1p1_nztm/final_layers_nztm/slope_deg.tif",
+        # constants.InputVariable.NZEnvDSSoilAcidP: "nzenvds_v1p1_nztm/final_layers_nztm/soil_acidP.tif",
+        # constants.InputVariable.NZEnvDSSoilAge: "nzenvds_v1p1_nztm/final_layers_nztm/soil_age.tif",
+        # constants.InputVariable.NZEnvDSSoilDrainage: "nzenvds_v1p1_nztm/final_layers_nztm/soil_drainage.tif",
+        # constants.InputVariable.NZEnvDSSoilInduration: "nzenvds_v1p1_nztm/final_layers_nztm/soil_induration.tif",
+        # constants.InputVariable.NZEnvDSSoilParticleSize: "nzenvds_v1p1_nztm/final_layers_nztm/soil_particleSize.tif",
+        # constants.InputVariable.NZEnvDSTopoGeomorphons: "nzenvds_v1p1_nztm/final_layers_nztm/topo_geomorphons.tif",
+        # constants.InputVariable.NZEnvDSTopoNormalisedHeight: "nzenvds_v1p1_nztm/final_layers_nztm/topo_normalisedHeight.tif",
+        # constants.InputVariable.NZEnvDSTopoPosition: "nzenvds_v1p1_nztm/final_layers_nztm/topo_position.tif",
+        # constants.InputVariable.NZEnvDSTopoRoughness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_roughness.tif",
+        # constants.InputVariable.NZEnvDSTopoRuggedness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_ruggedness.tif",
+        # constants.InputVariable.NZEnvDSTopoValleyDepth: "nzenvds_v1p1_nztm/final_layers_nztm/topo_valleyDepth.tif",
+        # constants.InputVariable.NZEnvDSTopoWetness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_wetness.tif",
     }
 
     def __init__(
-        self, base_raw_data_dir: Path = constants.BASE_DATA_DIR / "input_data" / "raw"
+        self, base_input_data_dir: Path = constants.BASE_DATA_DIR / "input_data"
     ) -> None:
-        self.base_raw_data_dir = base_raw_data_dir
+        self.base_input_data_dir = base_input_data_dir
 
     def get_values(self, coords: np.ndarray, variable: constants.InputVariable):
+        """
+        Get values for the given WGS84 (lon, lat) coordinates.
+        
+        Parameters
+        ----------
+        coords : np.ndarray
+            Array of shape (N, 2) containing coordinates as (lon, lat) in WGS84.
+        variable : constants.InputVariable
+            The variable to retrieve values for.
+        """
         if variable not in self.SUPPORTED_VARIABLES:
             utils.raise_log(
                 ValueError,
@@ -43,7 +85,7 @@ class TIFLoader:
                 logger,
             )
 
-        tif_ffp = self.base_raw_data_dir / self.VAR_TO_FILENAME_MAP[variable]
+        tif_ffp = self.base_input_data_dir / self.VAR_TO_FILENAME_MAP[variable]
         if not tif_ffp.exists():
             utils.raise_log(
                 FileNotFoundError,
@@ -72,6 +114,114 @@ class TIFLoader:
                 )
 
         return values
+
+class NZTMTIFLoader:
+    """Class for retrieving data from downloaded TIFF files in NZTM projection.
+    
+    Accepts WGS84 (lon/lat) coordinates and converts them to NZTM before querying.
+    """
+
+    SUPPORTED_VARIABLES = {
+        constants.InputVariable.NZEnvDSDistanceRivers,
+        constants.InputVariable.NZEnvDSDistanceRiversVertical,
+        constants.InputVariable.NZEnvDSPrecipAnn,
+        constants.InputVariable.NZEnvDSSlopeDeg,
+        constants.InputVariable.NZEnvDSSoilAcidP,
+        constants.InputVariable.NZEnvDSSoilAge,
+        constants.InputVariable.NZEnvDSSoilDrainage,
+        constants.InputVariable.NZEnvDSSoilInduration,
+        constants.InputVariable.NZEnvDSSoilParticleSize,
+        constants.InputVariable.NZEnvDSTopoGeomorphons,
+        constants.InputVariable.NZEnvDSTopoNormalisedHeight,
+        constants.InputVariable.NZEnvDSTopoPosition,
+        constants.InputVariable.NZEnvDSTopoRoughness,
+        constants.InputVariable.NZEnvDSTopoRuggedness,
+        constants.InputVariable.NZEnvDSTopoValleyDepth,
+        constants.InputVariable.NZEnvDSTopoWetness,
+    }
+
+    VAR_TO_FILENAME_MAP = {
+        constants.InputVariable.NZEnvDSDistanceRivers: "nzenvds_v1p1_nztm/final_layers_nztm/distance_rivers.tif",
+        constants.InputVariable.NZEnvDSDistanceRiversVertical: "nzenvds_v1p1_nztm/final_layers_nztm/distance_riversVertical.tif",
+        constants.InputVariable.NZEnvDSPrecipAnn: "nzenvds_v1p1_nztm/final_layers_nztm/precip_ann.tif",
+        constants.InputVariable.NZEnvDSSlopeDeg: "nzenvds_v1p1_nztm/final_layers_nztm/slope_deg.tif",
+        constants.InputVariable.NZEnvDSSoilAcidP: "nzenvds_v1p1_nztm/final_layers_nztm/soil_acidP.tif",
+        constants.InputVariable.NZEnvDSSoilAge: "nzenvds_v1p1_nztm/final_layers_nztm/soil_age.tif",
+        constants.InputVariable.NZEnvDSSoilDrainage: "nzenvds_v1p1_nztm/final_layers_nztm/soil_drainage.tif",
+        constants.InputVariable.NZEnvDSSoilInduration: "nzenvds_v1p1_nztm/final_layers_nztm/soil_induration.tif",
+        constants.InputVariable.NZEnvDSSoilParticleSize: "nzenvds_v1p1_nztm/final_layers_nztm/soil_particleSize.tif",
+        constants.InputVariable.NZEnvDSTopoGeomorphons: "nzenvds_v1p1_nztm/final_layers_nztm/topo_geomorphons.tif",
+        constants.InputVariable.NZEnvDSTopoNormalisedHeight: "nzenvds_v1p1_nztm/final_layers_nztm/topo_normalisedHeight.tif",
+        constants.InputVariable.NZEnvDSTopoPosition: "nzenvds_v1p1_nztm/final_layers_nztm/topo_position.tif",
+        constants.InputVariable.NZEnvDSTopoRoughness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_roughness.tif",
+        constants.InputVariable.NZEnvDSTopoRuggedness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_ruggedness.tif",
+        constants.InputVariable.NZEnvDSTopoValleyDepth: "nzenvds_v1p1_nztm/final_layers_nztm/topo_valleyDepth.tif",
+        constants.InputVariable.NZEnvDSTopoWetness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_wetness.tif",
+    }
+
+    _WGS84_TO_NZTM = Transformer.from_crs(
+        constants.WGS84_EPSG, constants.NZTM2000_EPSG, always_xy=True
+    )
+
+    def __init__(
+        self, base_input_data_dir: Path = constants.BASE_DATA_DIR / "input_data"
+    ) -> None:
+        self.base_input_data_dir = base_input_data_dir
+
+    def get_values(self, coords: np.ndarray, variable: constants.InputVariable):
+        """
+        Get values for the given WGS84 (lon, lat) coordinates.
+
+        Parameters
+        ----------
+        coords : np.ndarray
+            Array of shape (N, 2) containing coordinates as (lon, lat) in WGS84.
+        variable : constants.InputVariable
+            The variable to retrieve values for.
+        """
+        if variable not in self.SUPPORTED_VARIABLES:
+            utils.raise_log(
+                ValueError,
+                f"Variable {variable} is not supported by NZTMTIFLoader.",
+                logger,
+            )
+
+        tif_ffp = self.base_input_data_dir / self.VAR_TO_FILENAME_MAP[variable]
+        if not tif_ffp.exists():
+            utils.raise_log(
+                FileNotFoundError,
+                f"TIF file for variable {variable} not found at {tif_ffp}.",
+                logger,
+            )
+
+        nztm_coords = self._to_nztm(coords)
+
+        with rasterio.open(tif_ffp) as dataset:
+            assert (
+                dataset.crs.to_epsg() == constants.NZTM2000_EPSG
+            ), "Dataset CRS is not NZTM2000."
+
+            values = np.concatenate(list(dataset.sample(nztm_coords)))
+
+        return values
+
+    @classmethod
+    def _to_nztm(cls, coords: np.ndarray) -> np.ndarray:
+        """Convert WGS84 (lon, lat) coordinates to NZTM (easting, northing).
+
+        Parameters
+        ----------
+        coords : np.ndarray
+            Array of shape (N, 2) containing coordinates as (lon, lat).
+
+        Returns
+        -------
+        np.ndarray
+            Array of shape (N, 2) containing NZTM (easting, northing) coordinates.
+        """
+        easting, northing = cls._WGS84_TO_NZTM.transform(coords[:, 0], coords[:, 1])
+        return np.column_stack([easting, northing])
+
 
 def find_nearest_valid(
     tif_ffp: Path,

@@ -1,7 +1,6 @@
 seed: 42
 model_type: catboost
 
-
 apply_vs30_sample_weights: true
 max_vs30_weight: 2.5
 
@@ -26,3 +25,6 @@ input_variables:
 n_cv_folds: 25
 
 rel_results_dir: results
+
+model_config:
+  iterations: 100

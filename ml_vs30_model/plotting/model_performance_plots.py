@@ -1,4 +1,5 @@
 from pathlib import Path
+import xarray as xr
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -8,6 +9,10 @@ import ml_tools as mlt
 
 from .. import constants
 
+
+METRIC_Y_LIMITS = {
+    "RMSE": (0, 0.8),
+}
 
 def one_to_one_plot(results_df: pd.DataFrame, output_ffp: Path):
     """
@@ -263,3 +268,70 @@ def metric_scatter_plot(
         output_ffp.with_name(output_ffp.stem + ".yaml"),
         clobber=True,
     )
+
+def cv_iteration_metric_plot(
+    train_metrics_df: pd.DataFrame,
+    val_metrics_df: pd.DataFrame | None,
+    out_fp: Path,
+    metric: str,
+):
+    fig, ax = plt.subplots(figsize=(16, 10), dpi=constants.FIG_DPI)
+
+    # Training
+    for cv_fold in train_metrics_df.columns:
+        ax.plot(
+            train_metrics_df.index.values,
+            train_metrics_df[cv_fold].values,
+            c="blue",
+            linestyle="--",
+            linewidth=1,
+        )
+    # Mean line
+    ax.plot(
+        train_metrics_df.index.values,
+        train_metrics_df.mean(axis=1).values,
+        c="blue",
+        linestyle="-",
+        linewidth=2,
+    )
+
+    # Validation
+    if val_metrics_df is not None:
+        for cv_fold in val_metrics_df.columns:
+            ax.plot(
+                val_metrics_df.index.values,
+                val_metrics_df[cv_fold].values,
+                c="red",
+                linestyle="-",
+                linewidth=1,
+            )
+            plt.scatter(val_metrics_df.idxmin().values, val_metrics_df.min().values, c="red", s=50)
+        # Mean line
+        ax.plot(
+            val_metrics_df.index.values,
+            val_metrics_df.mean(axis=1).values,
+            c="red",
+            linestyle="-",
+            linewidth=2,
+        )
+
+    ax.set_xlim(train_metrics_df.index.values.min(), train_metrics_df.index.values.max())
+    if metric in METRIC_Y_LIMITS:
+        ax.set_ylim(METRIC_Y_LIMITS[metric])
+
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel(metric)
+    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+
+    fig.tight_layout()
+    fig.savefig(out_fp)
+    plt.close(fig)
+
+    mlt.utils.write_to_yaml(
+        dict(type="cv-iteration-metric", metric=metric),
+        out_fp.with_name(out_fp.stem + ".yaml"),
+        clobber=True,
+    )
+
+
+    

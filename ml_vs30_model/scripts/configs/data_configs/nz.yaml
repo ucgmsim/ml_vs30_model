@@ -18,5 +18,22 @@ input_variables:
   - depth_to_groundwater
   - nz_geology_category
   - nz_distance_to_coast
+  - nzenvds_distance_rivers
+  - nzenvds_distance_rivers_vertical
+  - nzenvds_precip_ann
+  - nzenvds_slope_deg
+  - nzenvds_soil_acid_p
+  - nzenvds_soil_age
+  - nzenvds_soil_drainage
+  - nzenvds_soil_induration
+  - nzenvds_soil_particle_size
+  - nzenvds_topo_geomorphons
+  - nzenvds_topo_normalised_height
+  - nzenvds_topo_position
+  - nzenvds_topo_roughness
+  - nzenvds_topo_ruggedness
+  - nzenvds_topo_valley_depth
+  - nzenvds_topo_wetness
+
 
 

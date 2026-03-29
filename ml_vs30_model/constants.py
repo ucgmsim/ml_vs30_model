@@ -8,11 +8,13 @@ import numpy as np
 class DataSource(StrEnum):
     GeoMorpho90 = "geomorpho90"
     TIFLoader = "tif_loader"
+    NZTMTIFLoader = "nztm_tif_loader"
     GlobalGWT = "global_gwt" # Global Groundwater Table
     ShapeLoader = "shape_loader"
     NZDistanceToCoast = "nz_distance_to_coast"
 
 class InputVariable(StrEnum):
+    # Global variables
     Roughness = "roughness"
     TopographicSlope = "topographic_slope"
     CompoundTopgraphicIndex = "compound_topographic_index"
@@ -27,9 +29,26 @@ class InputVariable(StrEnum):
     LandformUniformity = "landform_uniformity"
     AbsoluteDepthToBedrock = "absolute_depth_to_bedrock"
     DepthToGroundwater = "depth_to_groundwater"
-    NZGeologyCategory = "nz_geology_category"
-    NZDistanceToCoast = "nz_distance_to_coast"
-
+    # NZ 
+    NZGeologyCategory = "nz_geology_category"   # Foster et al.
+    NZDistanceToCoast = "nz_distance_to_coast"  # Manually computed
+    # NZEnvDS
+    NZEnvDSDistanceRivers = "nzenvds_distance_rivers"
+    NZEnvDSDistanceRiversVertical = "nzenvds_distance_rivers_vertical"
+    NZEnvDSPrecipAnn = "nzenvds_precip_ann"
+    NZEnvDSSlopeDeg = "nzenvds_slope_deg"
+    NZEnvDSSoilAcidP = "nzenvds_soil_acid_p"
+    NZEnvDSSoilAge = "nzenvds_soil_age"
+    NZEnvDSSoilDrainage = "nzenvds_soil_drainage"
+    NZEnvDSSoilInduration = "nzenvds_soil_induration"
+    NZEnvDSSoilParticleSize = "nzenvds_soil_particle_size"
+    NZEnvDSTopoGeomorphons = "nzenvds_topo_geomorphons"
+    NZEnvDSTopoNormalisedHeight = "nzenvds_topo_normalised_height"
+    NZEnvDSTopoPosition = "nzenvds_topo_position"
+    NZEnvDSTopoRoughness = "nzenvds_topo_roughness"
+    NZEnvDSTopoRuggedness = "nzenvds_topo_ruggedness"
+    NZEnvDSTopoValleyDepth = "nzenvds_topo_valley_depth"
+    NZEnvDSTopoWetness = "nzenvds_topo_wetness"
 
 INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.Roughness: DataSource.GeoMorpho90,
@@ -48,6 +67,22 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.DepthToGroundwater: DataSource.GlobalGWT,
     InputVariable.NZGeologyCategory: DataSource.ShapeLoader,
     InputVariable.NZDistanceToCoast: DataSource.NZDistanceToCoast,
+    InputVariable.NZEnvDSDistanceRivers: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSDistanceRiversVertical: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSPrecipAnn: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSSlopeDeg: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSSoilAcidP: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSSoilAge: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSSoilDrainage: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSSoilInduration: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSSoilParticleSize: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSTopoGeomorphons: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSTopoNormalisedHeight: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSTopoPosition: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSTopoRoughness: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSTopoRuggedness: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSTopoValleyDepth: DataSource.NZTMTIFLoader,
+    InputVariable.NZEnvDSTopoWetness: DataSource.NZTMTIFLoader,
 }
 
 INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
@@ -66,6 +101,23 @@ INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
     InputVariable.AbsoluteDepthToBedrock: "Absolute Depth To Bedrock",
     InputVariable.DepthToGroundwater: "Depth To Groundwater",
     InputVariable.NZGeologyCategory: "NZ Geology Category",
+    InputVariable.NZDistanceToCoast: "NZ Distance To Coast",
+    InputVariable.NZEnvDSDistanceRivers: "NZEnvDS Distance To Rivers",
+    InputVariable.NZEnvDSDistanceRiversVertical: "NZEnvDS Vertical Distance To Rivers",
+    InputVariable.NZEnvDSPrecipAnn: "NZEnvDS Annual Precipitation",
+    InputVariable.NZEnvDSSlopeDeg: "NZEnvDS Slope (Degrees)",
+    InputVariable.NZEnvDSSoilAcidP: "NZEnvDS Soil phosphorus. ",
+    InputVariable.NZEnvDSSoilAge: "NZEnvDS Soil Age",
+    InputVariable.NZEnvDSSoilDrainage: "NZEnvDS Soil Drainage",
+    InputVariable.NZEnvDSSoilInduration: "NZEnvDS Soil Induration",
+    InputVariable.NZEnvDSSoilParticleSize: "NZEnvDS Soil Particle Size",
+    InputVariable.NZEnvDSTopoGeomorphons: "NZEnvDS Topo Geomorphons",
+    InputVariable.NZEnvDSTopoNormalisedHeight: "NZEnvDS Topo Normalised Height",
+    InputVariable.NZEnvDSTopoPosition: "NZEnvDS Topo Position",
+    InputVariable.NZEnvDSTopoRoughness: "NZEnvDS Topo Roughness",
+    InputVariable.NZEnvDSTopoRuggedness: "NZEnvDS Topo Ruggedness",
+    InputVariable.NZEnvDSTopoValleyDepth: "NZEnvDS Topo Valley Depth",
+    InputVariable.NZEnvDSTopoWetness: "NZEnvDS Topo Wetness",
 }
 
 CATEGORIAL_VARIABLES = [
@@ -107,14 +159,14 @@ MIN_MAX_SCALE_PARAMS = {
 }
 
 
-VS30_WEIGHTING_BINS = np.asarray([0, 180, 360, 760, 1600])
+VS30_WEIGHTING_BINS = np.asarray([0, 180, 360, 760, 10_000])
 VS30_WEIGHTING_BIN_NAMES = [
     f"{VS30_WEIGHTING_BINS[i]}-{VS30_WEIGHTING_BINS[i + 1]}"
     for i in range(len(VS30_WEIGHTING_BINS) - 1)
 ]
 V30_BIN_COLORS = ["blue", "green", "orange", "red"]
 
-DENSE_VS30_BINS = np.asarray([0, 180, 260, 360, 540, 760, 1000, 1600, 3000])
+DENSE_VS30_BINS = np.asarray([0, 180, 260, 360, 540, 760, 1000, 1600, 3000, 10_000])
 DENSE_VS30_BIN_NAMES = [
     f"{DENSE_VS30_BINS[i]}-{DENSE_VS30_BINS[i + 1]}"
     for i in range(len(DENSE_VS30_BINS) - 1)

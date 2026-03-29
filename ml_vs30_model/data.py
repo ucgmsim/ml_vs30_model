@@ -129,6 +129,10 @@ def get_input_values(points: np.ndarray, variable: constants.InputVariable):
         logger.info(f"Using TIFLoader data source for variable: {variable.value}")
         tif_loader = data_loaders.TIFLoader()
         values = tif_loader.get_values(points, variable)
+    elif data_source == constants.DataSource.NZTMTIFLoader:
+        logger.info(f"Using NZTMTIFLoader data source for variable: {variable.value}")
+        nztm_loader = data_loaders.NZTMTIFLoader()
+        values = nztm_loader.get_values(points, variable)
     elif data_source == constants.DataSource.GlobalGWT:
         logger.info(f"Using GlobalGWT data source for variable: {variable.value}")
         global_gwt = data_loaders.GlobalGWT()

@@ -1,6 +1,6 @@
 import copy
 from pathlib import Path
-from dataclasses import dataclass
+import dataclasses
 from enum import StrEnum
 
 import ml_tools as mlt
@@ -12,8 +12,20 @@ class ModelType(StrEnum):
     NGBoost = "ngboost"
     CatBoost = "catboost"
 
+@dataclasses.dataclass  
+class CatboostModelConfig:
+    iterations: int
 
-@dataclass
+    @classmethod
+    def from_dict(cls, config_dict: dict) -> "CatboostModelConfig":
+        return cls(**config_dict)
+    
+    def to_dict(self) -> dict:
+        return {
+            "iterations": int(self.iterations),
+        }
+
+@dataclasses.dataclass
 class RunConfig:
 
     seed: int
@@ -27,8 +39,11 @@ class RunConfig:
     max_vs30_weight: float
 
     n_cv_folds: int 
+    """Number of CV folds to use. Only applicable when using CV."""
 
     rel_results_dir: str
+
+    model_config: CatboostModelConfig
 
     _scale_params: dict = None
 
@@ -82,15 +97,21 @@ class RunConfig:
         config_dict = mlt.utils.load_yaml(config_ffp)
 
         for cur_key, cur_val in kwargs.items():
-            if cur_val is not None:
+            if cur_val is None: 
+                continue
+
+            if cur_key == "iterations":
+                config_dict["model_config"]["iterations"] = cur_val
+            else:
                 config_dict[cur_key] = cur_val
 
-        return cls(**config_dict)
+        return cls.from_dict(config_dict)
 
     @classmethod
     def from_dict(cls, config_dict: dict) -> "RunConfig":
         """Creates an instance from the given config dictionary."""
         config_dict["model_type"] = ModelType(config_dict["model_type"])
+        config_dict["model_config"] = CatboostModelConfig.from_dict(config_dict["model_config"])
 
         return cls(**config_dict)
     
@@ -104,12 +125,13 @@ class RunConfig:
         """Converts the RunConfig instance to a dictionary."""
         config_dict = {
             "seed": int(self.seed),
-            "model_type": self.model_type,
+            "model_type": str(self.model_type),
             "rel_dataset_ffp": str(self.rel_dataset_ffp),
             "input_variables": list(self.input_variables),
             "n_cv_folds": int(self.n_cv_folds),
             "rel_results_dir": str(self.rel_results_dir),
             "scale_params": self._scale_params,
+            "model_config": self.model_config.to_dict(),
         }
         return config_dict
 
