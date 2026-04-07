@@ -72,9 +72,94 @@ class OpenTopographyS3Loader:
 
         return values
 
+    def get_region_values(
+        self,
+        lon_values: np.ndarray,
+        lat_values: np.ndarray,
+        width_m: float,
+        height_m: float,
+        variable: constants.InputVariable,
+    ) -> np.ndarray:
+        """
+        Get the values of the specified variable for a region defined by a centre point and bounding box dimensions.
+        """
+        n_coords = lon_values.shape[0]
+        logger.info(
+            f"Getting region values for variable {variable} for {n_coords} coordinates"
+            f" with width {width_m}m and height {height_m}m."
+        )
+        corner_coords = utils.get_bounding_box_corners(
+            lon_values, lat_values, width_m, height_m
+        )
+
+        results = []
+        for i in range(n_coords):
+            # Bounds
+            cur_corner_coords = corner_coords[i]
+            x_min, y_min = cur_corner_coords[:, 0].min(), cur_corner_coords[:, 1].min()
+            x_max, y_max = cur_corner_coords[:, 0].max(), cur_corner_coords[:, 1].max()
+
+            # Get filenames & download files if needed
+            tif_files = self._get_tif_filenames(cur_corner_coords, variable)
+            for tif_file in tif_files:
+                if not (self.base_base_input_data_dir / variable / tif_file).exists():
+                    logger.info(
+                        f"TIFF file {tif_file} not found locally. Downloading..."
+                    )
+                    if failed_download := self._download_tif_file(
+                        str(tif_file), variable
+                    ):
+                        break
+            if failed_download:
+                logger.warning(
+                    f"Failed to download all required TIFF files for coordinate {i}. Skipping."
+                )
+                continue
+
+            # Sanity check
+            if i == 0:
+                with rasterio.open(
+                    self.base_base_input_data_dir / variable / tif_files[0]
+                ) as dataset:
+                    assert (
+                        dataset.crs.to_epsg() == constants.WGS84_EPSG
+                    ), "Dataset CRS is not WGS84"
+
+            # Region is across multiple tiles
+            if len(set(tif_files)) > 1:
+                cur_results, _ = rasterio.merge.merge(
+                    [
+                        rasterio.open(self.base_base_input_data_dir / variable / tif)
+                        for tif in tif_files
+                    ],
+                    bounds=[x_min, y_min, x_max, y_max],
+                )
+                # Close the files
+                [src.close() for src in tif_files]
+            else:
+                with rasterio.open(
+                    self.base_base_input_data_dir / variable / tif_files[0]
+                ) as dataset:
+                    window = rasterio.windows.from_bounds(
+                        x_min, y_min, x_max, y_max, transform=dataset.transform
+                    )
+                    cur_results = dataset.read(1, window=window)
+
+            results.append(cur_results)
+
+        return results
+
+    def _get_tif_filenames(
+        self, coords: np.ndarray, variable: constants.InputVariable
+    ) -> np.ndarray:
+        """Get the filename of the TIFF file for the given lat/lon and variable."""
+        raise NotImplementedError(
+            "Subclasses must implement _get_tif_filenames method."
+        )
+
     def _download_tif_file(
         self, tif_filename: str, variable: constants.InputVariable
-    ) -> None:
+    ) -> bool:
         raise NotImplementedError(
             "Subclasses must implement _download_tif_file method."
         )
@@ -124,7 +209,7 @@ class SRTMGL1(OpenTopographyS3Loader):
 
     def _download_tif_file(
         self, tif_filename: str, variable: constants.InputVariable
-    ) -> None:
+    ) -> bool:
         """Download the specified TIFF file for SRTM GL1."""
         assert (
             variable == constants.InputVariable.Elevation
@@ -138,6 +223,11 @@ class SRTMGL1(OpenTopographyS3Loader):
             out_dir,
             show_progress=False,
         )
+
+        if not (out_dir / tif_filename).exists():
+            logger.warning(f"Failed to download TIFF file {tif_filename}.")
+            return False
+        return True
 
     def _get_tif_filenames(
         self, coords: np.ndarray, variable: constants.InputVariable
@@ -156,9 +246,7 @@ class SRTMGL1(OpenTopographyS3Loader):
             lat_idx = int(abs(np.floor(lat)))
             lon_idx = int(abs(np.floor(lon)))
 
-            filenames.append(
-                f"{lat_prefix}{lat_idx:02d}{lon_prefix}{lon_idx:03d}.tif"
-            )
+            filenames.append(f"{lat_prefix}{lat_idx:02d}{lon_prefix}{lon_idx:03d}.tif")
 
         return np.array(filenames)
 
@@ -241,7 +329,7 @@ class GeoMorpho90(OpenTopographyS3Loader):
 
     def _download_tif_file(
         self, tif_filename: str, variable: constants.InputVariable
-    ) -> None:
+    ) -> bool:
         """Download and extract the correct gzip file for the specified TIFF filename and variable."""
         files_df = self._get_files_df(variable)
 
@@ -284,6 +372,8 @@ class GeoMorpho90(OpenTopographyS3Loader):
 
         # Remove the gzip file after extraction
         gzip_ffp.unlink()
+
+        return True
 
     def _nsew_lat_lon_from_filename(self, filename: str) -> tuple[str, int, str, int]:
         """Extract the n/s, lat, e/w, lon components from the filename."""

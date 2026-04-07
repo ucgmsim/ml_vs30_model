@@ -110,7 +110,7 @@ INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
     InputVariable.NZEnvDSDistanceRiversVertical: "NZEnvDS Vertical Distance To Rivers",
     InputVariable.NZEnvDSPrecipAnn: "NZEnvDS Annual Precipitation",
     InputVariable.NZEnvDSSlopeDeg: "NZEnvDS Slope (Degrees)",
-    InputVariable.NZEnvDSSoilAcidP: "NZEnvDS Soil phosphorus. ",
+    InputVariable.NZEnvDSSoilAcidP: "NZEnvDS Soil phosphorus",
     InputVariable.NZEnvDSSoilAge: "NZEnvDS Soil Age",
     InputVariable.NZEnvDSSoilDrainage: "NZEnvDS Soil Drainage",
     InputVariable.NZEnvDSSoilInduration: "NZEnvDS Soil Induration",
@@ -127,7 +127,52 @@ INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
 CATEGORIAL_VARIABLES = [
     InputVariable.Geomorphon,
     InputVariable.NZGeologyCategory,
+    InputVariable.NZEnvDSTopoGeomorphons,
+    InputVariable.NZEnvDSSoilParticleSize,
+    InputVariable.NZEnvDSSoilInduration,
+    InputVariable.NZEnvDSSoilDrainage,
+    InputVariable.NZEnvDSSoilAge,
+    InputVariable.NZEnvDSSoilAcidP,
 ]
+
+GLOBAL_INPUT_VARS = np.array([
+    InputVariable.Roughness,
+    InputVariable.TopographicSlope,
+    InputVariable.CompoundTopgraphicIndex,
+    InputVariable.Geomorphon,
+    InputVariable.ProfileCurvature,
+    InputVariable.TangentialCurvature,
+    InputVariable.TerrainRuggednessIndex,
+    InputVariable.TopographicPositionIndex,
+    InputVariable.VectorRuggednessMeasure,
+    InputVariable.LandformEntropy,
+    InputVariable.LandformShannonIndex,
+    InputVariable.LandformUniformity,
+    InputVariable.AbsoluteDepthToBedrock,
+    InputVariable.DepthToGroundwater,
+    InputVariable.Elevation,
+])
+
+NZ_INPUT_VARS = np.array([
+    InputVariable.NZGeologyCategory,    
+    InputVariable.NZDistanceToCoast,
+    InputVariable.NZEnvDSDistanceRivers,
+    InputVariable.NZEnvDSDistanceRiversVertical,
+    InputVariable.NZEnvDSPrecipAnn,
+    InputVariable.NZEnvDSSlopeDeg,
+    InputVariable.NZEnvDSSoilAcidP,
+    InputVariable.NZEnvDSSoilAge,
+    InputVariable.NZEnvDSSoilDrainage,
+    InputVariable.NZEnvDSSoilInduration,
+    InputVariable.NZEnvDSSoilParticleSize,
+    InputVariable.NZEnvDSTopoGeomorphons,
+    InputVariable.NZEnvDSTopoNormalisedHeight,
+    InputVariable.NZEnvDSTopoPosition,
+    InputVariable.NZEnvDSTopoRoughness,
+    InputVariable.NZEnvDSTopoRuggedness,
+    InputVariable.NZEnvDSTopoValleyDepth,
+    InputVariable.NZEnvDSTopoWetness,
+])
 
 WGS84_EPSG_STR = "EPSG:4326"    
 WGS84_EPSG = 4326    
@@ -142,7 +187,9 @@ BASE_DATA_DIR  = Path(BASE_DATA_DIR)
 LN_NORM_VARS = [
     InputVariable.AbsoluteDepthToBedrock,
     InputVariable.TopographicSlope,
+    InputVariable.NZEnvDSSlopeDeg,
     InputVariable.Roughness,
+    InputVariable.NZEnvDSTopoRoughness,
     InputVariable.TerrainRuggednessIndex,
     InputVariable.VectorRuggednessMeasure,
 ]
@@ -160,6 +207,9 @@ MIN_MAX_SCALE_PARAMS = {
     InputVariable.LandformUniformity: (0, 1.0),
     InputVariable.LandformShannonIndex: (0, 3.0),
     InputVariable.NZDistanceToCoast: (0, 100_000),  
+    InputVariable.NZEnvDSTopoNormalisedHeight: (0, 1),
+    InputVariable.NZEnvDSTopoPosition: (-30, 30),
+    InputVariable.NZEnvDSTopoWetness: (2, 15),
 }
 
 
