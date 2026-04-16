@@ -1,12 +1,17 @@
 import logging
 from pathlib import Path
 
+import shap
 import xarray as xr
 import numpy as np
 import pandas as pd
+from catboost import CatBoostRegressor
+import ml_tools as mlt
 
-from .plotting import model_perf_plots
-from .plotting import spatial
+from .plotting import model_perf_plots, spatial, feature_importance_plots
+from .configs import RunConfig
+from . import pre_processing
+from . import constants
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +42,65 @@ def add_lnVs30_mse(results_df: pd.DataFrame) -> pd.DataFrame:
         np.log(results_df["vs30"]) - np.log(results_df["pred_vs30"])
     ) ** 2
     return results_df
+
+
+def compute_shap_feature_importance(
+    model_dir: Path,
+    run_config: RunConfig | None = None,
+    train_results: pd.DataFrame | None = None,
+    val_results: pd.DataFrame | None = None,
+    model: CatBoostRegressor | None = None,
+) -> None:
+    """
+    Computes SHAP feature importance
+    for the model in the provided directory.
+    """
+    logger.info("Computing SHAP feature importance...")
+    run_config = (
+        RunConfig.from_yaml(model_dir / "run_config.yaml")
+        if run_config is None
+        else run_config
+    )
+    dataset_df = pd.read_parquet(run_config.dataset_ffp)
+
+    # Load training results
+    train_results = (
+        pd.read_parquet(model_dir / "train_results.parquet")
+        if train_results is None
+        else train_results
+    )
+
+    # Load validation results if available
+    if val_results or (val_results_ffp := model_dir / "val_results.parquet").exists():
+        val_results = (
+            pd.read_parquet(val_results_ffp) if val_results is None else val_results
+        )
+
+    _, train_X, __, ___, val_X, *_ = pre_processing.get_pre_processed_train_val_df(
+        dataset_df,
+        train_results.index.values,
+        run_config,
+        val_sites=val_results.index.values if val_results is not None else None,
+    )
+    assert train_results.index.equals(train_X.index)
+    assert val_results is None or val_results.index.equals(val_X.index)
+
+    if model is None:
+        if run_config.model_type == "catboost":
+            model = CatBoostRegressor()
+            model.load_model(model_dir / "model.cbm")
+        else:
+            raise ValueError(
+                f"Unsupported model type {run_config.model_type} "
+                "for SHAP feature importance computation."
+            )
+
+    explainer = shap.TreeExplainer(model, train_X)
+    explainer = shap.TreeExplainer(model)
+    explainer_values = explainer(train_X if val_results is None else val_X)
+    mlt.utils.write_pickle(explainer_values, model_dir / "shap_values.pkl")
+
+    return explainer_values
 
 
 def gen_model_perfomance_plots(
@@ -117,7 +181,9 @@ def gen_cv_iteration_metric_plots(
 
 
 def gen_spatial_plots(
-    results_dir: Path, results_df: pd.DataFrame | None = None
+    results_dir: Path,
+    results_df: pd.DataFrame | None = None,
+    run_config: RunConfig | None = None,
 ) -> None:
     """
     Generates spatial plots for the provided results directory.
@@ -126,6 +192,64 @@ def gen_spatial_plots(
         logger.info("Reading results dataframe from parquet file val_results.parquet.")
         results_df = pd.read_parquet(results_dir / "val_results.parquet")
 
+    # Add quality score to results_df
+    if "quality_score" not in results_df.columns:
+        run_config = (
+            RunConfig.from_yaml(results_dir / "run_config.yaml")
+            if run_config is None
+            else run_config
+        )
+        dataset_df = pd.read_parquet(run_config.dataset_ffp)
+        if "quality_score" in dataset_df.columns:
+            results_df["quality_score"] = dataset_df.loc[
+                results_df.index, "quality_score"
+            ]
+
     logger.info("Generating spatial plots...")
     (outdir := results_dir / "plots").mkdir(exist_ok=True, parents=False)
     spatial.nz_site_residuals_map(results_df, outdir / "site_residual.html")
+
+
+def gen_feature_importance_plots(
+    results_dir: Path,
+    shap_values: shap.Explanation | None = None,
+    results_df: pd.DataFrame | None = None,
+    gen_waterfall_plots: bool = False,
+) -> None:
+    """
+    Generates feature importance plots
+    for the provided results directory.
+    """
+    if shap_values is None:
+        logger.info("Loading SHAP values from pickle file shap_values.pkl.")
+        shap_values = pd.read_pickle(results_dir / "shap_values.pkl")
+
+    # Use nice feature names
+    shap_values.feature_names = [
+        (
+            feat
+            if feat not in constants.PRETTY_INPUT_VARIABLE_NAMES
+            else constants.PRETTY_INPUT_VARIABLE_NAMES[feat]
+        )
+        for feat in shap_values.feature_names
+    ]
+
+    if results_df is None:
+        if (results_dir / "val_results.parquet").exists():
+            logger.info(
+                "Reading results dataframe from parquet file val_results.parquet."
+            )
+            results_df = pd.read_parquet(results_dir / "val_results.parquet")
+        elif (results_dir / "train_results.parquet").exists():
+            logger.info(
+                "Reading results dataframe from parquet file train_results.parquet."
+            )
+            results_df = pd.read_parquet(results_dir / "train_results.parquet")
+
+    logger.info("Generating feature importance plots...")
+    (outdir := results_dir / "plots").mkdir(exist_ok=True, parents=False)
+    feature_importance_plots.shap_global(shap_values, results_df, outdir)
+    feature_importance_plots.shap_beeswarm(shap_values, results_df, outdir)
+    if gen_waterfall_plots:
+        feature_importance_plots.shap_waterfall(shap_values, results_df, outdir / "waterfall_plots")
+

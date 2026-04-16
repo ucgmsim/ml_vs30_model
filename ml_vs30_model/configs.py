@@ -44,6 +44,7 @@ class RunConfig:
     rel_results_dir: str
 
     model_config: CatboostModelConfig
+    pre_process_categorial: bool
 
     _scale_params: dict = None
 
@@ -130,9 +131,15 @@ class RunConfig:
             "input_variables": list(self.input_variables),
             "n_cv_folds": int(self.n_cv_folds),
             "rel_results_dir": str(self.rel_results_dir),
-            "scale_params": self._scale_params,
             "model_config": self.model_config.to_dict(),
+            "apply_vs30_sample_weights": bool(self.apply_vs30_sample_weights),
+            "max_vs30_weight": float(self.max_vs30_weight),
+            "pre_process_categorial": bool(self.pre_process_categorial),
         }
+
+        if self._scale_params is not None:
+            config_dict["_scale_params"] = self._scale_params
+
         return config_dict
 
     def to_yaml(self, ffp: Path):

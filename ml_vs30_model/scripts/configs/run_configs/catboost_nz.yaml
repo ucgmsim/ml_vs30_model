@@ -1,5 +1,6 @@
 seed: 42
 model_type: catboost
+pre_process_categorial: false
 
 apply_vs30_sample_weights: true
 max_vs30_weight: 2.5
@@ -14,23 +15,9 @@ input_variables:
   - nzenvds_topo_roughness
   - nzenvds_topo_wetness
 
-  # - nz_distance_to_coast
-  # - roughness
-  # - topographic_slope
-  # - geomorphon
-  # - profile_curvature
-  # - tangential_curvature
-  # - terrain_ruggedness_index
-  # - topographic_position_index
-  # - vector_ruggedness_measure
-  # - landform_shannon_index
-  # - landform_entropy
-  # - landform_uniformity
-  # - absolute_depth_to_bedrock
 
 n_cv_folds: 25
-
 rel_results_dir: results
 
 model_config:
-  iterations: 50
+  iterations: 30

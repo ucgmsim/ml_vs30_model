@@ -79,6 +79,11 @@ def gen_dataset(data_config: DataConfig, out_ffp: Path) -> None:
         df["index"] = vs30_values_df[data_config.index_col]
         df = df.set_index("index")
 
+    # Include quality score if available
+    if "quality_score" in vs30_values_df.columns:
+        assert np.all(df.index.values == vs30_values_df.sta.values)
+        df["quality_score"] = vs30_values_df["quality_score"].values
+
     # Add input variable values
     for variable in data_config.input_variables:
         df[variable.value] = get_input_values(df[["lon", "lat"]].to_numpy(), variable)

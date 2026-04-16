@@ -114,7 +114,7 @@ def nz_site_residuals_map(results_df: pd.DataFrame, output_ffp: Path) -> None:
         showlegend=False,
     )
 
-    hover_columns = ["station", "lon", "lat", "vs30", "pred_vs30", "ln_residual"]
+    hover_columns = ["station", "lon", "lat", "vs30", "pred_vs30", "ln_residual", "quality_score"]
     hover_template = [
         f"{col}: %{{customdata[{i}]}}"
         for i, col in enumerate(hover_columns)

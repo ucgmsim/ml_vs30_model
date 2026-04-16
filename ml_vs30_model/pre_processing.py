@@ -1,11 +1,14 @@
 """Module that contains functions for pre-processing of the features."""
 
+import logging
+
 import pandas as pd
 import numpy as np
 
 from .configs import RunConfig
 from . import constants
 
+logger = logging.getLogger(__name__)
 
 def normalize(
     series: pd.Series, mean: float | None = None, std: float | None = None
@@ -32,7 +35,10 @@ def pre_process_features(
 ) -> pd.DataFrame:
     """Performs pre-processing on the features in the given DataFrame."""
     scaled_input_df = pd.DataFrame(index=df.index)
-    scale_params = {} if run_config.scale_params is None else run_config.scale_params
+    
+    scale_params = run_config.scale_params
+    if run_config.scale_params is None:
+        scale_params = {} 
 
     for var in run_config.input_variables:
         if var in constants.LN_NORM_VARS:
@@ -81,3 +87,48 @@ def add_sample_weights(train_df: pd.DataFrame, run_config: RunConfig) -> np.ndar
         train_df.loc[:, "sample_weight"] += train_df["vs30_weight"]
         
     return train_df
+
+
+def get_pre_processed_train_val_df(
+    dataset_df: pd.DataFrame,
+    train_sites: np.ndarray,
+    run_config: RunConfig,
+    val_sites: np.ndarray | None = None,
+):
+    train_df = dataset_df.loc[train_sites].copy()
+    val_df = dataset_df.loc[val_sites].copy() if val_sites is not None else None
+
+    if train_df[run_config.input_variables].isna().any().any():
+        mask = train_df[run_config.input_variables].isna().any(axis=1)
+        logger.warning(f"Missing values found in training data, dropping {mask.sum()} rows.")
+        train_df = train_df.loc[~mask]
+
+    if val_df is not None and val_df[run_config.input_variables].isna().any().any():
+        mask = val_df[run_config.input_variables].isna().any(axis=1)
+        logger.warning(f"Missing values found in validation data, dropping {mask.sum()} rows.")
+        val_df = val_df.loc[~mask]
+
+    train_df, val_df = train_df.copy(), val_df.copy() if val_df is not None else None
+
+    # Compute sample weighting
+    train_df = add_sample_weights(train_df, run_config)
+
+    # Pre-process
+    train_X, scale_params = pre_process_features(
+        train_df, run_config, pre_process_categorial=run_config.pre_process_categorial
+    )
+    train_y = pre_process_vs30(train_df["vs30"])
+    if run_config.scale_params is None:
+        run_config = run_config.copy()
+        run_config.scale_params = scale_params
+    assert train_df.index.equals(train_X.index)
+
+    val_X, val_y= None, None
+    if val_df is not None:
+        val_X, _ = pre_process_features(
+            val_df, run_config, pre_process_categorial=run_config.pre_process_categorial
+        )
+        val_y = pre_process_vs30(val_df["vs30"])
+        assert val_df.index.equals(val_X.index)
+
+    return run_config, train_X, train_y, train_df, val_X, val_y, val_df

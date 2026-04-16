@@ -5,6 +5,9 @@ import pandas as pd
 from pyproj import Geod
 
 from . import constants
+from .configs import RunConfig
+from . import pre_processing
+
 
 def raise_log(ex_type: Exception, error_msg: str, logger: logging.Logger) -> None:
     logger.error(error_msg)
@@ -28,9 +31,7 @@ def get_vs30_weights(df: pd.DataFrame, max_weight: int) -> pd.DataFrame:
     vs30_bin_weights = np.clip(
         (vs30_bin_counts.sum() / vs30_bin_counts) - 1, 0.0, max_weight
     )
-    df["vs30_weight"] = df.vs30_bin.map(
-        vs30_bin_weights
-    ).astype(np.float16)
+    df["vs30_weight"] = df.vs30_bin.map(vs30_bin_weights).astype(np.float16)
 
     return df
 
@@ -68,16 +69,18 @@ def get_bounding_box_corners(
     half_w = np.ones(n_points) * width_m / 2
     half_h = np.ones(n_points) * height_m / 2
 
-    top_lons,    top_lats,    _ = geod.fwd(lons, lats,   np.zeros(n_points), half_h)  
-    bottom_lons, bottom_lats, _ = geod.fwd(lons, lats, np.ones(n_points) * 180, half_h)  
-    right_lons,  right_lats,  _ = geod.fwd(lons, lats,  np.ones(n_points) * 90, half_w)  
-    left_lons,   left_lats,   _ = geod.fwd(lons, lats, np.ones(n_points) * 270, half_w)
+    top_lons, top_lats, _ = geod.fwd(lons, lats, np.zeros(n_points), half_h)
+    bottom_lons, bottom_lats, _ = geod.fwd(lons, lats, np.ones(n_points) * 180, half_h)
+    right_lons, right_lats, _ = geod.fwd(lons, lats, np.ones(n_points) * 90, half_w)
+    left_lons, left_lats, _ = geod.fwd(lons, lats, np.ones(n_points) * 270, half_w)
 
     # Stack into (N, 4, 2)
-    return np.stack([
-        np.column_stack([left_lons,  top_lats]),     # upper left
-        np.column_stack([left_lons,  bottom_lats]),  # lower left
-        np.column_stack([right_lons, top_lats]),     # upper right
-        np.column_stack([right_lons, bottom_lats]),  # lower right
-    ], axis=1)
-
+    return np.stack(
+        [
+            np.column_stack([left_lons, top_lats]),  # upper left
+            np.column_stack([left_lons, bottom_lats]),  # lower left
+            np.column_stack([right_lons, top_lats]),  # upper right
+            np.column_stack([right_lons, bottom_lats]),  # lower right
+        ],
+        axis=1,
+    )

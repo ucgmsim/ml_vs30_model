@@ -52,6 +52,17 @@ class InputVariable(StrEnum):
     NZEnvDSTopoValleyDepth = "nzenvds_topo_valley_depth"
     NZEnvDSTopoWetness = "nzenvds_topo_wetness"
 
+PRETTY_INPUT_VARIABLE_NAMES = {
+    InputVariable.NZGeologyCategory: "NZ Geology Category",
+    InputVariable.CompoundTopgraphicIndex: "Compound Topographic Index",    
+    InputVariable.DepthToGroundwater: "Groundwater Depth",
+    InputVariable.NZEnvDSSlopeDeg: "NZEnvDS Slope (Degrees)",
+    InputVariable.NZEnvDSTopoNormalisedHeight: "NZEnvDS Norm. Topo Height",
+    InputVariable.NZEnvDSTopoPosition: "NZEnvDS Topo Position",
+    InputVariable.NZEnvDSTopoWetness: "NZEnvDS Wetness",
+    InputVariable.NZEnvDSTopoRoughness: "NZEnvDS Roughness",
+}
+
 INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.Roughness: DataSource.GeoMorpho90,
     InputVariable.TopographicSlope: DataSource.GeoMorpho90,

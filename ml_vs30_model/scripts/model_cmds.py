@@ -55,10 +55,12 @@ def cv_train_catboost(
 
     vs30.catboost_model.cv_train(run_config, base_out_dir, run_post_processing)
 
+
 @app.command("full-train-catboost")
 def full_train_catboost(
     run_config_ffp: Path,
     rel_dataset_ffp: Path,
+    n_iterations: int | None = None,
     apply_vs30_sample_weights: bool | None = None,
     id_suffix: str | None = None,
     run_post_processing: bool = True,
@@ -73,6 +75,7 @@ def full_train_catboost(
         run_config_ffp,
         rel_dataset_ffp=rel_dataset_ffp,
         apply_vs30_sample_weights=apply_vs30_sample_weights,
+        iterations=n_iterations,
     )
 
     id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
@@ -80,16 +83,19 @@ def full_train_catboost(
 
     vs30.catboost_model.full_train(run_config, out_dir, run_post_processing)
 
-@app.command("run-post-processing")
-def run_post_processing(results_dir: Path):
+
+@app.command("run-cv-post-processing")
+def run_post_processing(results_dir: Path, gen_waterfall_plots: bool = False):
     logger = mlt.utils.setup_logging()
 
     logger.info("Running post-processing...")
-    vs30.post_processing.gen_cv_iteration_metric_plots(
-        results_dir
-    )
+    vs30.post_processing.gen_cv_iteration_metric_plots(results_dir)
+
     vs30.post_processing.gen_model_perfomance_plots(results_dir)
     vs30.post_processing.gen_spatial_plots(results_dir)
+    vs30.post_processing.gen_feature_importance_plots(
+        results_dir, gen_waterfall_plots=gen_waterfall_plots
+    )
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import typer
+import ml_tools as mlt
 
 import ml_vs30_model as vs30
 
@@ -20,6 +21,19 @@ def nz_site_database_map(dataset_ffp: Path, output_ffp: Path):
     dataset_df = pd.read_csv(dataset_ffp)
 
     vs30.plotting.spatial.nz_site_database_map(dataset_df, output_ffp)
+
+
+@app.command("gen-feature-importance-plots")
+def gen_feature_importance_plots(
+    model_dir: Path,
+    gen_waterfall_plots: bool = False,
+):
+    """
+    Generates feature importance plots for the model in the provided directory.
+    """
+    mlt.utils.setup_logging()
+
+    vs30.post_processing.gen_feature_importance_plots(model_dir, gen_waterfall_plots=gen_waterfall_plots)
 
 
 if __name__ == "__main__":
