@@ -11,12 +11,13 @@ from rclone_python import rclone
 from .. import constants
 from .. import utils
 from .tif_loader import find_nearest_valid
+from .base_loader import BaseLoader
 
 
 logger = logging.getLogger(__name__)
 
 
-class OpenTopographyS3Loader:
+class OpenTopographyS3Loader(BaseLoader):
     """Class for accessing geospatial data from OpenTopography S3 bucket."""
 
     RCLONE_CONFIG_FFP = (

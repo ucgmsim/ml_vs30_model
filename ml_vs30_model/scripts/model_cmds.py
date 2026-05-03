@@ -11,6 +11,37 @@ app = typer.Typer(
 )
 
 
+@app.command("cv-train-nn")
+def cv_train_nn(
+    run_config_ffp: Path,
+    rel_dataset_ffp: Path,
+    n_cv_folds: int | None = None,
+    n_iterations: int | None = None,
+    apply_vs30_sample_weights: bool | None = None,
+    id_suffix: str | None = None,
+    run_post_processing: bool = True,
+):
+    """
+    Runs cross-validation training of the neural network model,
+    based on the provided configuration file.
+    """
+    mlt.utils.setup_logging()
+    run_config = vs30.RunConfig.from_config_kwargs(
+        run_config_ffp,
+        rel_dataset_ffp=rel_dataset_ffp,
+        n_cv_folds=n_cv_folds,
+        apply_vs30_sample_weights=apply_vs30_sample_weights,
+        iterations=n_iterations,
+    )
+
+    id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
+    base_out_dir = (
+        run_config.results_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
+    )
+
+    vs30.nn_model.cv_train(run_config, base_out_dir, run_post_processing=run_post_processing)
+
+
 @app.command("cv-train-ngboost")
 def cv_train_ngboost(config_ffp: Path):
     """
@@ -18,7 +49,6 @@ def cv_train_ngboost(config_ffp: Path):
     based on the provided configuration file.
     """
     mlt.utils.setup_logging()
-
     run_config = vs30.RunConfig.from_yaml(config_ffp)
 
     vs30.ngboost_model.cv_train(run_config)
@@ -86,6 +116,7 @@ def full_train_catboost(
 
 @app.command("run-cv-post-processing")
 def run_post_processing(results_dir: Path, gen_waterfall_plots: bool = False):
+    """Runs post-processing on the results of a cross-validation training run"""
     logger = mlt.utils.setup_logging()
 
     logger.info("Running post-processing...")

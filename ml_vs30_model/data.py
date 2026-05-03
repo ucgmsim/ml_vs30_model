@@ -18,6 +18,7 @@ from pygmt_helper import plotting as gmt_plotting
 from . import constants
 from . import data_loaders
 from . import utils
+from .feature_engineer import FeatureEngineer
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +29,13 @@ class DataConfig:
     rel_vs30_values_ffp: str
     index_col: str | None
 
-    # apply_vs30_weighting: bool
-    # max_vs30_weight: int
-    # total_max_weight: int
-
     input_variables: list[constants.InputVariable]
+    derived_variables: list[constants.InputVariable] | None
 
     def __post_init__(self):
-
         self._vs30_values_ffp = None
+
+        self._derived_variables_check()
 
     @property
     def vs30_values_ffp(self) -> Path:
@@ -44,6 +43,27 @@ class DataConfig:
             self._vs30_values_ffp = constants.BASE_DATA_DIR / self.rel_vs30_values_ffp
 
         return self._vs30_values_ffp
+
+    def _derived_variables_check(self):
+        if self.derived_variables is not None:
+            for derived_var in self.derived_variables:
+                if derived_var not in constants.DERIVED_VARIABLES_DEPENDENCIES:
+                    utils.raise_log(
+                        ValueError,
+                        f"Derived variable {derived_var}"
+                        " does not have defined dependencies.",
+                        logger,
+                    )
+
+                dependencies = constants.DERIVED_VARIABLES_DEPENDENCIES[derived_var]
+                for dep in dependencies:
+                    if dep not in self.input_variables:
+                        utils.raise_log(
+                            ValueError,
+                            f"Derived variable {derived_var} depends on {dep}, "
+                            "which is not in input variables.",
+                            logger,
+                        )
 
     @classmethod
     def from_dict(cls, config_dict: dict) -> "DataConfig":
@@ -56,6 +76,11 @@ class DataConfig:
             constants.InputVariable(var_str)
             for var_str in config_dict["input_variables"]
         ]
+        if config_dict.get("derived_variables") is not None:
+            config_dict["derived_variables"] = [
+                constants.InputVariable(var_str)
+                for var_str in config_dict["derived_variables"]
+            ]
 
         return cls.from_dict(config_dict)
 
@@ -85,8 +110,17 @@ def gen_dataset(data_config: DataConfig, out_ffp: Path) -> None:
         df["quality_score"] = vs30_values_df["quality_score"].values
 
     # Add input variable values
+    logger.info(f"Retrieving input variable values for {len(df)} sites.")
     for variable in data_config.input_variables:
         df[variable.value] = get_input_values(df[["lon", "lat"]].to_numpy(), variable)
+
+    # Add derived variables
+    logger.info("Computing derived variable values.")
+    if data_config.derived_variables is not None:
+        feature_engineer = FeatureEngineer(df)
+        df[data_config.derived_variables] = feature_engineer.compute_features(
+            data_config.derived_variables
+        )[data_config.derived_variables]
 
     if (df["vs30"] < 0.0).any():
         raise ValueError("Vs30 values must be non-negative.")
@@ -151,7 +185,9 @@ def get_input_values(points: np.ndarray, variable: constants.InputVariable):
         shape_loader = data_loaders.ShapeLoader()
         values = shape_loader.get_values(points, variable)
     elif data_source == constants.DataSource.NZDistanceToCoast:
-        logger.info(f"Using NZDistanceToCoast data source for variable: {variable.value}")
+        logger.info(
+            f"Using NZDistanceToCoast data source for variable: {variable.value}"
+        )
         dist_to_coast_loader = data_loaders.NZDistanceToCoast()
         values = dist_to_coast_loader.get_values(points, variable)
     else:

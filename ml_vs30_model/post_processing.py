@@ -96,7 +96,7 @@ def compute_shap_feature_importance(
             )
 
     explainer = shap.TreeExplainer(model, train_X)
-    explainer = shap.TreeExplainer(model)
+    # explainer = shap.TreeExplainer(model)
     explainer_values = explainer(train_X if val_results is None else val_X)
     mlt.utils.write_pickle(explainer_values, model_dir / "shap_values.pkl")
 
@@ -228,8 +228,8 @@ def gen_feature_importance_plots(
     shap_values.feature_names = [
         (
             feat
-            if feat not in constants.PRETTY_INPUT_VARIABLE_NAMES
-            else constants.PRETTY_INPUT_VARIABLE_NAMES[feat]
+            if feat not in constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING
+            else constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING[feat]
         )
         for feat in shap_values.feature_names
     ]

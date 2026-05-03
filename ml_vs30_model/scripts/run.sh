@@ -13,4 +13,4 @@ function csnotify {
 
 
 # Create NZ input grid
-python data_cmds.py create-nz-input-grid 0.01 /home/claudy/dev/work/data/vs30/grids/nz_input_grid_0p01 roughness topographic_slope compound_topographic_index geomorphon profile_curvature tangential_curvature terrain_ruggedness_index topographic_position_index vector_ruggedness_measure landform_entropy landform_shannon_index landform_uniformity absolute_depth_to_bedrock depth_to_groundwater nz_geology_category nz_distance_to_coast  --n-procs 12
+# python data_cmds.py create-nz-input-grid 0.01 /home/claudy/dev/work/data/vs30/grids/nz_input_grid_0p01 roughness topographic_slope compound_topographic_index geomorphon profile_curvature tangential_curvature terrain_ruggedness_index topographic_position_index vector_ruggedness_measure landform_entropy landform_shannon_index landform_uniformity absolute_depth_to_bedrock depth_to_groundwater nz_geology_category nz_distance_to_coast  --n-procs 12

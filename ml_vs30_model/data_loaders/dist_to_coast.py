@@ -11,10 +11,11 @@ import shapely
 
 
 from .. import constants
+from .base_loader import BaseLoader
 
 logger = logging.getLogger(__name__)
 
-class NZDistanceToCoast:
+class NZDistanceToCoast(BaseLoader):
     """
     Class for computing distance to coast for New Zealand locations.
     """

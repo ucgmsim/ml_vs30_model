@@ -10,10 +10,11 @@ import rasterio
 
 from .. import constants
 from .. import utils
+from .base_loader import BaseLoader
 
 logger = logging.getLogger(__name__)
 
-class TIFLoader:
+class TIFLoader(BaseLoader):
     """Class for retrieving data from downloaded TIFF files."""
 
     SUPPORTED_VARIABLES = {
@@ -21,22 +22,6 @@ class TIFLoader:
         constants.InputVariable.LandformEntropy,
         constants.InputVariable.LandformUniformity,
         constants.InputVariable.AbsoluteDepthToBedrock,
-        # constants.InputVariable.NZEnvDSDistanceRivers,
-        # constants.InputVariable.NZEnvDSDistanceRiversVertical,
-        # constants.InputVariable.NZEnvDSPrecipAnn,
-        # constants.InputVariable.NZEnvDSSlopeDeg,
-        # constants.InputVariable.NZEnvDSSoilAcidP,
-        # constants.InputVariable.NZEnvDSSoilAge,
-        # constants.InputVariable.NZEnvDSSoilDrainage,
-        # constants.InputVariable.NZEnvDSSoilInduration,
-        # constants.InputVariable.NZEnvDSSoilParticleSize,
-        # constants.InputVariable.NZEnvDSTopoGeomorphons,
-        # constants.InputVariable.NZEnvDSTopoNormalisedHeight,
-        # constants.InputVariable.NZEnvDSTopoPosition,
-        # constants.InputVariable.NZEnvDSTopoRoughness,
-        # constants.InputVariable.NZEnvDSTopoRuggedness,
-        # constants.InputVariable.NZEnvDSTopoValleyDepth,
-        # constants.InputVariable.NZEnvDSTopoWetness,
     }
 
     VAR_TO_FILENAME_MAP = {
@@ -44,22 +29,6 @@ class TIFLoader:
         constants.InputVariable.LandformEntropy: "raw/geom_1KMent_GMTEDmd.tif",
         constants.InputVariable.LandformUniformity: "raw/geom_1KMuni_GMTEDmd.tif",
         constants.InputVariable.AbsoluteDepthToBedrock: "raw/absolute_depth_to_bedrock/BDTICM_M_250m_ll.tif",
-        # constants.InputVariable.NZEnvDSDistanceRivers: "nzenvds_v1p1_nztm/final_layers_nztm/distance_rivers.tif",
-        # constants.InputVariable.NZEnvDSDistanceRiversVertical: "nzenvds_v1p1_nztm/final_layers_nztm/distance_riversVertical.tif",
-        # constants.InputVariable.NZEnvDSPrecipAnn: "nzenvds_v1p1_nztm/final_layers_nztm/precip_ann.tif",
-        # constants.InputVariable.NZEnvDSSlopeDeg: "nzenvds_v1p1_nztm/final_layers_nztm/slope_deg.tif",
-        # constants.InputVariable.NZEnvDSSoilAcidP: "nzenvds_v1p1_nztm/final_layers_nztm/soil_acidP.tif",
-        # constants.InputVariable.NZEnvDSSoilAge: "nzenvds_v1p1_nztm/final_layers_nztm/soil_age.tif",
-        # constants.InputVariable.NZEnvDSSoilDrainage: "nzenvds_v1p1_nztm/final_layers_nztm/soil_drainage.tif",
-        # constants.InputVariable.NZEnvDSSoilInduration: "nzenvds_v1p1_nztm/final_layers_nztm/soil_induration.tif",
-        # constants.InputVariable.NZEnvDSSoilParticleSize: "nzenvds_v1p1_nztm/final_layers_nztm/soil_particleSize.tif",
-        # constants.InputVariable.NZEnvDSTopoGeomorphons: "nzenvds_v1p1_nztm/final_layers_nztm/topo_geomorphons.tif",
-        # constants.InputVariable.NZEnvDSTopoNormalisedHeight: "nzenvds_v1p1_nztm/final_layers_nztm/topo_normalisedHeight.tif",
-        # constants.InputVariable.NZEnvDSTopoPosition: "nzenvds_v1p1_nztm/final_layers_nztm/topo_position.tif",
-        # constants.InputVariable.NZEnvDSTopoRoughness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_roughness.tif",
-        # constants.InputVariable.NZEnvDSTopoRuggedness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_ruggedness.tif",
-        # constants.InputVariable.NZEnvDSTopoValleyDepth: "nzenvds_v1p1_nztm/final_layers_nztm/topo_valleyDepth.tif",
-        # constants.InputVariable.NZEnvDSTopoWetness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_wetness.tif",
     }
 
     def __init__(
@@ -138,25 +107,29 @@ class NZTMTIFLoader:
         constants.InputVariable.NZEnvDSTopoRuggedness,
         constants.InputVariable.NZEnvDSTopoValleyDepth,
         constants.InputVariable.NZEnvDSTopoWetness,
+        constants.InputVariable.NZNLMGroundwaterDepth,
+        constants.InputVariable.NZNWTGroundwaterDepth,
     }
 
     VAR_TO_FILENAME_MAP = {
-        constants.InputVariable.NZEnvDSDistanceRivers: "nzenvds_v1p1_nztm/final_layers_nztm/distance_rivers.tif",
-        constants.InputVariable.NZEnvDSDistanceRiversVertical: "nzenvds_v1p1_nztm/final_layers_nztm/distance_riversVertical.tif",
-        constants.InputVariable.NZEnvDSPrecipAnn: "nzenvds_v1p1_nztm/final_layers_nztm/precip_ann.tif",
-        constants.InputVariable.NZEnvDSSlopeDeg: "nzenvds_v1p1_nztm/final_layers_nztm/slope_deg.tif",
+        # constants.InputVariable.NZEnvDSDistanceRivers: "nzenvds_v1p1_nztm/final_layers_nztm/distance_rivers.tif",
+        # constants.InputVariable.NZEnvDSDistanceRiversVertical: "nzenvds_v1p1_nztm/final_layers_nztm/distance_riversVertical.tif",
+        # constants.InputVariable.NZEnvDSPrecipAnn: "nzenvds_v1p1_nztm/final_layers_nztm/precip_ann.tif",
+        # constants.InputVariable.NZEnvDSSlopeDeg: "nzenvds_v1p1_nztm/final_layers_nztm/slope_deg.tif",
         constants.InputVariable.NZEnvDSSoilAcidP: "nzenvds_v1p1_nztm/final_layers_nztm/soil_acidP.tif",
         constants.InputVariable.NZEnvDSSoilAge: "nzenvds_v1p1_nztm/final_layers_nztm/soil_age.tif",
-        constants.InputVariable.NZEnvDSSoilDrainage: "nzenvds_v1p1_nztm/final_layers_nztm/soil_drainage.tif",
+        # constants.InputVariable.NZEnvDSSoilDrainage: "nzenvds_v1p1_nztm/final_layers_nztm/soil_drainage.tif",
         constants.InputVariable.NZEnvDSSoilInduration: "nzenvds_v1p1_nztm/final_layers_nztm/soil_induration.tif",
-        constants.InputVariable.NZEnvDSSoilParticleSize: "nzenvds_v1p1_nztm/final_layers_nztm/soil_particleSize.tif",
+        # constants.InputVariable.NZEnvDSSoilParticleSize: "nzenvds_v1p1_nztm/final_layers_nztm/soil_particleSize.tif",
         constants.InputVariable.NZEnvDSTopoGeomorphons: "nzenvds_v1p1_nztm/final_layers_nztm/topo_geomorphons.tif",
-        constants.InputVariable.NZEnvDSTopoNormalisedHeight: "nzenvds_v1p1_nztm/final_layers_nztm/topo_normalisedHeight.tif",
-        constants.InputVariable.NZEnvDSTopoPosition: "nzenvds_v1p1_nztm/final_layers_nztm/topo_position.tif",
-        constants.InputVariable.NZEnvDSTopoRoughness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_roughness.tif",
+        # constants.InputVariable.NZEnvDSTopoNormalisedHeight: "nzenvds_v1p1_nztm/final_layers_nztm/topo_normalisedHeight.tif",
+        # constants.InputVariable.NZEnvDSTopoPosition: "nzenvds_v1p1_nztm/final_layers_nztm/topo_position.tif",
+        # constants.InputVariable.NZEnvDSTopoRoughness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_roughness.tif",
         constants.InputVariable.NZEnvDSTopoRuggedness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_ruggedness.tif",
-        constants.InputVariable.NZEnvDSTopoValleyDepth: "nzenvds_v1p1_nztm/final_layers_nztm/topo_valleyDepth.tif",
-        constants.InputVariable.NZEnvDSTopoWetness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_wetness.tif",
+        # constants.InputVariable.NZEnvDSTopoValleyDepth: "nzenvds_v1p1_nztm/final_layers_nztm/topo_valleyDepth.tif",
+        # constants.InputVariable.NZEnvDSTopoWetness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_wetness.tif",
+        # constants.InputVariable.NZNLMGroundwaterDepth: "nz_nlm/NLM_gwd.tif",
+        # constants.InputVariable.NZNWTGroundwaterDepth: "nz_nwt/nwt_wtd_NZ_20220825.tif",
     }
 
     _WGS84_TO_NZTM = Transformer.from_crs(
@@ -186,7 +159,9 @@ class NZTMTIFLoader:
                 logger,
             )
 
-        tif_ffp = self.base_input_data_dir / self.VAR_TO_FILENAME_MAP[variable]
+        tif_ffp = constants.INPUT_VAR_TO_FFP_MAP.get(variable)
+        if not tif_ffp:
+            tif_ffp = self.base_input_data_dir / self.VAR_TO_FILENAME_MAP[variable]
         if not tif_ffp.exists():
             utils.raise_log(
                 FileNotFoundError,

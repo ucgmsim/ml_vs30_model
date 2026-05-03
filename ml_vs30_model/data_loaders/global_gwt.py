@@ -8,10 +8,11 @@ from scipy.interpolate import RegularGridInterpolator
 
 from .. import constants
 from .. import utils
+from .base_loader import BaseLoader
 
 logger = logging.getLogger(__name__)
 
-class GlobalGWT:
+class GlobalGWT(BaseLoader):
     """
     Class for accessing global groundwater table data.
     Dataset source: https://www.science.org/doi/10.1126/science.1229881

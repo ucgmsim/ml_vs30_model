@@ -68,7 +68,7 @@ def pre_process_vs30(values: np.ndarray | pd.Series):
     return np.log(values)
 
 
-def add_sample_weights(train_df: pd.DataFrame, run_config: RunConfig) -> np.ndarray:
+def add_sample_weights(train_df: pd.DataFrame, run_config: RunConfig) -> pd.DataFrame:
     """Computes sample weights based on the Vs30 values in the training DataFrame."""
     train_df.loc[:, "sample_weight"] = 1.0
 
@@ -81,7 +81,7 @@ def add_sample_weights(train_df: pd.DataFrame, run_config: RunConfig) -> np.ndar
         )
 
         train_df.loc[:, "vs30_weight"] = (
-            train_df["vs30_bin"].map(vs30_bin_weights).astype(np.float16)
+            train_df["vs30_bin"].map(vs30_bin_weights).astype(float)
         )
 
         train_df.loc[:, "sample_weight"] += train_df["vs30_weight"]

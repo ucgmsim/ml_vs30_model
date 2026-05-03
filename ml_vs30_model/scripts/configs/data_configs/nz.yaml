@@ -18,6 +18,10 @@ input_variables:
   - depth_to_groundwater
   - nz_geology_category
   - nz_distance_to_coast
+  - nz_geology_age_min
+  - nz_geology_age_max
+  - nz_nlm_groundwater_depth
+  - nz_nwt_groundwater_depth
   - nzenvds_distance_rivers
   - nzenvds_distance_rivers_vertical
   - nzenvds_precip_ann
@@ -34,6 +38,11 @@ input_variables:
   - nzenvds_topo_ruggedness
   - nzenvds_topo_valley_depth
   - nzenvds_topo_wetness
+derived_variables:
+  - nz_geology_age_mid
+  - nz_geology_age_ln_mid
+  - nz_combined_groundwater_depth
+  - nz_combined_groundwater_depth_ln
 
 
 

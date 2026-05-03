@@ -9,6 +9,7 @@ from . import constants
 
 
 class ModelType(StrEnum):
+    MLP = "mlp"
     NGBoost = "ngboost"
     CatBoost = "catboost"
 

@@ -21,8 +21,8 @@ def one_to_one_plot(results_df: pd.DataFrame, output_ffp: Path):
     Generates a one-to-one plot comparing true vs30 values to predicted vs30 values,
     and saves it to the specified output file path.
     """
+    # Vs30
     fig, ax = plt.subplots(figsize=(10, 10))
-
     for vs30_bin in constants.VS30_WEIGHTING_BIN_NAMES:
         mask = results_df["vs30_bin"] == vs30_bin
         ax.scatter(
@@ -32,7 +32,6 @@ def one_to_one_plot(results_df: pd.DataFrame, output_ffp: Path):
             rf"$\sigma$={results_df.loc[mask, 'ln_residual'].std():.3f} (N={mask.sum()})",
             alpha=0.5,
         )
-
     ax.plot(
         [0, 1550],
         [0, 1550],
@@ -51,8 +50,43 @@ def one_to_one_plot(results_df: pd.DataFrame, output_ffp: Path):
     plt.close(fig)
 
     mlt.utils.write_to_yaml(
-        dict(type="one-to-one"),
+        dict(type="one-to-one", variable="vs30"),
         output_ffp.with_name(output_ffp.stem + ".yaml"),
+        clobber=True,
+    )
+
+    # Ln(Vs30)
+    ln_min, ln_max = 4.5, 7.5
+    fig, ax = plt.subplots(figsize=(10, 10))
+    for vs30_bin in constants.VS30_WEIGHTING_BIN_NAMES:
+        mask = results_df["vs30_bin"] == vs30_bin
+        ax.scatter(
+            np.log(results_df.loc[mask, "vs30"]),
+            np.log(results_df.loc[mask, "pred_vs30"]),
+            label=rf"{vs30_bin}, $\mu$={results_df.loc[mask, 'ln_residual'].mean():.3f}, "
+            rf"$\sigma$={results_df.loc[mask, 'ln_residual'].std():.3f} (N={mask.sum()})",
+            alpha=0.5,
+        )
+    ax.plot(
+        [ln_min, ln_max],
+        [ln_min, ln_max],
+        "k",
+    )
+
+    ax.set_xlim(ln_min, ln_max)
+    ax.set_ylim(ln_min, ln_max)
+    ax.set_xlabel("True ln(vs30)")
+    ax.set_ylabel("Predicted ln(vs30)")
+    ax.legend(title="Vs30 Bin")
+    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    ax.set_aspect("equal", adjustable="box")
+    fig.tight_layout()
+    fig.savefig(output_ffp.with_name(output_ffp.stem + "_lnVs30.png"))
+    plt.close(fig)
+
+    mlt.utils.write_to_yaml(
+        dict(type="one-to-one", variable="lnVs30"),
+        output_ffp.with_name(output_ffp.stem + "_lnVs30.yaml"),
         clobber=True,
     )
 
@@ -330,7 +364,7 @@ def cv_iteration_metric_plot(
     plt.close(fig)
 
     mlt.utils.write_to_yaml(
-        dict(type="cv-iteration-metric", metric=metric),
+        dict(type="cv-iteration-metric", metric=str(metric)),
         out_fp.with_name(out_fp.stem + ".yaml"),
         clobber=True,
     )

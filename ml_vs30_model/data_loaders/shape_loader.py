@@ -6,19 +6,24 @@ import numpy as np
 
 from .. import constants
 from .. import utils
+from .base_loader import BaseLoader
 
 logger = logging.getLogger(__name__)
 
 
-class ShapeLoader:
+class ShapeLoader(BaseLoader):
     """Class for retrieving data from downloaded shapefiles."""
 
     SUPPORTED_VARIABLES = {
         constants.InputVariable.NZGeologyCategory,
+        constants.InputVariable.NZGeologyAgeMin,
+        constants.InputVariable.NZGeologyAgeMax,
     }
 
     VAR_TO_FILENAME_MAP = {
         constants.InputVariable.NZGeologyCategory: "foster_geological_category/qmap.shp",
+        constants.InputVariable.NZGeologyAgeMin: "nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp",
+        constants.InputVariable.NZGeologyAgeMax: "nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp",
     }
 
     def __init__(
@@ -52,9 +57,17 @@ class ShapeLoader:
         if variable == constants.InputVariable.NZGeologyCategory:
             shape_df = shape_df.rename(columns={"gid": "value"})
             shape_df = shape_df.set_crs(epsg=constants.NZTM2000_EPSG, allow_override=True)
+        elif variable in constants.InputVariable.NZGeologyAgeMin:
+            shape_df = shape_df.rename(columns={"ABSMIN_MA": "value"})
+        elif variable in constants.InputVariable.NZGeologyAgeMax:
+            shape_df = shape_df.rename(columns={"ABSMAX_MA": "value"})
+        else:
+            utils.raise_log(
+                NotImplementedError,
+                f"Implementation missing for variable {variable} in ShapeLoader.",
+                logger,
+            )
 
         assert shape_df.crs.to_epsg() == constants.NZTM2000_EPSG, "Shape dataframe CRS is not NZTM2000."
-
         merged_df = gpd.sjoin(point_df, shape_df, how="left", predicate="intersects")
-
         return merged_df["value"].to_numpy()

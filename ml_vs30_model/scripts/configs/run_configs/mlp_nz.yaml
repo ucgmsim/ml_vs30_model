@@ -1,20 +1,20 @@
 seed: 42
-model_type: catboost
+model_type: mlp
 pre_process_categorial: false
 
 apply_vs30_sample_weights: true
-max_vs30_weight: 1.5
+max_vs30_weight: 2.5
 
 input_variables:
+  - depth_to_groundwater
   - compound_topographic_index
-  - nz_geology_age_ln_mid
   - nz_geology_category
-  - nz_combined_groundwater_depth_ln
   - nzenvds_slope_deg
   - nzenvds_topo_normalised_height
   - nzenvds_topo_position
   - nzenvds_topo_roughness
   - nzenvds_topo_wetness
+
 
 n_cv_folds: 25
 rel_results_dir: results

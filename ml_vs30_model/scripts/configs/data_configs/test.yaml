@@ -3,5 +3,16 @@ index_col: "sta"
 
 input_variables: 
   - elevation
+  - nz_geology_age_min
+  - nz_geology_age_max
+  - nz_nlm_groundwater_depth
+  - nz_nwt_groundwater_depth
+  - depth_to_groundwater
+
+derived_variables:
+  - nz_geology_age_mid
+  - nz_geology_age_ln_mid
+  - nz_combined_groundwater_depth
+  - nz_combined_groundwater_depth_ln
 
 

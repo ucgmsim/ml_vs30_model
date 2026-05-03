@@ -4,6 +4,10 @@ import os
 
 import numpy as np
 
+if (BASE_DATA_DIR := os.getenv("VS30_MODEL_BASE_DATA_DIR")) is None:
+    raise EnvironmentError("Environment variable VS30_MODEL_BASE_DATA_DIR is not set.")
+BASE_DATA_DIR  = Path(BASE_DATA_DIR)
+
 
 class DataSource(StrEnum):
     GeoMorpho90 = "geomorpho90"
@@ -30,10 +34,18 @@ class InputVariable(StrEnum):
     LandformUniformity = "landform_uniformity"
     AbsoluteDepthToBedrock = "absolute_depth_to_bedrock"
     DepthToGroundwater = "depth_to_groundwater"
-    Elevation = "elevation"                     # SRTMGL1 elevation data (30m)
+    Elevation = "elevation"                                                 # SRTMGL1 elevation data (30m)
     # NZ 
-    NZGeologyCategory = "nz_geology_category"   # Foster et al.
-    NZDistanceToCoast = "nz_distance_to_coast"  # Manually computed
+    NZGeologyCategory = "nz_geology_category"                               # Foster et al.
+    NZDistanceToCoast = "nz_distance_to_coast"                              # Manually computed
+    NZGeologyAgeMin = "nz_geology_age_min"                                  # GNS Geology Units
+    NZGeologyAgeMax = "nz_geology_age_max"                                  # GNS Geology Units
+    NZGeologyAgeMid = "nz_geology_age_mid" 
+    NZGeologyAgeLnMid = "nz_geology_age_ln_mid" 
+    NZNLMGroundwaterDepth = "nz_nlm_groundwater_depth"                      # NLM Groundwater Depth Model
+    NZNWTGroundwaterDepth = "nz_nwt_groundwater_depth"                      # National Water Table
+    NZCombinedGroundwaterDepth = "nz_combined_groundwater_depth"            # Combined groundwater depth from NLM and NWT
+    NZCombinedGroundwaterDepthLn = "nz_combined_groundwater_depth_ln"      
     # NZEnvDS
     NZEnvDSDistanceRivers = "nzenvds_distance_rivers"
     NZEnvDSDistanceRiversVertical = "nzenvds_distance_rivers_vertical"
@@ -52,16 +64,6 @@ class InputVariable(StrEnum):
     NZEnvDSTopoValleyDepth = "nzenvds_topo_valley_depth"
     NZEnvDSTopoWetness = "nzenvds_topo_wetness"
 
-PRETTY_INPUT_VARIABLE_NAMES = {
-    InputVariable.NZGeologyCategory: "NZ Geology Category",
-    InputVariable.CompoundTopgraphicIndex: "Compound Topographic Index",    
-    InputVariable.DepthToGroundwater: "Groundwater Depth",
-    InputVariable.NZEnvDSSlopeDeg: "NZEnvDS Slope (Degrees)",
-    InputVariable.NZEnvDSTopoNormalisedHeight: "NZEnvDS Norm. Topo Height",
-    InputVariable.NZEnvDSTopoPosition: "NZEnvDS Topo Position",
-    InputVariable.NZEnvDSTopoWetness: "NZEnvDS Wetness",
-    InputVariable.NZEnvDSTopoRoughness: "NZEnvDS Roughness",
-}
 
 INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.Roughness: DataSource.GeoMorpho90,
@@ -81,6 +83,10 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.Elevation: DataSource.SRTMGL1,    
     InputVariable.NZGeologyCategory: DataSource.ShapeLoader,
     InputVariable.NZDistanceToCoast: DataSource.NZDistanceToCoast,
+    InputVariable.NZGeologyAgeMin: DataSource.ShapeLoader,
+    InputVariable.NZGeologyAgeMax: DataSource.ShapeLoader,
+    InputVariable.NZNLMGroundwaterDepth: DataSource.NZTMTIFLoader,
+    InputVariable.NZNWTGroundwaterDepth: DataSource.NZTMTIFLoader,
     InputVariable.NZEnvDSDistanceRivers: DataSource.NZTMTIFLoader,
     InputVariable.NZEnvDSDistanceRiversVertical: DataSource.NZTMTIFLoader,
     InputVariable.NZEnvDSPrecipAnn: DataSource.NZTMTIFLoader,
@@ -117,6 +123,14 @@ INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
     InputVariable.DepthToGroundwater: "Depth To Groundwater",
     InputVariable.NZGeologyCategory: "NZ Geology Category",
     InputVariable.NZDistanceToCoast: "NZ Distance To Coast",
+    InputVariable.NZGeologyAgeMin: "NZ Geology Age (Min)",
+    InputVariable.NZGeologyAgeMax: "NZ Geology Age (Max)",
+    InputVariable.NZGeologyAgeMid: "NZ Geology Age (Mid)",
+    InputVariable.NZGeologyAgeLnMid: "NZ Geology Age (Ln Mid)",
+    InputVariable.NZNLMGroundwaterDepth: "NZ NLM Groundwater Depth",
+    InputVariable.NZNWTGroundwaterDepth: "NZ NWT Groundwater Depth",
+    InputVariable.NZCombinedGroundwaterDepth: "NZ Groundwater Depth (Comb)",
+    InputVariable.NZCombinedGroundwaterDepthLn: "NZ Groundwater Depth (Comb, Ln)",
     InputVariable.NZEnvDSDistanceRivers: "NZEnvDS Distance To Rivers",
     InputVariable.NZEnvDSDistanceRiversVertical: "NZEnvDS Vertical Distance To Rivers",
     InputVariable.NZEnvDSPrecipAnn: "NZEnvDS Annual Precipitation",
@@ -167,6 +181,9 @@ GLOBAL_INPUT_VARS = np.array([
 NZ_INPUT_VARS = np.array([
     InputVariable.NZGeologyCategory,    
     InputVariable.NZDistanceToCoast,
+    InputVariable.NZGeologyAgeLnMid,
+    InputVariable.NZCombinedGroundwaterDepth,
+    InputVariable.NZCombinedGroundwaterDepthLn,
     InputVariable.NZEnvDSDistanceRivers,
     InputVariable.NZEnvDSDistanceRiversVertical,
     InputVariable.NZEnvDSPrecipAnn,
@@ -185,14 +202,36 @@ NZ_INPUT_VARS = np.array([
     InputVariable.NZEnvDSTopoWetness,
 ])
 
+DERIVED_VARIABLES_DEPENDENCIES = {
+    InputVariable.NZGeologyAgeMid: [InputVariable.NZGeologyAgeMin, InputVariable.NZGeologyAgeMax],
+    InputVariable.NZGeologyAgeLnMid: [InputVariable.NZGeologyAgeMin, InputVariable.NZGeologyAgeMax],
+    InputVariable.NZCombinedGroundwaterDepth: [InputVariable.NZNLMGroundwaterDepth, InputVariable.NZNWTGroundwaterDepth],
+    InputVariable.NZCombinedGroundwaterDepthLn: [InputVariable.NZNLMGroundwaterDepth, InputVariable.NZNWTGroundwaterDepth],
+}
+
+# Input variables locations
+INPUT_VAR_TO_FFP_MAP = {
+    InputVariable.NZEnvDSSlopeDeg: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/slope_deg.tif",
+    InputVariable.NZEnvDSTopoNormalisedHeight: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_normalisedHeight.tif",
+    InputVariable.NZEnvDSTopoPosition: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_position.tif",
+    InputVariable.NZEnvDSTopoRoughness: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_roughness.tif",
+    InputVariable.NZEnvDSTopoWetness: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_wetness.tif",
+    InputVariable.NZEnvDSDistanceRivers: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/distance_rivers.tif",
+    InputVariable.NZEnvDSDistanceRiversVertical: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/distance_riversVertical.tif",
+    InputVariable.NZEnvDSPrecipAnn: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/precip_ann.tif",
+    InputVariable.NZEnvDSSoilDrainage: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/soil_drainage.tif",
+    InputVariable.NZEnvDSSoilParticleSize: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/soil_particleSize.tif",
+    InputVariable.NZEnvDSTopoValleyDepth: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_valleyDepth.tif",
+    InputVariable.NZNLMGroundwaterDepth: BASE_DATA_DIR / "input_data/nz_nlm/NLM_gwd.tif",
+    InputVariable.NZNWTGroundwaterDepth: BASE_DATA_DIR / "input_data/nz_nwt/nwt_wtd_NZ_20220825.tif",
+}
+
+
 WGS84_EPSG_STR = "EPSG:4326"    
 WGS84_EPSG = 4326    
 NZTM2000_EPSG_STR = "EPSG:2193" 
 NZTM2000_EPSG = 2193
 
-if (BASE_DATA_DIR := os.getenv("VS30_MODEL_BASE_DATA_DIR")) is None:
-    raise EnvironmentError("Environment variable VS30_MODEL_BASE_DATA_DIR is not set.")
-BASE_DATA_DIR  = Path(BASE_DATA_DIR)
 
 
 LN_NORM_VARS = [
@@ -208,11 +247,10 @@ NORM_VARS = [
     InputVariable.TopographicPositionIndex,
     InputVariable.ProfileCurvature,
     InputVariable.TangentialCurvature,
-
 ]
 
 MIN_MAX_SCALE_PARAMS = {
-    InputVariable.DepthToGroundwater: (-5, 5),
+    InputVariable.NZCombinedGroundwaterDepthLn: (-6, 6),
     InputVariable.CompoundTopgraphicIndex: (-4.0, 10.0),
     InputVariable.LandformEntropy: (0, 3.0),
     InputVariable.LandformUniformity: (0, 1.0),
@@ -221,6 +259,7 @@ MIN_MAX_SCALE_PARAMS = {
     InputVariable.NZEnvDSTopoNormalisedHeight: (0, 1),
     InputVariable.NZEnvDSTopoPosition: (-30, 30),
     InputVariable.NZEnvDSTopoWetness: (2, 15),
+    InputVariable.NZGeologyAgeLnMid: (-6, 6),
 }
 
 
