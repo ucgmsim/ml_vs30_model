@@ -12,25 +12,65 @@ import folium
 import requests
 
 import ml_vs30_model as vs30
+from qcore import coordinates
 
-variables = list(vs30.constants.INPUT_VAR_TO_FFP_MAP.keys())
+BASE_URL = "http://127.0.0.1:8000/xr"
+
+# variables = list(vs30.constants.INPUT_VAR_TO_FFP_MAP.keys())
+datasets = [f.name for f in vs30.constants.BASE_DATA_DIR.glob("grids/*") if f.is_dir()]
 
 
-def get_variable_stats(variable: str):
-    stats_tiler_url = f"http://127.0.0.1:8000/statistics?url={variable}"
-    response = requests.get(stats_tiler_url)
-
-    json_dict = json.loads(response.text)
-    counts, bin_edges = json_dict["b1"]["histogram"]
-    stats = {
-        "histogram": (counts, bin_edges),
-        "min": json_dict["b1"]["min"],
-        "max": json_dict["b1"]["max"],
+def get_variable_stats(dataset_name: str, variable: str):
+    params = {
+        "url": dataset_name,
+        "variable": variable,
     }
 
-    min_val, max_val = float(np.round((json_dict["b1"]["min"]), 3)), float(np.round(
-        json_dict["b1"]["max"], 3
-    ))
+    # Get full dataset bounds
+    info = requests.get(
+        f"{BASE_URL}/info",
+        params=params,
+    ).json()
+    bounds = info["bounds"]  # [minx, miny, maxx, maxy]
+
+    # Build a GeoJSON polygon from bounds
+    minx, miny, maxx, maxy = bounds
+    min_lat, min_lon = coordinates.nztm_to_wgs_depth(np.array([miny, minx]))
+    max_lat, max_lon = coordinates.nztm_to_wgs_depth(np.array([maxy, maxx]))
+
+    geojson = {
+        "type": "Feature",
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [min_lon, min_lat],
+                    [max_lon, min_lat],
+                    [max_lon, max_lat],
+                    [min_lon, max_lat],
+                    [min_lon, min_lat],
+                ]
+            ],
+        },
+        "properties": {},
+    }
+
+    response = requests.post(f"{BASE_URL}/statistics", params=params, json=geojson)
+
+    if response.status_code != 200:
+        raise ValueError(f"Error fetching variable stats: {response.text}")
+
+    stats_dict = json.loads(response.text)["properties"]["statistics"]["b1"]
+    counts, bin_edges = stats_dict["histogram"]
+    stats = {
+        "histogram": (counts, bin_edges),
+        "min": stats_dict["min"],
+        "max": stats_dict["max"],
+    }
+
+    min_val, max_val = float(np.round((stats_dict["min"]), 3)), float(
+        np.round(stats_dict["max"], 3)
+    )
     step_size = (max_val - min_val) / 100
 
     return (
@@ -40,9 +80,28 @@ def get_variable_stats(variable: str):
     )
 
 
-def create_map(variable: str, cmap: str, cmap_min: float, cmap_max: float):
-    tiler_url = f"http://127.0.0.1:8000/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}"
-    tiler_url += f"?url={variable}&colormap_name={cmap}&rescale={cmap_min},{cmap_max}"
+def supported_variables(dataset_name: str):
+    """Gets the list of variables available in the dataset for tiling."""
+    variables_tiler_url = f"{BASE_URL}/variables?url={dataset_name}"
+
+    vars = json.loads(requests.get(variables_tiler_url).text)
+    vars.remove("spatial_ref")  # Remove the spatial_ref
+
+    return gr.Dropdown(choices=vars)
+
+
+def create_map(
+    dataset_name: str, variable: str, cmap: str, cmap_min: float, cmap_max: float
+):
+    # tiler_url = f"http://127.0.0.1:8000/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}"
+    # tiler_url += f"?url={variable}&colormap_name={cmap}&rescale={cmap_min},{cmap_max}"
+
+    tiler_url = (
+        BASE_URL
+        + "/tiles/WebMercatorQuad/{z}/{x}/{y}"
+        + f"?url={dataset_name}&variable={variable}"
+        + f"&colormap_name={cmap}&rescale={cmap_min},{cmap_max}"
+    )
 
     m = folium.Map(location=[-43.5, 172.6], zoom_start=6, tiles="cartodb positron")
 
@@ -106,12 +165,16 @@ with gr.Blocks() as demo:
 
     with gr.Sidebar(open=True):
         with gr.Group():
+            dataset_dropdown = gr.Dropdown(
+                interactive=True, choices=datasets, label="Dataset", show_label=True
+            )
             var_dropdown = gr.Dropdown(
-                choices=variables,
                 label="Input Variable",
-                value=None,
                 show_label=True,
             )
+            data_update_btn = gr.Button("Update", variant="primary")
+
+        gr.HTML("<hr>")
 
         # Colormap
         with gr.Group():
@@ -129,35 +192,57 @@ with gr.Blocks() as demo:
                 label="Colormap max", interactive=True, precision=3
             )
 
-    # Input variable changed
-    var_dropdown.change(
-        get_variable_stats, inputs=var_dropdown, outputs=[var_stats, cmap_min_slider, cmap_max_slider]
-    ).then(
-        create_map,
-        inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
-        outputs=[map, cbar_plot],
-    ).then(
-        gen_hist_plot,
-        inputs=[var_dropdown, var_stats],
-        outputs=hist_plot,
+            vis_update_btn = gr.Button("Update", variant="primary")
+
+    dataset_dropdown.change(
+        supported_variables, inputs=dataset_dropdown, outputs=var_dropdown
     )
 
-    # Colormap settings changed
-    cmap_dropdown.change(
+    data_update_btn.click(
+        get_variable_stats,
+        inputs=[dataset_dropdown, var_dropdown],
+        outputs=[var_stats, cmap_min_slider, cmap_max_slider],
+    ).then(
         create_map,
-        inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
+        inputs=[
+            dataset_dropdown,
+            var_dropdown,
+            cmap_dropdown,
+            cmap_min_slider,
+            cmap_max_slider,
+        ],
         outputs=[map, cbar_plot],
     )
-    cmap_min_slider.change(
-        create_map,
-        inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
-        outputs=[map, cbar_plot],
-    )
-    cmap_max_slider.change(
-        create_map,
-        inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
-        outputs=[map, cbar_plot],   
-    )
+
+    # # Input variable changed
+    # var_dropdown.change(
+    #     get_variable_stats, inputs=var_dropdown, outputs=[var_stats, cmap_min_slider, cmap_max_slider]
+    # ).then(
+    #     create_map,
+    #     inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
+    #     outputs=[map, cbar_plot],
+    # ).then(
+    #     gen_hist_plot,
+    #     inputs=[var_dropdown, var_stats],
+    #     outputs=hist_plot,
+    # )
+
+    # # Colormap settings changed
+    # cmap_dropdown.change(
+    #     create_map,
+    #     inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
+    #     outputs=[map, cbar_plot],
+    # )
+    # cmap_min_slider.change(
+    #     create_map,
+    #     inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
+    #     outputs=[map, cbar_plot],
+    # )
+    # cmap_max_slider.change(
+    #     create_map,
+    #     inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
+    #     outputs=[map, cbar_plot],
+    # )
 
 
 demo.launch(css="""

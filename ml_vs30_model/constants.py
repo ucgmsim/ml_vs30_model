@@ -233,7 +233,6 @@ NZTM2000_EPSG_STR = "EPSG:2193"
 NZTM2000_EPSG = 2193
 
 
-
 LN_NORM_VARS = [
     InputVariable.AbsoluteDepthToBedrock,
     InputVariable.TopographicSlope,
@@ -277,6 +276,8 @@ DENSE_VS30_BIN_NAMES = [
 ]
 
 NZ_BOUNDING_BOX = [166.3, 179, -47.4, -36.0]
+
+NZTM_BOUNDING_BOX = [1079100.000, 2100800.000, 4736600.000, 6229700.000]
 
 # Geyin & Maurer model MAE values for Vs30 bins
 # Table 2 of Geyin & Maurer (2023) 

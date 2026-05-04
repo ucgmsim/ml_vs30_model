@@ -13,6 +13,7 @@ from .configs import RunConfig
 from . import pre_processing
 from . import post_processing
 from . import training
+from . import constants
 
 logger = logging.getLogger(__name__)
 
@@ -153,3 +154,14 @@ def run_model_training(
     # Save results
     model.save_model(out_dir / "model.cbm")
     run_config.to_yaml(out_dir / "run_config.yaml")
+
+
+def estimate_vs30_nz(model_dir: Path, grid_dx: float, grid_dy: float):
+    # Create the grid
+    x = np.arange(constants.NZTM_BOUNDING_BOX[0], constants.NZTM_BOUNDING_BOX[1] + grid_dx, grid_dx)
+    y = np.arange(constants.NZTM_BOUNDING_BOX[2], constants.NZTM_BOUNDING_BOX[3] + grid_dy, grid_dy)
+
+    grid_x, grid_y = np.meshgrid(x, y)
+    grid_points = np.column_stack([grid_x.ravel(), grid_y.ravel()])
+
+    print("wtf")

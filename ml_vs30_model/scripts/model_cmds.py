@@ -129,5 +129,22 @@ def run_post_processing(results_dir: Path, gen_waterfall_plots: bool = False):
     )
 
 
+@app.command("estimate-vs30-nz")
+def estimate_vs30_nz(
+    model_dir: Path, grid_dx: float, grid_dy: float):
+    """
+    Estimates Vs30 across New Zealand using the trained model.
+
+    Parameters
+    ----------
+    model_dir : Path
+        Directory containing the trained model and run configuration.
+    grid_dx : float
+        Grid spacing in the x-direction (longitude) in meters.
+    grid_dy : float
+        Grid spacing in the y-direction (latitude) in meters.
+    """
+    vs30.catboost_model.estimate_vs30_nz(model_dir, grid_dx, grid_dy)
+
 if __name__ == "__main__":
     app()

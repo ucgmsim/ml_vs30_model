@@ -1,5 +1,10 @@
 from fastapi import FastAPI
-from titiler.core.factory import TilerFactory
+from titiler.core import factory as core_factory
+from titiler.xarray import extensions as xr_extensions
+from titiler.xarray import factory as xr_factory
+from titiler.xarray import io as xr_io
+import xarray as xr
+
 from fastapi import HTTPException, Query
 
 from starlette.middleware.cors import CORSMiddleware
@@ -11,20 +16,42 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins (for development - be more specific in production)
+    allow_origins=[
+        "*"
+    ],  # Allows all origins (for development - be more specific in production)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-def resolve_url(url: str = Query(...)) -> str:
+
+def tif_resolve_url(url: str = Query(...)) -> str:
     resolved = vs30.constants.INPUT_VAR_TO_FFP_MAP.get(url)
     if not resolved:
         raise HTTPException(status_code=404, detail=f"Unknown dataset: '{url}'")
     return resolved
 
-# Create a TilerFactory for Cloud-Optimized GeoTIFFs
-cog = TilerFactory(path_dependency=resolve_url)
+def xr_resolve_url(url: str = Query(...)) -> str:
+    ffp = vs30.constants.BASE_DATA_DIR / "grids" / url / "input_grid.nc"
+    if not ffp.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Dataset not found: '{url}'"
+        )
+    return str(ffp)
 
-# Register all the COG endpoints automatically
+
+# Cloud-Optimized GeoTIFFs
+cog = core_factory.TilerFactory(path_dependency=tif_resolve_url)
 app.include_router(cog.router, tags=["Cloud Optimized GeoTIFF"])
+
+# Xarray
+xr = xr_factory.TilerFactory(
+    reader=xr_io.FsReader,
+    router_prefix="/xr",
+    path_dependency=xr_resolve_url,
+    extensions=[
+        # we also want to use the simple opener for the Extension
+        xr_extensions.VariablesExtension(dataset_opener=xr.open_dataset),
+    ],
+)
+app.include_router(xr.router, prefix="/xr", tags=["Xarray"])

@@ -14,6 +14,7 @@ import ml_tools as mlt
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from pygmt_helper import plotting as gmt_plotting
+from qcore import coordinates
 
 from . import constants
 from . import data_loaders
@@ -201,6 +202,44 @@ def get_input_values(points: np.ndarray, variable: constants.InputVariable):
     return values
 
 
+def _get_variable_nztm_da(
+    land_points: np.ndarray,
+    land_mask: np.ndarray,
+    nztm_y_coords: np.ndarray,
+    nztm_x_coords: np.ndarray,
+    variable: constants.InputVariable,
+) -> xr.DataArray:
+    """
+    MP helper function
+
+    Creates a DataArray for the given variable, with values filled in for land points
+    and NaN or -9999 for non-land points.
+    Parameter land_points needs to be shape[:, 2], in lon/lat order,
+    and the resulting DataArray uses nztm_x/y coordinates.
+    """
+    variable_values = get_input_values(land_points, variable)
+
+    if np.issubdtype(variable_values.dtype, np.floating):
+        variable_da = xr.DataArray(
+            np.full(land_mask.shape, np.nan, dtype=np.float64),
+            coords=[nztm_y_coords, nztm_x_coords],
+            dims=["y", "x"],
+        )
+    elif np.issubdtype(variable_values.dtype, np.integer):
+        variable_da = xr.DataArray(
+            np.full(land_mask.shape, -9999, dtype=np.int32),
+            coords=[nztm_y_coords, nztm_x_coords],
+            dims=["y", "x"],
+        )
+    else:
+        raise ValueError(
+            f"Unsupported data type for variable {variable}: {variable_values.dtype}"
+        )
+
+    variable_da.values[land_mask] = variable_values
+    return variable, variable_da
+
+
 def _get_variable_da(
     land_points: np.ndarray,
     land_mask: np.ndarray,
@@ -208,7 +247,13 @@ def _get_variable_da(
     lon_coords: np.ndarray,
     variable: constants.InputVariable,
 ) -> xr.DataArray:
-    """MP helper function"""
+    """
+    MP helper function
+
+    Creates a DataArray for the given variable, with values filled in for land points
+    and NaN or -9999 for non-land points.
+    Resulting DataArray uses lat/lon coordinates and has the same shape as the land_mask.
+    """
     variable_values = get_input_values(land_points, variable)
 
     if np.issubdtype(variable_values.dtype, np.floating):
@@ -229,8 +274,70 @@ def _get_variable_da(
         )
 
     variable_da.values[land_mask] = variable_values
-
     return variable, variable_da
+
+
+def create_nz_nztm_input_grid(
+    dx: float,
+    dy: float,
+    output_dir: Path,
+    variables: list[constants.InputVariable],
+    n_procs: int = 1,
+):
+    min_x, max_x, min_y, max_y = constants.NZTM_BOUNDING_BOX
+    nztm_x = np.arange(min_x, max_x + dx, dx)
+    nztm_y = np.arange(min_y, max_y + dy, dy)
+
+    grid_x, grid_y = np.meshgrid(nztm_x, nztm_y)
+    grid_points = np.column_stack([grid_x.ravel(), grid_y.ravel()])
+    grid_points_latlon = coordinates.nztm_to_wgs_depth(grid_points[:, ::-1])
+
+    logger.info(
+        f"Generating land mask for {len(grid_points)} points."
+    )
+    map_data = gmt_plotting.NZMapData.load()
+
+    start = time.time()
+    coast_mask, water_mask = gmt_plotting.get_coast_water_mask_optimised(
+        map_data, grid_points_latlon, 
+    )
+    logger.info(f"Took: {time.time() - start} for optimized coast/water mask")
+
+    land_mask = coast_mask & ~water_mask
+    land_mask = land_mask.reshape(grid_x.shape)
+
+    on_land_da = xr.DataArray(
+        land_mask.astype(int), coords=[nztm_y, nztm_x], dims=["y", "x"]
+    )
+    grid_dataset = xr.Dataset({"on_land": on_land_da})
+    grid_dataset = grid_dataset.rio.write_crs(constants.NZTM2000_EPSG_STR)
+
+    logger.info("Extracting variable values for land points.")
+    land_points_lonlat = grid_points_latlon[land_mask.ravel()][:, ::-1]
+    if n_procs == 1:
+        for variable in variables:
+            logger.info(f"Processing variable: {variable.value}")
+            _, variable_da = _get_variable_nztm_da(
+                land_points_lonlat, land_mask, nztm_y, nztm_x, variable
+            )
+            grid_dataset[variable.value] = variable_da
+    else:
+        with mp.Pool(processes=n_procs) as p:
+            results = p.starmap(
+                _get_variable_nztm_da,
+                [
+                    (land_points_lonlat, land_mask, nztm_y, nztm_x, variable)
+                    for variable in variables
+                ],
+            )
+
+            for variable, variable_da in results:
+                grid_dataset[variable.value] = variable_da
+
+    # Create output directory if it doesn't exist
+    output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Saving grid dataset to {output_dir}")
+    grid_dataset.to_netcdf(output_dir / "input_grid.nc")
 
 
 def create_nz_input_grid(

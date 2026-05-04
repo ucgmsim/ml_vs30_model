@@ -6,7 +6,11 @@ import typer
 import ml_tools as mlt
 import ml_vs30_model as vs30
 
-app = typer.Typer(pretty_exceptions_short=True, pretty_exceptions_show_locals=False, add_completion=False)
+app = typer.Typer(
+    pretty_exceptions_short=True,
+    pretty_exceptions_show_locals=False,
+    add_completion=False,
+)
 
 
 @app.command("gen-dataset")
@@ -20,6 +24,22 @@ def gen_dataset(config_ffp: Path, out_ffp: Path, log_ffp: Path | None = None):
 
     config = vs30.DataConfig.from_yaml(config_ffp)
     vs30.data.gen_dataset(config, out_ffp)
+
+
+@app.command("create-nz-nztm-input-grid")
+def create_nz_nztm_input_grid(
+    dx: float,
+    dy: float,
+    output_dir: Path,
+    variables: list[vs30.constants.InputVariable],
+    n_procs: int = 1,
+):
+    """
+    Creates a grid of input variable values for New Zealand in NZTM coordinates,
+    based on the provided grid spacing (in meters).
+    """
+    mlt.utils.setup_logging()
+    vs30.data.create_nz_nztm_input_grid(dx, dy, output_dir, variables, n_procs=n_procs)
 
 
 @app.command("create-nz-input-grid")
@@ -36,7 +56,6 @@ def create_nz_input_grid(
     based on the provided resolution (in degrees).
     """
     mlt.utils.setup_logging()
-
     vs30.data.create_nz_input_grid(
         vs30.constants.NZ_BOUNDING_BOX,
         resolution,
