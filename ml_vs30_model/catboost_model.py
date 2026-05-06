@@ -161,7 +161,7 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path):
     """Estimates Vs30 across New Zealand using the trained model"""
     run_config = RunConfig.from_yaml(model_dir / "run_config.yaml")
 
-    with xr.open_dataset(input_dataset_ffp) as ds:
+    with xr.open_dataset(input_dataset_ffp, mode="r", mask_and_scale=False) as ds:
         land_mask = ds["on_land"].values.astype(bool)
         input_ds = ds[run_config.input_variables]
 

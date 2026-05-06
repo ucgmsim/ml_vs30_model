@@ -33,7 +33,7 @@ class OpenTopographyS3Loader(BaseLoader):
         self.variable_file_dfs_cache: dict[constants.InputVariable, list[str]] = {}
 
     def get_values(
-        self, coords: np.ndarray, variable: constants.InputVariable
+        self, coords: np.ndarray, variable: constants.InputVariable, address_missing: bool = True
     ) -> np.ndarray:
         """Get the values of the specified variable at the given lat/lon coordinates."""
         data_dir = self.base_base_input_data_dir / variable
@@ -57,7 +57,7 @@ class OpenTopographyS3Loader(BaseLoader):
                 values = np.empty(coords.shape[0], dtype=cur_values.dtype)
 
             missing_mask = cur_values == -9999
-            if np.any(missing_mask):
+            if address_missing and np.any(missing_mask):
                 logger.info(
                     f"Found {np.sum(missing_mask)}/{cur_values.shape[0]} missing values for variable {variable} "
                     f"for filename {filename}. Using nearest non-missing value."
@@ -197,7 +197,7 @@ class SRTMGL1(OpenTopographyS3Loader):
         super().__init__(base_input_data_dir)
 
     def get_values(
-        self, coords: np.ndarray, variable: constants.InputVariable
+        self, coords: np.ndarray, variable: constants.InputVariable, address_missing: bool = True
     ) -> np.ndarray:
         if variable not in self.SUPPORTED_VARIABLES:
             utils.raise_log(
@@ -206,7 +206,7 @@ class SRTMGL1(OpenTopographyS3Loader):
                 logger,
             )
 
-        return super().get_values(coords, variable)
+        return super().get_values(coords, variable, address_missing=address_missing)
 
     def _download_tif_file(
         self, tif_filename: str, variable: constants.InputVariable
@@ -288,7 +288,7 @@ class GeoMorpho90(OpenTopographyS3Loader):
         super().__init__(base_input_data_dir)
 
     def get_values(
-        self, coords: np.ndarray, variable: constants.InputVariable
+        self, coords: np.ndarray, variable: constants.InputVariable, address_missing: bool = True
     ) -> np.ndarray:
         if variable not in self.SUPPORTED_VARIABLES:
             utils.raise_log(
@@ -297,7 +297,7 @@ class GeoMorpho90(OpenTopographyS3Loader):
                 logger,
             )
 
-        return super().get_values(coords, variable)
+        return super().get_values(coords, variable, address_missing=address_missing)
 
     def _get_tif_filenames(
         self, coords: np.ndarray, variable: constants.InputVariable

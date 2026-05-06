@@ -143,7 +143,9 @@ def gen_dataset(data_config: DataConfig, out_ffp: Path) -> None:
     logger.info(f"Dataset saved to {out_ffp}")
 
 
-def get_input_values(points: np.ndarray, variable: constants.InputVariable):
+def get_input_values(
+    points: np.ndarray, variable: constants.InputVariable, address_missing: bool = True
+):
     """
     Gets the input variable values for the given points and variables.
 
@@ -153,6 +155,9 @@ def get_input_values(points: np.ndarray, variable: constants.InputVariable):
         An array of shape (n_points, 2) containing the longitude and latitude of the points.
     variable: constants.InputVariable
         The input variable to retrieve values for.
+    address_missing: bool
+        Whether to address missing values (e.g. negative depth to bedrock)
+        by finding nearest valid value. Can be slow for large number of points.
     """
     logger.info(f"Processing variable: {variable.value}")
     data_source = constants.INPUT_VARIABLE_SOURCE_MAPPING.get(variable)
@@ -160,15 +165,21 @@ def get_input_values(points: np.ndarray, variable: constants.InputVariable):
     if data_source == constants.DataSource.GeoMorpho90:
         logger.info(f"Using GeoMorpho90 data source for variable: {variable.value}")
         geomorpho90 = data_loaders.GeoMorpho90()
-        values = geomorpho90.get_values(points, variable)
+        values = geomorpho90.get_values(
+            points, variable, address_missing=address_missing
+        )
     elif data_source == constants.DataSource.SRTMGL1:
         logger.info(f"Using SRTMGL1 data source for variable: {variable.value}")
         srtm_loader = data_loaders.SRTMGL1()
-        values = srtm_loader.get_values(points, variable)
+        values = srtm_loader.get_values(
+            points, variable, address_missing=address_missing
+        )
     elif data_source == constants.DataSource.TIFLoader:
         logger.info(f"Using TIFLoader data source for variable: {variable.value}")
         tif_loader = data_loaders.TIFLoader()
-        values = tif_loader.get_values(points, variable)
+        values = tif_loader.get_values(
+            points, variable, address_missing=address_missing
+        )
     elif data_source == constants.DataSource.NZTMTIFLoader:
         logger.info(f"Using NZTMTIFLoader data source for variable: {variable.value}")
         nztm_loader = data_loaders.NZTMTIFLoader()
@@ -176,7 +187,9 @@ def get_input_values(points: np.ndarray, variable: constants.InputVariable):
     elif data_source == constants.DataSource.GlobalGWT:
         logger.info(f"Using GlobalGWT data source for variable: {variable.value}")
         global_gwt = data_loaders.GlobalGWT()
-        values = global_gwt.get_values(points, variable)
+        values = global_gwt.get_values(
+            points, variable
+        )
     elif data_source == constants.DataSource.ShapeLoader:
         logger.info(f"Using ShapeLoader data source for variable: {variable.value}")
         shape_loader = data_loaders.ShapeLoader()
@@ -192,8 +205,8 @@ def get_input_values(points: np.ndarray, variable: constants.InputVariable):
         logger.error(error_msg)
         raise NotImplementedError(error_msg)
 
-    assert np.any(
-        values != -9999
+    assert not address_missing or (
+        address_missing and np.any(values == -9999) or np.any(np.isnan(values))
     ), f"Variable {variable} contains missing values after processing."
     logger.info(f"Completed processing for variable: {variable.value}")
     return values
@@ -207,7 +220,7 @@ def __get_variable_da(
     variable: constants.InputVariable,
 ) -> xr.DataArray:
     """
-    Helper function to create a DataArray for a variable, 
+    Helper function to create a DataArray for a variable,
     with values filled in for land points and NaN/-9999 for non-land points.
     """
     if np.issubdtype(variable_values.dtype, np.floating):
@@ -216,14 +229,18 @@ def __get_variable_da(
             coords=[nztm_y_coords, nztm_x_coords],
             dims=["y", "x"],
         )
-        variable_da = variable_da.rio.write_crs(constants.NZTM2000_EPSG_STR).rio.write_nodata(np.nan)
+        variable_da = variable_da.rio.write_crs(
+            constants.NZTM2000_EPSG_STR
+        ).rio.write_nodata(np.nan)
     elif np.issubdtype(variable_values.dtype, np.integer):
         variable_da = xr.DataArray(
             np.full(land_mask.shape, -9999, dtype=np.int32),
             coords=[nztm_y_coords, nztm_x_coords],
             dims=["y", "x"],
         )
-        variable_da = variable_da.rio.write_crs(constants.NZTM2000_EPSG_STR).rio.write_nodata(-9999)
+        variable_da = variable_da.rio.write_crs(
+            constants.NZTM2000_EPSG_STR
+        ).rio.write_nodata(-9999)
     else:
         raise ValueError(
             f"Unsupported data type for variable {variable}: {variable_values.dtype}"
@@ -249,7 +266,7 @@ def _get_variable_nztm_da(
     Parameter land_points needs to be shape[:, 2], in lon/lat order,
     and the resulting DataArray uses nztm_x/y coordinates.
     """
-    variable_values = get_input_values(land_points, variable)
+    variable_values = get_input_values(land_points, variable, address_missing=False)
     variable_da = __get_variable_da(
         variable_values, land_mask, nztm_y_coords, nztm_x_coords, variable
     )
@@ -268,7 +285,7 @@ def _compute_derived_variables_nztm_da(
 
     Creates a DataArray for the given derived variable, with values filled in for land points
     and NaN or -9999 for non-land points.
-    
+
     Given dataset must contain the required dependencies for the derived variable.
 
     Parameter land_points needs to be shape[:, 2], in lon/lat order,
@@ -317,7 +334,7 @@ def create_nz_nztm_input_grid(
     output_dir: Path
         Directory to save the output grid dataset.
     variables: list[constants.InputVariable]
-        List of input variables to include in the grid dataset. 
+        List of input variables to include in the grid dataset.
         Can include both original and derived variables.
     n_procs: int
         Number of processes to use for parallel processing.

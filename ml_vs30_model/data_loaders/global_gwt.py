@@ -84,6 +84,7 @@ class GlobalGWT(BaseLoader):
         regions = self.DB_COORD_LIMITS_DF.index[region_ind].values.astype(str)
         unqiue_region = np.unique(regions)
 
+        logger.info("Computing values by interpolating.")
         values = np.full(coords.shape[0], np.nan)
         for region in unqiue_region:
             coords_mask = regions == region

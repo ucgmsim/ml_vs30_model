@@ -37,7 +37,7 @@ class TIFLoader(BaseLoader):
     ) -> None:
         self.base_input_data_dir = base_input_data_dir
 
-    def get_values(self, coords: np.ndarray, variable: constants.InputVariable):
+    def get_values(self, coords: np.ndarray, variable: constants.InputVariable, address_missing: bool = True):
         """
         Get values for the given WGS84 (lon, lat) coordinates.
         
@@ -47,6 +47,9 @@ class TIFLoader(BaseLoader):
             Array of shape (N, 2) containing coordinates as (lon, lat) in WGS84.
         variable : constants.InputVariable
             The variable to retrieve values for.
+        address_missing : bool
+            Whether to address missing values (e.g. negative depth to bedrock) 
+            by finding nearest valid value. Can be slow for large number of points.
         """
         if variable not in self.SUPPORTED_VARIABLES:
             utils.raise_log(
@@ -73,7 +76,7 @@ class TIFLoader(BaseLoader):
             values = data[0, rows, cols]
 
         # Deal with negative absolute depth to bedrock values
-        if variable == constants.InputVariable.AbsoluteDepthToBedrock:
+        if address_missing and variable == constants.InputVariable.AbsoluteDepthToBedrock:
             mask = values < 0
             if np.any(mask):
                 logger.info(
