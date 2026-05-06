@@ -30,6 +30,7 @@ def cv_train(
         compute_shap=True,
     )
 
+
 def full_train(run_config: RunConfig, out_dir: Path, run_post_processing: bool = True):
     """Runs training on the full dataset and saves results."""
     logger.info(f"Loading dataset from {run_config.dataset_ffp}")
@@ -156,12 +157,49 @@ def run_model_training(
     run_config.to_yaml(out_dir / "run_config.yaml")
 
 
-def estimate_vs30_nz(model_dir: Path, grid_dx: float, grid_dy: float):
-    # Create the grid
-    x = np.arange(constants.NZTM_BOUNDING_BOX[0], constants.NZTM_BOUNDING_BOX[1] + grid_dx, grid_dx)
-    y = np.arange(constants.NZTM_BOUNDING_BOX[2], constants.NZTM_BOUNDING_BOX[3] + grid_dy, grid_dy)
+def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path):
+    """Estimates Vs30 across New Zealand using the trained model"""
+    run_config = RunConfig.from_yaml(model_dir / "run_config.yaml")
 
-    grid_x, grid_y = np.meshgrid(x, y)
-    grid_points = np.column_stack([grid_x.ravel(), grid_y.ravel()])
+    with xr.open_dataset(input_dataset_ffp) as ds:
+        land_mask = ds["on_land"].values.astype(bool)
+        input_ds = ds[run_config.input_variables]
 
-    print("wtf")
+        # NaN values in numerical variables
+        null_mask = np.any(
+            np.isnan(
+                input_ds[run_config.numerical_variables].to_array().values
+            ),
+            axis=0,
+        )
+        # -9999 values in categorial variables
+        null_mask |= np.any(
+            input_ds[run_config.categorial_variables].to_array().values
+            == -9999,
+            axis=0,
+        )
+        logger.info(
+            f"Input dataset contains {null_mask.sum() - (~land_mask).sum()} NaN/-9999 values. Dropping these for prediction."
+        )
+
+        # Get predictions
+        logger.info("Running Vs30 estimation across New Zealand...")
+        input_df = (
+            input_ds.to_dataframe().loc[(~null_mask).ravel()].reset_index()
+        )
+        pre_input_df, _ = pre_processing.pre_process_features(input_df, run_config)
+        model = CatBoostRegressor()
+        model.load_model(model_dir / "model.cbm")
+        pred_vs30 = np.exp(model.predict(pre_input_df))
+        # Create data array
+        pred_da = xr.DataArray(
+            data=np.full(land_mask.shape, np.nan), coords=[ds.y, ds.x], dims=["y", "x"]
+        )
+        pred_da.values[~null_mask] = pred_vs30
+
+    # Save
+    out_ffp = model_dir / "nz_vs30_results.nc"
+    grid_dataset = xr.Dataset({"vs30": pred_da})
+    grid_dataset = grid_dataset.rio.write_crs(constants.NZTM2000_EPSG_STR)
+    grid_dataset.to_netcdf(out_ffp)
+    logger.info(f"Saved Vs30 estimates across New Zealand to {out_ffp}")

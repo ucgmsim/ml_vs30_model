@@ -1,12 +1,15 @@
 import logging
 from pathlib import Path
 
+import rasterio
+from rasterio import transform
 import shap
 import xarray as xr
 import numpy as np
 import pandas as pd
 from catboost import CatBoostRegressor
 import ml_tools as mlt
+
 
 from .plotting import model_perf_plots, spatial, feature_importance_plots
 from .configs import RunConfig
@@ -251,5 +254,125 @@ def gen_feature_importance_plots(
     feature_importance_plots.shap_global(shap_values, results_df, outdir)
     feature_importance_plots.shap_beeswarm(shap_values, results_df, outdir)
     if gen_waterfall_plots:
-        feature_importance_plots.shap_waterfall(shap_values, results_df, outdir / "waterfall_plots")
+        feature_importance_plots.shap_waterfall(
+            shap_values, results_df, outdir / "waterfall_plots"
+        )
+
+
+def add_foster_nz_estimates(dataset_ffp: Path, foster_data_dir: Path):
+    """
+    Adds Foster et al. (2016) Vs30 estimates for New Zealand to the provided dataset.
+    """
+    logger.info(f"Adding modified Foster et al. result to database {dataset_ffp}...")
+
+    with xr.open_dataset(dataset_ffp, mode="r") as ds:
+        vs30_da = ds["vs30"]
+        y, x = vs30_da.y.values, vs30_da.x.values
+        nan_mask = vs30_da.isnull().values
+
+    grid_x, grid_y = np.meshgrid(x, y)
+    coords = np.column_stack((grid_x[~nan_mask], grid_y[~nan_mask]))
+
+    ### Combined MVN
+    logger.info("Extracting Foster et al. combined MVN estimates...")
+    with rasterio.open(foster_data_dir / "combined_mvn.tif") as ds:
+        assert ds.crs.to_epsg() == constants.NZTM2000_EPSG, "Dataset CRS is not WGS84"
+
+        foster_data = ds.read([1, 2])
+
+        rows, cols = transform.rowcol(ds.transform, coords[:, 0], coords[:, 1])
+        foster_combined_mvn_vs30_mean = foster_data[0, rows, cols]
+        foster_combined_mvn_vs30_std = foster_data[1, rows, cols]
+
+    # Compute residual
+    res = foster_combined_mvn_vs30_mean - vs30_da.values[~nan_mask]
+    ln_res = np.log(foster_combined_mvn_vs30_mean) - np.log(vs30_da.values[~nan_mask])
+
+    # Create data arrays
+    foster_combined_mvn_vs30_mean_da = xr.DataArray(
+        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    foster_combined_mvn_vs30_mean_da.values[~nan_mask] = foster_combined_mvn_vs30_mean
+    foster_combined_mvn_vs30_std_da = xr.DataArray(
+        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    foster_combined_mvn_vs30_std_da.values[~nan_mask] = foster_combined_mvn_vs30_std
+    res_da = xr.DataArray(
+        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    res_da.values[~nan_mask] = res
+    ln_res_da = xr.DataArray(
+        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    ln_res_da.values[~nan_mask] = ln_res
+
+    # Save
+    logger.info("Saving modified Foster et al. estimates to dataset...")
+    xr.Dataset(
+        {
+            "foster_combined_mvn_vs30_mean": foster_combined_mvn_vs30_mean_da,
+            "foster_combined_mvn_vs30_std": foster_combined_mvn_vs30_std_da,
+            "foster_combined_mvn_vs30_res": res_da,
+            "foster_combined_mvn_vs30_ln_res": ln_res_da,
+        }
+    ).to_netcdf(dataset_ffp, mode="a")
+
+
+def add_jaehwi_nz_estimates(dataset_ffp: Path, jaehwi_data_ffp: Path, prefix: str = "jw"):
+    """
+    Adds Jaehwi's Vs30 estimates for New Zealand to the provided dataset.
+    """
+    logger.info(
+        f"Adding Jaehwi's estimates to result ({jaehwi_data_ffp.parent.name}) database {dataset_ffp}..."
+    )
+
+    with xr.open_dataset(dataset_ffp, mode="r") as ds:
+        vs30_da = ds["vs30"]
+        y, x = vs30_da.y.values, vs30_da.x.values
+        nan_mask = vs30_da.isnull().values
+
+    grid_x, grid_y = np.meshgrid(x, y)
+    coords = np.column_stack((grid_x[~nan_mask], grid_y[~nan_mask]))
+
+    logger.info("Extracting Jaehwi's estimates...")
+    with rasterio.open(jaehwi_data_ffp) as ds:
+        assert ds.crs.to_epsg() == constants.NZTM2000_EPSG, "Dataset CRS is not WGS84"
+
+        jw_data = ds.read([1, 2])
+
+        rows, cols = transform.rowcol(ds.transform, coords[:, 0], coords[:, 1])
+        jw_vs30_mean, jw_vs30_std = jw_data[0, rows, cols], jw_data[1, rows, cols]
+
+    # Compute residual
+    res = jw_vs30_mean - vs30_da.values[~nan_mask]
+    ln_res = np.log(jw_vs30_mean) - np.log(vs30_da.values[~nan_mask])
+
+    # Create data arrays
+    jw_vs30_mean_da = xr.DataArray(
+        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    jw_vs30_mean_da.values[~nan_mask] = jw_vs30_mean
+    jw_vs30_std_da = xr.DataArray(
+        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    jw_vs30_std_da.values[~nan_mask] = jw_vs30_std
+    res_da = xr.DataArray(
+        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    res_da.values[~nan_mask] = res
+    ln_res_da = xr.DataArray(
+        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    ln_res_da.values[~nan_mask] = ln_res
+
+    # Save
+    logger.info("Saving Jaehwi's estimates to dataset...")
+    xr.Dataset(
+        {
+            f"{prefix}_vs30_mean": jw_vs30_mean_da,
+            f"{prefix}_vs30_std": jw_vs30_std_da,
+            f"{prefix}_vs30_res": res_da,
+            f"{prefix}_vs30_ln_res": ln_res_da,
+        }
+    ).to_netcdf(dataset_ffp, mode="a")
 

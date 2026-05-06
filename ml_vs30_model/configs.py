@@ -66,6 +66,10 @@ class RunConfig:
     @property
     def categorial_variables(self) -> list[constants.InputVariable]:
         return [var for var in self.input_variables if var in constants.CATEGORIAL_VARIABLES]
+    
+    @property
+    def numerical_variables(self) -> list[constants.InputVariable]:
+        return [var for var in self.input_variables if var not in constants.CATEGORIAL_VARIABLES]
 
     @property
     def scale_params(self):

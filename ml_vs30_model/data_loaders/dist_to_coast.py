@@ -1,6 +1,7 @@
+import time
 import logging
 from pathlib import Path
-from time import time
+
 
 import matplotlib.pyplot as plt
 import geopandas as gpd
@@ -34,7 +35,11 @@ class NZDistanceToCoast(BaseLoader):
         
         # Pre-build STRtree on boundaries for fast nearest-neighbour lookup
         self.boundaries = self.coastline_df.geometry.boundary.values
-        self.tree = shapely.STRtree(self.boundaries)
+        
+        # Extract all vertex coordinates to bypass massive bounding boxes
+        points = shapely.get_coordinates(self.boundaries)
+        self.coastline_points = shapely.points(points)
+        self.tree = shapely.STRtree(self.coastline_points)
 
 
     def get_values(self, coords: np.ndarray, variable: constants.InputVariable):
@@ -42,8 +47,7 @@ class NZDistanceToCoast(BaseLoader):
             raise ValueError(f"Variable {variable} is not supported by NZDistanceToCoast.")
         
         points = gpd.points_from_xy(coords[:, 0], coords[:, 1], crs=constants.WGS84_EPSG).to_crs(epsg=constants.NZTM2000_EPSG)
-        nearest_idx = self.tree.nearest(points)
-        distances = shapely.distance(points, self.boundaries[nearest_idx])
+        _, distances = self.tree.query_nearest(points, return_distance=True, all_matches=False)
 
         return distances
 

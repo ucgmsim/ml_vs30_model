@@ -1,9 +1,8 @@
-from functools import lru_cache
-from pathlib import Path
 import json
+import base64
+from io import BytesIO
 
 import matplotlib
-
 matplotlib.use("Agg")
 import numpy as np
 import gradio as gr
@@ -11,16 +10,50 @@ import matplotlib.pyplot as plt
 import folium
 import requests
 
+
 import ml_vs30_model as vs30
 from qcore import coordinates
 
 BASE_URL = "http://127.0.0.1:8000/xr"
+MODEL_BASE_URL = "http://127.0.0.1:8000/model"
 
 # variables = list(vs30.constants.INPUT_VAR_TO_FFP_MAP.keys())
 datasets = [f.name for f in vs30.constants.BASE_DATA_DIR.glob("grids/*") if f.is_dir()]
 
+models = [
+    f.name
+    for f in vs30.constants.BASE_DATA_DIR.glob("results/*")
+    if f.is_dir() and "full" in f.name
+]
 
-def get_variable_stats(dataset_name: str, variable: str):
+
+VS30_CMAP_MIN, VS30_CMAP_MAX = 0, 1000
+VS30_CMAP_RES_MIN, VS30_CMAP_RES_MAX = -250, 250
+VS30_CMAP_LN_RES_MIN, VS30_CMAP_LN_RES_MAX = -1, 1
+VS30_CMAP_STD_MIN, VS30_CMAP_STD_MAX = 0, 1
+
+DEFAULT_CMAP = "viridis"
+STD_CMAP = "Reds"
+RES_CMAP = "bwr_r"
+
+
+def make_cbar_html(cmap_name: str, cmap_min: float, cmap_max: float, label: str) -> str:
+    fig, ax = plt.subplots(figsize=(8, 0.4))
+    norm = plt.Normalize(vmin=cmap_min, vmax=cmap_max)
+    cmap = plt.get_cmap(cmap_name)
+    fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=ax, orientation="horizontal", label=label)
+    fig.patch.set_alpha(0.7)
+    fig.tight_layout(pad=0.2)
+
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", transparent=True)
+    plt.close(fig)
+    buf.seek(0)
+    b64 = base64.b64encode(buf.read()).decode("utf-8")
+    
+    return f'<img src="data:image/png;base64,{b64}" style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); z-index:1000; width:400px;">'
+
+def get_input_variable_stats(dataset_name: str, variable: str):
     params = {
         "url": dataset_name,
         "variable": variable,
@@ -68,8 +101,8 @@ def get_variable_stats(dataset_name: str, variable: str):
         "max": stats_dict["max"],
     }
 
-    min_val, max_val = float(np.round((stats_dict["min"]), 3)), float(
-        np.round(stats_dict["max"], 3)
+    min_val, max_val = float(np.round((stats["min"]), 3)), float(
+        np.round(stats["max"], 3)
     )
     step_size = (max_val - min_val) / 100
 
@@ -80,7 +113,7 @@ def get_variable_stats(dataset_name: str, variable: str):
     )
 
 
-def supported_variables(dataset_name: str):
+def inputs_supported_variables(dataset_name: str):
     """Gets the list of variables available in the dataset for tiling."""
     variables_tiler_url = f"{BASE_URL}/variables?url={dataset_name}"
 
@@ -90,12 +123,9 @@ def supported_variables(dataset_name: str):
     return gr.Dropdown(choices=vars)
 
 
-def create_map(
+def create_inputs_map(
     dataset_name: str, variable: str, cmap: str, cmap_min: float, cmap_max: float
 ):
-    # tiler_url = f"http://127.0.0.1:8000/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}"
-    # tiler_url += f"?url={variable}&colormap_name={cmap}&rescale={cmap_min},{cmap_max}"
-
     tiler_url = (
         BASE_URL
         + "/tiles/WebMercatorQuad/{z}/{x}/{y}"
@@ -103,8 +133,8 @@ def create_map(
         + f"&colormap_name={cmap}&rescale={cmap_min},{cmap_max}"
     )
 
-    m = folium.Map(location=[-43.5, 172.6], zoom_start=6, tiles="cartodb positron")
-
+    # Map
+    m = folium.Map(location=[-42, 172.6], zoom_start=6, tiles="cartodb positron")
     folium.TileLayer(
         tiles=tiler_url,
         attr="My Data",
@@ -113,11 +143,10 @@ def create_map(
         control=True,
     ).add_to(m)
 
+    # Colorbar
     fig, ax = plt.subplots(figsize=(16, 1))
-
     cmap = plt.get_cmap(cmap)
     norm = plt.Normalize(vmin=cmap_min, vmax=cmap_max)
-
     fig.colorbar(
         plt.cm.ScalarMappable(norm=norm, cmap=cmap),
         cax=ax,
@@ -125,7 +154,6 @@ def create_map(
         label=variable,
     )
     fig.subplots_adjust(bottom=0.5)
-
     plt.close(fig)
 
     return (
@@ -134,7 +162,7 @@ def create_map(
     )
 
 
-def gen_hist_plot(variable: str, variable_stats: dict):
+def gen_inputs_hist_plot(variable: str, variable_stats: dict):
     min_val, max_val = variable_stats["min"], variable_stats["max"]
     counts, bin_edges = variable_stats["histogram"]
 
@@ -153,98 +181,204 @@ def gen_hist_plot(variable: str, variable_stats: dict):
     return fig
 
 
-with gr.Blocks() as demo:
+def create_model_map(model_name: str, variable: str):
+    if variable.endswith("_ln_res"):
+        cmap_min, cmap_max = VS30_CMAP_LN_RES_MIN, VS30_CMAP_LN_RES_MAX
+        cmap = RES_CMAP
+    elif variable.endswith("_res"):
+        cmap_min, cmap_max = VS30_CMAP_RES_MIN, VS30_CMAP_RES_MAX
+        cmap = RES_CMAP
+    elif variable.endswith("_std"):
+        cmap_min, cmap_max = VS30_CMAP_STD_MIN, VS30_CMAP_STD_MAX
+        cmap = STD_CMAP
+    else:
+        cmap_min, cmap_max = VS30_CMAP_MIN, VS30_CMAP_MAX
+        cmap = DEFAULT_CMAP
 
-    map = gr.HTML("<h1>Select a variable...</h1>")
-    cbar_plot = gr.Plot(container=False)
-
-    gr.Markdown("# Variable histogram")
-    hist_plot = gr.Plot(container=False)
-
-    var_stats = gr.State()
-
-    with gr.Sidebar(open=True):
-        with gr.Group():
-            dataset_dropdown = gr.Dropdown(
-                interactive=True, choices=datasets, label="Dataset", show_label=True
-            )
-            var_dropdown = gr.Dropdown(
-                label="Input Variable",
-                show_label=True,
-            )
-            data_update_btn = gr.Button("Update", variant="primary")
-
-        gr.HTML("<hr>")
-
-        # Colormap
-        with gr.Group():
-            cmap_dropdown = gr.Dropdown(
-                choices=["viridis", "plasma", "inferno", "magma", "greys"],
-                label="Colormap",
-                value="viridis",
-                show_label=True,
-            )
-
-            cmap_min_slider = gr.Slider(
-                label="Colormap min", interactive=True, precision=3
-            )
-            cmap_max_slider = gr.Slider(
-                label="Colormap max", interactive=True, precision=3
-            )
-
-            vis_update_btn = gr.Button("Update", variant="primary")
-
-    dataset_dropdown.change(
-        supported_variables, inputs=dataset_dropdown, outputs=var_dropdown
+    tiler_url = (
+        MODEL_BASE_URL
+        + "/tiles/WebMercatorQuad/{z}/{x}/{y}"
+        + f"?url={model_name}&variable={variable}"
+        + f"&colormap_name={cmap.lower()}&rescale={cmap_min},{cmap_max}"
     )
 
+    # Map
+    m = folium.Map(location=[-42, 172.6], zoom_start=6, tiles="cartodb positron")
+    folium.TileLayer(
+        tiles=tiler_url,
+        attr="My Data",
+        name=variable,
+        overlay=True,
+        control=True,
+    ).add_to(m)
+
+    map_html = m._repr_html_()
+    cbar_html = make_cbar_html(cmap, cmap_min, cmap_max, variable)
+    combined = f'<div style="position:relative">{map_html}{cbar_html}</div>'
+
+    # if variable.endswith("_ln_res"):
+    #     folium_cmap = branca.colormap.linear.RdBu_05.scale(VS30_CMAP_LN_RES_MIN, VS30_CMAP_LN_RES_MAX)
+
+    # folium_cmap.caption = variable
+    # m.add_child(folium_cmap)
+
+    return combined
+
+
+def models_supported_variables(model_name: str):
+    model_variables_url = f"{MODEL_BASE_URL}/variables?url={model_name}"
+    vars = json.loads(requests.get(model_variables_url).text)
+    vars.remove("spatial_ref")  # Remove the spatial_ref
+    return gr.Dropdown(choices=vars)
+
+
+with gr.Blocks() as demo:
+    
+    with gr.Tab("Model"):
+        model_map = gr.HTML("<h1>Model predictions...</h1>")
+
+    with gr.Tab("Inputs"):
+        inputs_map = gr.HTML("<h1>Select a dataset and variable...</h1>")
+        inputs_cbar_plot = gr.Plot(container=False)
+
+        gr.Markdown("# Variable histogram")
+        inputs_hist_plot = gr.Plot(container=False)
+
+        inputs_var_stats = gr.State()
+
+
+    with gr.Sidebar(open=True):
+
+        with gr.Accordion("Model Options"):
+            with gr.Group():
+                model_selection = gr.Dropdown(
+                    choices=models,
+                    label="Model",
+                    value=None,
+                    show_label=True,
+                    interactive=True,
+                )
+                model_variable_dropdown = gr.Dropdown(
+                    label="Model Variable",
+                    show_label=True,
+                    value=None,
+                    interactive=True,
+                )
+                model_update_btn = gr.Button("Update", variant="primary")
+
+            # with gr.Group():
+            #     # model_cmap_dropdown = gr.Dropdown(
+            #     #     choices=["viridis", "plasma", "inferno", "magma", "greys"],
+            #     #     label="Colormap",
+            #     #     value="viridis",
+            #     #     show_label=True,
+            #     # )
+            #     model_cmap_update_btn = gr.Button("Update", variant="primary")
+
+                # _cmap_min_slider = gr.Slider(
+                #     label="Colormap min", interactive=True, precision=3
+                # )
+                # input_cmap_max_slider = gr.Slider(
+                #     label="Colormap max", interactive=True, precision=3
+                # )
+        
+        with gr.Accordion("Input Variable Options", open=True) as input_options_accordion:
+            with gr.Group():
+                gr.Markdown("### Dataset/Variable")
+                dataset_dropdown = gr.Dropdown(
+                    interactive=True,
+                    choices=datasets,
+                    value=None,
+                    label="Dataset",
+                    show_label=True,
+                )
+                var_dropdown = gr.Dropdown(
+                    label="Input Variable", show_label=True, value=None
+                )
+                data_update_btn = gr.Button("Update", variant="primary")
+
+            gr.Markdown("----------------------")
+
+            # Colormap
+            with gr.Accordion("Colormap Options", open=False):
+                with gr.Group():
+                    input_cmap_dropdown = gr.Dropdown(
+                        choices=["viridis", "plasma", "inferno", "magma", "greys"],
+                        label="Colormap",
+                        value="viridis",
+                        show_label=True,
+                    )
+
+                    input_cmap_min_slider = gr.Slider(
+                        label="Colormap min", interactive=True, precision=3
+                    )
+                    input_cmap_max_slider = gr.Slider(
+                        label="Colormap max", interactive=True, precision=3
+                    )
+
+                    input_vis_update_btn = gr.Button("Update", variant="primary")
+
+    # On dataset change, retrieve supported variables
+    dataset_dropdown.change(
+        inputs_supported_variables, inputs=dataset_dropdown, outputs=var_dropdown
+    )
+
+    # Dataset update button
     data_update_btn.click(
-        get_variable_stats,
+        get_input_variable_stats,
         inputs=[dataset_dropdown, var_dropdown],
-        outputs=[var_stats, cmap_min_slider, cmap_max_slider],
+        outputs=[inputs_var_stats, input_cmap_min_slider, input_cmap_max_slider],
     ).then(
-        create_map,
+        create_inputs_map,
         inputs=[
             dataset_dropdown,
             var_dropdown,
-            cmap_dropdown,
-            cmap_min_slider,
-            cmap_max_slider,
+            input_cmap_dropdown,
+            input_cmap_min_slider,
+            input_cmap_max_slider,
         ],
-        outputs=[map, cbar_plot],
+        outputs=[inputs_map, inputs_cbar_plot],
+    ).then(
+        gen_inputs_hist_plot,
+        inputs=[var_dropdown, inputs_var_stats],
+        outputs=inputs_hist_plot,
     )
 
-    # # Input variable changed
-    # var_dropdown.change(
-    #     get_variable_stats, inputs=var_dropdown, outputs=[var_stats, cmap_min_slider, cmap_max_slider]
-    # ).then(
-    #     create_map,
-    #     inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
-    #     outputs=[map, cbar_plot],
-    # ).then(
-    #     gen_hist_plot,
-    #     inputs=[var_dropdown, var_stats],
-    #     outputs=hist_plot,
+    # Visualization update button
+    input_vis_update_btn.click(
+        create_inputs_map,
+        inputs=[
+            dataset_dropdown,
+            var_dropdown,
+            input_cmap_dropdown,
+            input_cmap_min_slider,
+            input_cmap_max_slider,
+        ],
+        outputs=[inputs_map, inputs_cbar_plot],
+    )
+
+    # On model change, retrieve supported variables
+    model_selection.change(
+        models_supported_variables,
+        inputs=model_selection,
+        outputs=model_variable_dropdown,
+    )
+
+    # Model update button
+    model_update_btn.click(
+        create_model_map,
+        inputs=[model_selection, model_variable_dropdown],
+        # inputs=[model_selection, model_variable_dropdown, model_cmap_dropdown],
+        outputs=model_map,
+    )
+
+    # model_cmap_update_btn.click(
+    #     create_model_map,
+    #     inputs=[model_selection, model_variable_dropdown, model_cmap_dropdown],
+    #     outputs=model_map,
     # )
 
-    # # Colormap settings changed
-    # cmap_dropdown.change(
-    #     create_map,
-    #     inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
-    #     outputs=[map, cbar_plot],
-    # )
-    # cmap_min_slider.change(
-    #     create_map,
-    #     inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
-    #     outputs=[map, cbar_plot],
-    # )
-    # cmap_max_slider.change(
-    #     create_map,
-    #     inputs=[var_dropdown, cmap_dropdown, cmap_min_slider, cmap_max_slider],
-    #     outputs=[map, cbar_plot],
-    # )
-
-
+    demo.load(lambda: gr.Accordion(open=False), outputs=input_options_accordion)
 demo.launch(css="""
     .gradio-container {padding: 0 !important; margin: 0 !important;}
     .main {padding: 0 !important;}

@@ -20,4 +20,4 @@ n_cv_folds: 25
 rel_results_dir: results
 
 model_config:
-  iterations: 30
+  iterations: 20

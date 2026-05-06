@@ -7,6 +7,7 @@ import numpy as np
 from pyproj import Geod, Transformer
 
 import rasterio
+from rasterio import transform
 
 from .. import constants
 from .. import utils
@@ -66,8 +67,10 @@ class TIFLoader(BaseLoader):
             assert (
                 dataset.crs.to_epsg() == constants.WGS84_EPSG
             ), "Dataset CRS is not WGS84."
-
-            values = np.concatenate(list(dataset.sample(coords)))
+            data = dataset.read()
+            assert data.shape[0] == 1, "Expected single-band TIFF file."
+            rows, cols = transform.rowcol(dataset.transform, coords[:, 0], coords[:, 1])
+            values = data[0, rows, cols]
 
         # Deal with negative absolute depth to bedrock values
         if variable == constants.InputVariable.AbsoluteDepthToBedrock:
@@ -75,7 +78,7 @@ class TIFLoader(BaseLoader):
             if np.any(mask):
                 logger.info(
                     f"Found {np.sum(mask)} negative values for Absolute Depth to Bedrock. "
-                    f"Using nearest non-zero value."
+                    f"Using nearest non-zero value. This can be slow for large number of points."
                 )
 
                 values[mask] = find_nearest_valid(
@@ -170,13 +173,14 @@ class NZTMTIFLoader:
             )
 
         nztm_coords = self._to_nztm(coords)
-
         with rasterio.open(tif_ffp) as dataset:
             assert (
                 dataset.crs.to_epsg() == constants.NZTM2000_EPSG
             ), "Dataset CRS is not NZTM2000."
-
-            values = np.concatenate(list(dataset.sample(nztm_coords)))
+            data = dataset.read()
+            assert data.shape[0] == 1, "Expected single-band TIFF file."
+            rows, cols = transform.rowcol(dataset.transform, nztm_coords[:, 0], nztm_coords[:, 1])
+            values = data[0, rows, cols]
 
         return values
 

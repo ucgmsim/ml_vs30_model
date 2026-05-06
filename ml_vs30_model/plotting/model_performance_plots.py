@@ -11,10 +11,10 @@ import ml_tools as mlt
 from .. import constants
 from ..configs import RunConfig
 
-
 METRIC_Y_LIMITS = {
     "RMSE": (0, 0.8),
 }
+
 
 def one_to_one_plot(results_df: pd.DataFrame, output_ffp: Path):
     """
@@ -305,6 +305,7 @@ def metric_scatter_plot(
         clobber=True,
     )
 
+
 def cv_iteration_metric_plot(
     train_metrics_df: pd.DataFrame,
     val_metrics_df: pd.DataFrame | None,
@@ -321,6 +322,7 @@ def cv_iteration_metric_plot(
             c="blue",
             linestyle="--",
             linewidth=1,
+            alpha=0.5,
         )
     # Mean line
     ax.plot(
@@ -340,8 +342,15 @@ def cv_iteration_metric_plot(
                 c="red",
                 linestyle="-",
                 linewidth=1,
+                alpha=0.5,
             )
-            plt.scatter(val_metrics_df.idxmin().values, val_metrics_df.min().values, c="red", s=50)
+            plt.scatter(
+                val_metrics_df.idxmin().values,
+                val_metrics_df.min().values,
+                c="red",
+                s=50,
+                alpha=0.5,
+            )
         # Mean line
         ax.plot(
             val_metrics_df.index.values,
@@ -351,7 +360,9 @@ def cv_iteration_metric_plot(
             linewidth=2,
         )
 
-    ax.set_xlim(train_metrics_df.index.values.min(), train_metrics_df.index.values.max())
+    ax.set_xlim(
+        train_metrics_df.index.values.min(), train_metrics_df.index.values.max()
+    )
     if metric in METRIC_Y_LIMITS:
         ax.set_ylim(METRIC_Y_LIMITS[metric])
 
@@ -368,8 +379,3 @@ def cv_iteration_metric_plot(
         out_fp.with_name(out_fp.stem + ".yaml"),
         clobber=True,
     )
-
-
-
-    
-    

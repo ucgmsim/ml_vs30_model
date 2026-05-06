@@ -70,4 +70,8 @@ class ShapeLoader(BaseLoader):
 
         assert shape_df.crs.to_epsg() == constants.NZTM2000_EPSG, "Shape dataframe CRS is not NZTM2000."
         merged_df = gpd.sjoin(point_df, shape_df, how="left", predicate="intersects")
+
+        if variable == constants.InputVariable.NZGeologyCategory:
+            merged_df["value"] = merged_df["value"].fillna(-9999).astype(int)
+
         return merged_df["value"].to_numpy()

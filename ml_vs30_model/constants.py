@@ -6,7 +6,7 @@ import numpy as np
 
 if (BASE_DATA_DIR := os.getenv("VS30_MODEL_BASE_DATA_DIR")) is None:
     raise EnvironmentError("Environment variable VS30_MODEL_BASE_DATA_DIR is not set.")
-BASE_DATA_DIR  = Path(BASE_DATA_DIR)
+BASE_DATA_DIR = Path(BASE_DATA_DIR)
 
 
 class DataSource(StrEnum):
@@ -14,9 +14,10 @@ class DataSource(StrEnum):
     SRTMGL1 = "srtmgl1"
     TIFLoader = "tif_loader"
     NZTMTIFLoader = "nztm_tif_loader"
-    GlobalGWT = "global_gwt" # Global Groundwater Table
+    GlobalGWT = "global_gwt"  # Global Groundwater Table
     ShapeLoader = "shape_loader"
     NZDistanceToCoast = "nz_distance_to_coast"
+
 
 class InputVariable(StrEnum):
     # Global variables
@@ -24,7 +25,7 @@ class InputVariable(StrEnum):
     TopographicSlope = "topographic_slope"
     CompoundTopgraphicIndex = "compound_topographic_index"
     Geomorphon = "geomorphon"
-    ProfileCurvature = "profile_curvature" 
+    ProfileCurvature = "profile_curvature"
     TangentialCurvature = "tangential_curvature"
     TerrainRuggednessIndex = "terrain_ruggedness_index"
     TopographicPositionIndex = "topographic_position_index"
@@ -34,18 +35,20 @@ class InputVariable(StrEnum):
     LandformUniformity = "landform_uniformity"
     AbsoluteDepthToBedrock = "absolute_depth_to_bedrock"
     DepthToGroundwater = "depth_to_groundwater"
-    Elevation = "elevation"                                                 # SRTMGL1 elevation data (30m)
-    # NZ 
-    NZGeologyCategory = "nz_geology_category"                               # Foster et al.
-    NZDistanceToCoast = "nz_distance_to_coast"                              # Manually computed
-    NZGeologyAgeMin = "nz_geology_age_min"                                  # GNS Geology Units
-    NZGeologyAgeMax = "nz_geology_age_max"                                  # GNS Geology Units
-    NZGeologyAgeMid = "nz_geology_age_mid" 
-    NZGeologyAgeLnMid = "nz_geology_age_ln_mid" 
-    NZNLMGroundwaterDepth = "nz_nlm_groundwater_depth"                      # NLM Groundwater Depth Model
-    NZNWTGroundwaterDepth = "nz_nwt_groundwater_depth"                      # National Water Table
-    NZCombinedGroundwaterDepth = "nz_combined_groundwater_depth"            # Combined groundwater depth from NLM and NWT
-    NZCombinedGroundwaterDepthLn = "nz_combined_groundwater_depth_ln"      
+    Elevation = "elevation"  # SRTMGL1 elevation data (30m)
+    # NZ
+    NZGeologyCategory = "nz_geology_category"  # Foster et al.
+    NZDistanceToCoast = "nz_distance_to_coast"  # Manually computed
+    NZGeologyAgeMin = "nz_geology_age_min"  # GNS Geology Units
+    NZGeologyAgeMax = "nz_geology_age_max"  # GNS Geology Units
+    NZGeologyAgeMid = "nz_geology_age_mid"
+    NZGeologyAgeLnMid = "nz_geology_age_ln_mid"
+    NZNLMGroundwaterDepth = "nz_nlm_groundwater_depth"  # NLM Groundwater Depth Model
+    NZNWTGroundwaterDepth = "nz_nwt_groundwater_depth"  # National Water Table
+    NZCombinedGroundwaterDepth = (
+        "nz_combined_groundwater_depth"  # Combined groundwater depth from NLM and NWT
+    )
+    NZCombinedGroundwaterDepthLn = "nz_combined_groundwater_depth_ln"
     # NZEnvDS
     NZEnvDSDistanceRivers = "nzenvds_distance_rivers"
     NZEnvDSDistanceRiversVertical = "nzenvds_distance_rivers_vertical"
@@ -80,7 +83,7 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.LandformUniformity: DataSource.TIFLoader,
     InputVariable.AbsoluteDepthToBedrock: DataSource.TIFLoader,
     InputVariable.DepthToGroundwater: DataSource.GlobalGWT,
-    InputVariable.Elevation: DataSource.SRTMGL1,    
+    InputVariable.Elevation: DataSource.SRTMGL1,
     InputVariable.NZGeologyCategory: DataSource.ShapeLoader,
     InputVariable.NZDistanceToCoast: DataSource.NZDistanceToCoast,
     InputVariable.NZGeologyAgeMin: DataSource.ShapeLoader,
@@ -160,76 +163,107 @@ CATEGORIAL_VARIABLES = [
     InputVariable.NZEnvDSSoilAcidP,
 ]
 
-GLOBAL_INPUT_VARS = np.array([
-    InputVariable.Roughness,
-    InputVariable.TopographicSlope,
-    InputVariable.CompoundTopgraphicIndex,
-    InputVariable.Geomorphon,
-    InputVariable.ProfileCurvature,
-    InputVariable.TangentialCurvature,
-    InputVariable.TerrainRuggednessIndex,
-    InputVariable.TopographicPositionIndex,
-    InputVariable.VectorRuggednessMeasure,
-    InputVariable.LandformEntropy,
-    InputVariable.LandformShannonIndex,
-    InputVariable.LandformUniformity,
-    InputVariable.AbsoluteDepthToBedrock,
-    InputVariable.DepthToGroundwater,
-    InputVariable.Elevation,
-])
+GLOBAL_INPUT_VARS = np.array(
+    [
+        InputVariable.Roughness,
+        InputVariable.TopographicSlope,
+        InputVariable.CompoundTopgraphicIndex,
+        InputVariable.Geomorphon,
+        InputVariable.ProfileCurvature,
+        InputVariable.TangentialCurvature,
+        InputVariable.TerrainRuggednessIndex,
+        InputVariable.TopographicPositionIndex,
+        InputVariable.VectorRuggednessMeasure,
+        InputVariable.LandformEntropy,
+        InputVariable.LandformShannonIndex,
+        InputVariable.LandformUniformity,
+        InputVariable.AbsoluteDepthToBedrock,
+        InputVariable.DepthToGroundwater,
+        InputVariable.Elevation,
+    ]
+)
 
-NZ_INPUT_VARS = np.array([
-    InputVariable.NZGeologyCategory,    
-    InputVariable.NZDistanceToCoast,
-    InputVariable.NZGeologyAgeLnMid,
-    InputVariable.NZCombinedGroundwaterDepth,
-    InputVariable.NZCombinedGroundwaterDepthLn,
-    InputVariable.NZEnvDSDistanceRivers,
-    InputVariable.NZEnvDSDistanceRiversVertical,
-    InputVariable.NZEnvDSPrecipAnn,
-    InputVariable.NZEnvDSSlopeDeg,
-    InputVariable.NZEnvDSSoilAcidP,
-    InputVariable.NZEnvDSSoilAge,
-    InputVariable.NZEnvDSSoilDrainage,
-    InputVariable.NZEnvDSSoilInduration,
-    InputVariable.NZEnvDSSoilParticleSize,
-    InputVariable.NZEnvDSTopoGeomorphons,
-    InputVariable.NZEnvDSTopoNormalisedHeight,
-    InputVariable.NZEnvDSTopoPosition,
-    InputVariable.NZEnvDSTopoRoughness,
-    InputVariable.NZEnvDSTopoRuggedness,
-    InputVariable.NZEnvDSTopoValleyDepth,
-    InputVariable.NZEnvDSTopoWetness,
-])
+NZ_INPUT_VARS = np.array(
+    [
+        InputVariable.NZGeologyCategory,
+        InputVariable.NZDistanceToCoast,
+        InputVariable.NZGeologyAgeLnMid,
+        InputVariable.NZCombinedGroundwaterDepth,
+        InputVariable.NZCombinedGroundwaterDepthLn,
+        InputVariable.NZEnvDSDistanceRivers,
+        InputVariable.NZEnvDSDistanceRiversVertical,
+        InputVariable.NZEnvDSPrecipAnn,
+        InputVariable.NZEnvDSSlopeDeg,
+        InputVariable.NZEnvDSSoilAcidP,
+        InputVariable.NZEnvDSSoilAge,
+        InputVariable.NZEnvDSSoilDrainage,
+        InputVariable.NZEnvDSSoilInduration,
+        InputVariable.NZEnvDSSoilParticleSize,
+        InputVariable.NZEnvDSTopoGeomorphons,
+        InputVariable.NZEnvDSTopoNormalisedHeight,
+        InputVariable.NZEnvDSTopoPosition,
+        InputVariable.NZEnvDSTopoRoughness,
+        InputVariable.NZEnvDSTopoRuggedness,
+        InputVariable.NZEnvDSTopoValleyDepth,
+        InputVariable.NZEnvDSTopoWetness,
+    ]
+)
 
 DERIVED_VARIABLES_DEPENDENCIES = {
-    InputVariable.NZGeologyAgeMid: [InputVariable.NZGeologyAgeMin, InputVariable.NZGeologyAgeMax],
-    InputVariable.NZGeologyAgeLnMid: [InputVariable.NZGeologyAgeMin, InputVariable.NZGeologyAgeMax],
-    InputVariable.NZCombinedGroundwaterDepth: [InputVariable.NZNLMGroundwaterDepth, InputVariable.NZNWTGroundwaterDepth],
-    InputVariable.NZCombinedGroundwaterDepthLn: [InputVariable.NZNLMGroundwaterDepth, InputVariable.NZNWTGroundwaterDepth],
+    InputVariable.NZGeologyAgeMid: [
+        InputVariable.NZGeologyAgeMin,
+        InputVariable.NZGeologyAgeMax,
+    ],
+    InputVariable.NZGeologyAgeLnMid: [
+        InputVariable.NZGeologyAgeMin,
+        InputVariable.NZGeologyAgeMax,
+    ],
+    InputVariable.NZCombinedGroundwaterDepth: [
+        InputVariable.NZNLMGroundwaterDepth,
+        InputVariable.NZNWTGroundwaterDepth,
+        InputVariable.DepthToGroundwater,
+    ],
+    InputVariable.NZCombinedGroundwaterDepthLn: [
+        InputVariable.NZNLMGroundwaterDepth,
+        InputVariable.NZNWTGroundwaterDepth,
+        InputVariable.DepthToGroundwater,
+    ],
 }
 
 # Input variables locations
 INPUT_VAR_TO_FFP_MAP = {
-    InputVariable.NZEnvDSSlopeDeg: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/slope_deg.tif",
-    InputVariable.NZEnvDSTopoNormalisedHeight: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_normalisedHeight.tif",
-    InputVariable.NZEnvDSTopoPosition: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_position.tif",
-    InputVariable.NZEnvDSTopoRoughness: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_roughness.tif",
-    InputVariable.NZEnvDSTopoWetness: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_wetness.tif",
-    InputVariable.NZEnvDSDistanceRivers: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/distance_rivers.tif",
-    InputVariable.NZEnvDSDistanceRiversVertical: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/distance_riversVertical.tif",
-    InputVariable.NZEnvDSPrecipAnn: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/precip_ann.tif",
-    InputVariable.NZEnvDSSoilDrainage: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/soil_drainage.tif",
-    InputVariable.NZEnvDSSoilParticleSize: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/soil_particleSize.tif",
-    InputVariable.NZEnvDSTopoValleyDepth: BASE_DATA_DIR / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_valleyDepth.tif",
-    InputVariable.NZNLMGroundwaterDepth: BASE_DATA_DIR / "input_data/nz_nlm/NLM_gwd.tif",
-    InputVariable.NZNWTGroundwaterDepth: BASE_DATA_DIR / "input_data/nz_nwt/nwt_wtd_NZ_20220825.tif",
+    InputVariable.NZEnvDSSlopeDeg: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/slope_deg.tif",
+    InputVariable.NZEnvDSTopoNormalisedHeight: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_normalisedHeight.tif",
+    InputVariable.NZEnvDSTopoPosition: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_position.tif",
+    InputVariable.NZEnvDSTopoRoughness: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_roughness.tif",
+    InputVariable.NZEnvDSTopoWetness: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_wetness.tif",
+    InputVariable.NZEnvDSDistanceRivers: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/distance_rivers.tif",
+    InputVariable.NZEnvDSDistanceRiversVertical: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/distance_riversVertical.tif",
+    InputVariable.NZEnvDSPrecipAnn: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/precip_ann.tif",
+    InputVariable.NZEnvDSSoilDrainage: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/soil_drainage.tif",
+    InputVariable.NZEnvDSSoilParticleSize: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/soil_particleSize.tif",
+    InputVariable.NZEnvDSTopoValleyDepth: BASE_DATA_DIR
+    / "input_data/nzenvds_v1p1_nztm/final_layers_nztm/topo_valleyDepth.tif",
+    InputVariable.NZNLMGroundwaterDepth: BASE_DATA_DIR
+    / "input_data/nz_nlm/NLM_gwd.tif",
+    InputVariable.NZNWTGroundwaterDepth: BASE_DATA_DIR
+    / "input_data/nz_nwt/nwt_wtd_NZ_20220825.tif",
 }
 
 
-WGS84_EPSG_STR = "EPSG:4326"    
-WGS84_EPSG = 4326    
-NZTM2000_EPSG_STR = "EPSG:2193" 
+WGS84_EPSG_STR = "EPSG:4326"
+WGS84_EPSG = 4326
+NZTM2000_EPSG_STR = "EPSG:2193"
 NZTM2000_EPSG = 2193
 
 
@@ -249,12 +283,12 @@ NORM_VARS = [
 ]
 
 MIN_MAX_SCALE_PARAMS = {
-    InputVariable.NZCombinedGroundwaterDepthLn: (-6, 6),
+    InputVariable.NZCombinedGroundwaterDepthLn: (-6, 3.2188758249), # (0.002478752177, 25) (m)
     InputVariable.CompoundTopgraphicIndex: (-4.0, 10.0),
     InputVariable.LandformEntropy: (0, 3.0),
     InputVariable.LandformUniformity: (0, 1.0),
     InputVariable.LandformShannonIndex: (0, 3.0),
-    InputVariable.NZDistanceToCoast: (0, 100_000),  
+    InputVariable.NZDistanceToCoast: (0, 100_000),
     InputVariable.NZEnvDSTopoNormalisedHeight: (0, 1),
     InputVariable.NZEnvDSTopoPosition: (-30, 30),
     InputVariable.NZEnvDSTopoWetness: (2, 15),
@@ -280,7 +314,7 @@ NZ_BOUNDING_BOX = [166.3, 179, -47.4, -36.0]
 NZTM_BOUNDING_BOX = [1079100.000, 2100800.000, 4736600.000, 6229700.000]
 
 # Geyin & Maurer model MAE values for Vs30 bins
-# Table 2 of Geyin & Maurer (2023) 
+# Table 2 of Geyin & Maurer (2023)
 GEYIN_MAURER_MODEL_MAE = {
     90: 55,
     220: 55,
@@ -322,11 +356,15 @@ if (env_gmt_fig_font_label := os.environ.get("gmt_fig_font_label")) is not None:
     GMT_FIG_FONT_LABEL = env_gmt_fig_font_label
 
 GMT_FIG_BOLD_FONT_LABEL = "14p,Helvetica-Bold,black"
-if (env_gmt_fig_bold_font_label := os.environ.get("gmt_fig_bold_font_label")) is not None:
+if (
+    env_gmt_fig_bold_font_label := os.environ.get("gmt_fig_bold_font_label")
+) is not None:
     GMT_FIG_BOLD_FONT_LABEL = env_gmt_fig_bold_font_label
 
 GMT_FIG_FONT_ANNOT_PRIMARY = "11p,Helvetica,black"
-if (env_gmt_fig_font_annot_primary := os.environ.get("gmt_fig_font_annot_primary")) is not None:
+if (
+    env_gmt_fig_font_annot_primary := os.environ.get("gmt_fig_font_annot_primary")
+) is not None:
     GMT_FIG_FONT_ANNOT_PRIMARY = env_gmt_fig_font_annot_primary
 
 GMT_SHOW_CB_LABEL = True

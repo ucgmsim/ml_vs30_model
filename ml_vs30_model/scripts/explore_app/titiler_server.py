@@ -39,19 +39,36 @@ def xr_resolve_url(url: str = Query(...)) -> str:
         )
     return str(ffp)
 
+def xr_model_resolve_url(url: str = Query(...)) -> str:
+    ffp = vs30.constants.BASE_DATA_DIR / "results" / url / "nz_vs30_results.nc"
+    if not ffp.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Dataset not found: '{url}'"
+        )
+    return str(ffp)
 
 # Cloud-Optimized GeoTIFFs
 cog = core_factory.TilerFactory(path_dependency=tif_resolve_url)
 app.include_router(cog.router, tags=["Cloud Optimized GeoTIFF"])
 
 # Xarray
-xr = xr_factory.TilerFactory(
+xr_inputs = xr_factory.TilerFactory(
     reader=xr_io.FsReader,
     router_prefix="/xr",
     path_dependency=xr_resolve_url,
     extensions=[
-        # we also want to use the simple opener for the Extension
         xr_extensions.VariablesExtension(dataset_opener=xr.open_dataset),
     ],
 )
-app.include_router(xr.router, prefix="/xr", tags=["Xarray"])
+app.include_router(xr_inputs.router, prefix="/xr", tags=["Xarray"])
+
+xr_model = xr_factory.TilerFactory(
+    reader=xr_io.FsReader,
+    router_prefix="/model",
+    path_dependency=xr_model_resolve_url,
+    extensions=[
+        xr_extensions.VariablesExtension(dataset_opener=xr.open_dataset),
+    ],
+)
+app.include_router(xr_model.router, prefix="/model", tags=["Xarray Model"])
+

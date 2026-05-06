@@ -131,20 +131,26 @@ def run_post_processing(results_dir: Path, gen_waterfall_plots: bool = False):
 
 @app.command("estimate-vs30-nz")
 def estimate_vs30_nz(
-    model_dir: Path, grid_dx: float, grid_dy: float):
+    model_dir: Path, input_dataset_ffp: Path):
     """
     Estimates Vs30 across New Zealand using the trained model.
-
-    Parameters
-    ----------
-    model_dir : Path
-        Directory containing the trained model and run configuration.
-    grid_dx : float
-        Grid spacing in the x-direction (longitude) in meters.
-    grid_dy : float
-        Grid spacing in the y-direction (latitude) in meters.
     """
-    vs30.catboost_model.estimate_vs30_nz(model_dir, grid_dx, grid_dy)
+    mlt.utils.setup_logging()
+    vs30.catboost_model.estimate_vs30_nz(model_dir, input_dataset_ffp)
+
+@app.command("add-other-nz-estimates")
+def add_other_nz_estimates(dataset_ffp: Path):
+    """
+    Adds other Vs30 estimates for New Zealand to the provided dataset.
+    """
+    mlt.utils.setup_logging()
+
+    foster_data_dir = vs30.constants.BASE_DATA_DIR / "nz_estimates/vs30map_data_2023"
+    vs30.post_processing.add_foster_nz_estimates(dataset_ffp, foster_data_dir)
+
+    jaehwi_v1p0_ffp = vs30.constants.BASE_DATA_DIR / "nz_estimates/jaehwi_v1p0_26March/v1p0_26Mar.tif"
+    vs30.post_processing.add_jaehwi_nz_estimates(dataset_ffp, jaehwi_v1p0_ffp, prefix="jw_v1p0")
+
 
 if __name__ == "__main__":
     app()

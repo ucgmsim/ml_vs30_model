@@ -31,7 +31,7 @@ def min_max_scale(series: pd.Series, var: str | constants.InputVariable) -> pd.S
 
 
 def pre_process_features(
-    df: pd.DataFrame, run_config: RunConfig, pre_process_categorial: bool = True
+    df: pd.DataFrame, run_config: RunConfig
 ) -> pd.DataFrame:
     """Performs pre-processing on the features in the given DataFrame."""
     scaled_input_df = pd.DataFrame(index=df.index)
@@ -52,7 +52,7 @@ def pre_process_features(
         elif var in constants.MIN_MAX_SCALE_PARAMS:
             scaled_input_df[var] = min_max_scale(df[var], var)
         elif var in constants.CATEGORIAL_VARIABLES:
-            if pre_process_categorial:
+            if run_config.pre_process_categorial:
                 one_hot_df = pd.get_dummies(df[var], prefix=var)
                 scaled_input_df = pd.concat([scaled_input_df, one_hot_df], axis=1)
             else:
@@ -115,7 +115,7 @@ def get_pre_processed_train_val_df(
 
     # Pre-process
     train_X, scale_params = pre_process_features(
-        train_df, run_config, pre_process_categorial=run_config.pre_process_categorial
+        train_df, run_config
     )
     train_y = pre_process_vs30(train_df["vs30"])
     if run_config.scale_params is None:
@@ -126,7 +126,7 @@ def get_pre_processed_train_val_df(
     val_X, val_y= None, None
     if val_df is not None:
         val_X, _ = pre_process_features(
-            val_df, run_config, pre_process_categorial=run_config.pre_process_categorial
+            val_df, run_config
         )
         val_y = pre_process_vs30(val_df["vs30"])
         assert val_df.index.equals(val_X.index)
