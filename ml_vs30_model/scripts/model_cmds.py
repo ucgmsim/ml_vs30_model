@@ -57,12 +57,13 @@ def cv_train_ngboost(config_ffp: Path):
 @app.command("cv-train-catboost")
 def cv_train_catboost(
     run_config_ffp: Path,
-    rel_dataset_ffp: Path,
+    rel_dataset_ffp: Path | None = None,
     n_cv_folds: int | None = None,
     n_iterations: int | None = None,
     apply_vs30_sample_weights: bool | None = None,
     id_suffix: str | None = None,
     run_post_processing: bool = True,
+    extra_input_variables: list[str] | None = None,
 ):
     """
     Runs cross-validation training of the CatBoost model,
@@ -76,6 +77,7 @@ def cv_train_catboost(
         n_cv_folds=n_cv_folds,
         apply_vs30_sample_weights=apply_vs30_sample_weights,
         iterations=n_iterations,
+        extra_input_variables=extra_input_variables,
     )
 
     id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
@@ -89,11 +91,12 @@ def cv_train_catboost(
 @app.command("full-train-catboost")
 def full_train_catboost(
     run_config_ffp: Path,
-    rel_dataset_ffp: Path,
+    rel_dataset_ffp: Path | None = None,
     n_iterations: int | None = None,
     apply_vs30_sample_weights: bool | None = None,
     id_suffix: str | None = None,
     run_post_processing: bool = True,
+    extra_input_variables: list[str] | None = None,
 ):
     """
     Runs training of the CatBoost model on the full dataset,
@@ -106,6 +109,7 @@ def full_train_catboost(
         rel_dataset_ffp=rel_dataset_ffp,
         apply_vs30_sample_weights=apply_vs30_sample_weights,
         iterations=n_iterations,
+        extra_input_variables=extra_input_variables,
     )
 
     id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
@@ -148,8 +152,20 @@ def add_other_nz_estimates(dataset_ffp: Path):
     foster_data_dir = vs30.constants.BASE_DATA_DIR / "nz_estimates/vs30map_data_2023"
     vs30.post_processing.add_foster_nz_estimates(dataset_ffp, foster_data_dir)
 
+    foster_original_ffp = vs30.constants.BASE_DATA_DIR / "nz_estimates/foster_original/foster_paper_original.tif"
+    vs30.post_processing.add_foster_original_nz_estimates(dataset_ffp, foster_original_ffp)
+
     jaehwi_v1p0_ffp = vs30.constants.BASE_DATA_DIR / "nz_estimates/jaehwi_v1p0_26March/v1p0_26Mar.tif"
     vs30.post_processing.add_jaehwi_nz_estimates(dataset_ffp, jaehwi_v1p0_ffp, prefix="jw_v1p0")
+
+@app.command("add-ml-model-residuals")
+def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
+    """
+    Adds residuals with respect to the other model
+    """
+    mlt.utils.setup_logging()
+    vs30.post_processing.add_ml_model_residuals(dataset_ffp, other_dataset_ffp)
+
 
 
 if __name__ == "__main__":

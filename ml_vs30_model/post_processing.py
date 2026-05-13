@@ -259,12 +259,11 @@ def gen_feature_importance_plots(
         )
 
 
-def add_foster_nz_estimates(dataset_ffp: Path, foster_data_dir: Path):
+def _get_dataset_values(dataset_ffp: Path):
     """
-    Adds Foster et al. (2016) Vs30 estimates for New Zealand to the provided dataset.
+    Helper function to get the
+    coordinates, nan mask, and vs30 data array.
     """
-    logger.info(f"Adding modified Foster et al. result to database {dataset_ffp}...")
-
     with xr.open_dataset(dataset_ffp, mode="r") as ds:
         vs30_da = ds["vs30"]
         y, x = vs30_da.y.values, vs30_da.x.values
@@ -273,10 +272,68 @@ def add_foster_nz_estimates(dataset_ffp: Path, foster_data_dir: Path):
     grid_x, grid_y = np.meshgrid(x, y)
     coords = np.column_stack((grid_x[~nan_mask], grid_y[~nan_mask]))
 
+    return coords, nan_mask, vs30_da
+
+
+def _create_dataset_from_estimates(
+    ml_vs30_da: xr.DataArray,
+    nan_mask: np.ndarray,
+    mean_estimate: np.ndarray,
+    prefix: str,
+    std_estimate: np.ndarray | None = None,
+) -> xr.Dataset:
+    y, x = ml_vs30_da.y.values, ml_vs30_da.x.values
+
+    # Compute residual
+    res = mean_estimate - ml_vs30_da.values[~nan_mask]
+    ln_res = np.log(mean_estimate) - np.log(ml_vs30_da.values[~nan_mask])
+
+    # Create data arrays
+    vs30_mean_da = xr.DataArray(
+        data=np.full(ml_vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    vs30_mean_da.values[~nan_mask] = mean_estimate
+
+    if std_estimate is not None:
+        vs30_std_da = xr.DataArray(
+            data=np.full(ml_vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+        )
+        vs30_std_da.values[~nan_mask] = std_estimate
+
+    res_da = xr.DataArray(
+        data=np.full(ml_vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    res_da.values[~nan_mask] = res
+
+    ln_res_da = xr.DataArray(
+        data=np.full(ml_vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    )
+    ln_res_da.values[~nan_mask] = ln_res
+
+    ds = xr.Dataset(
+        {
+            f"{prefix}_vs30_mean": vs30_mean_da,
+            f"{prefix}_vs30_res": res_da,
+            f"{prefix}_vs30_ln_res": ln_res_da,
+        }
+    )
+    if std_estimate is not None:
+        ds[f"{prefix}_vs30_std"] = vs30_std_da
+
+    return ds
+
+
+def add_foster_nz_estimates(dataset_ffp: Path, foster_data_dir: Path):
+    """
+    Adds Foster et al. (2016) Vs30 estimates for New Zealand to the provided dataset.
+    """
+    logger.info(f"Adding modified Foster et al. result to database {dataset_ffp}...")
+    coords, nan_mask, vs30_da = _get_dataset_values(dataset_ffp)
+
     ### Combined MVN
     logger.info("Extracting Foster et al. combined MVN estimates...")
     with rasterio.open(foster_data_dir / "combined_mvn.tif") as ds:
-        assert ds.crs.to_epsg() == constants.NZTM2000_EPSG, "Dataset CRS is not WGS84"
+        assert ds.crs.to_epsg() == constants.NZTM2000_EPSG, "Dataset CRS is not NZTM"
 
         foster_data = ds.read([1, 2])
 
@@ -284,41 +341,52 @@ def add_foster_nz_estimates(dataset_ffp: Path, foster_data_dir: Path):
         foster_combined_mvn_vs30_mean = foster_data[0, rows, cols]
         foster_combined_mvn_vs30_std = foster_data[1, rows, cols]
 
-    # Compute residual
-    res = foster_combined_mvn_vs30_mean - vs30_da.values[~nan_mask]
-    ln_res = np.log(foster_combined_mvn_vs30_mean) - np.log(vs30_da.values[~nan_mask])
+    # # Compute residual
+    # res = foster_combined_mvn_vs30_mean - vs30_da.values[~nan_mask]
+    # ln_res = np.log(foster_combined_mvn_vs30_mean) - np.log(vs30_da.values[~nan_mask])
 
-    # Create data arrays
-    foster_combined_mvn_vs30_mean_da = xr.DataArray(
-        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    # # Create data arrays
+    # foster_combined_mvn_vs30_mean_da = xr.DataArray(
+    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    # )
+    # foster_combined_mvn_vs30_mean_da.values[~nan_mask] = foster_combined_mvn_vs30_mean
+    # foster_combined_mvn_vs30_std_da = xr.DataArray(
+    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    # )
+    # foster_combined_mvn_vs30_std_da.values[~nan_mask] = foster_combined_mvn_vs30_std
+    # res_da = xr.DataArray(
+    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    # )
+    # res_da.values[~nan_mask] = res
+    # ln_res_da = xr.DataArray(
+    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    # )
+    # ln_res_da.values[~nan_mask] = ln_res
+
+    ds = _create_dataset_from_estimates(
+        vs30_da,
+        nan_mask,
+        foster_combined_mvn_vs30_mean,
+        "foster_combined_mvn",
+        std_estimate=foster_combined_mvn_vs30_std,
     )
-    foster_combined_mvn_vs30_mean_da.values[~nan_mask] = foster_combined_mvn_vs30_mean
-    foster_combined_mvn_vs30_std_da = xr.DataArray(
-        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    )
-    foster_combined_mvn_vs30_std_da.values[~nan_mask] = foster_combined_mvn_vs30_std
-    res_da = xr.DataArray(
-        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    )
-    res_da.values[~nan_mask] = res
-    ln_res_da = xr.DataArray(
-        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    )
-    ln_res_da.values[~nan_mask] = ln_res
 
     # Save
     logger.info("Saving modified Foster et al. estimates to dataset...")
-    xr.Dataset(
-        {
-            "foster_combined_mvn_vs30_mean": foster_combined_mvn_vs30_mean_da,
-            "foster_combined_mvn_vs30_std": foster_combined_mvn_vs30_std_da,
-            "foster_combined_mvn_vs30_res": res_da,
-            "foster_combined_mvn_vs30_ln_res": ln_res_da,
-        }
-    ).to_netcdf(dataset_ffp, mode="a")
+    # xr.Dataset(
+    #     {
+    #         "foster_combined_mvn_vs30_mean": foster_combined_mvn_vs30_mean_da,
+    #         "foster_combined_mvn_vs30_std": foster_combined_mvn_vs30_std_da,
+    #         "foster_combined_mvn_vs30_res": res_da,
+    #         "foster_combined_mvn_vs30_ln_res": ln_res_da,
+    #     }
+    # )
+    ds.to_netcdf(dataset_ffp, mode="a")
 
 
-def add_jaehwi_nz_estimates(dataset_ffp: Path, jaehwi_data_ffp: Path, prefix: str = "jw"):
+def add_jaehwi_nz_estimates(
+    dataset_ffp: Path, jaehwi_data_ffp: Path, prefix: str = "jw"
+):
     """
     Adds Jaehwi's Vs30 estimates for New Zealand to the provided dataset.
     """
@@ -326,53 +394,127 @@ def add_jaehwi_nz_estimates(dataset_ffp: Path, jaehwi_data_ffp: Path, prefix: st
         f"Adding Jaehwi's estimates to result ({jaehwi_data_ffp.parent.name}) database {dataset_ffp}..."
     )
 
-    with xr.open_dataset(dataset_ffp, mode="r") as ds:
-        vs30_da = ds["vs30"]
-        y, x = vs30_da.y.values, vs30_da.x.values
-        nan_mask = vs30_da.isnull().values
+    # with xr.open_dataset(dataset_ffp, mode="r") as ds:
+    #     vs30_da = ds["vs30"]
+    #     y, x = vs30_da.y.values, vs30_da.x.values
+    #     nan_mask = vs30_da.isnull().values
 
-    grid_x, grid_y = np.meshgrid(x, y)
-    coords = np.column_stack((grid_x[~nan_mask], grid_y[~nan_mask]))
+    # grid_x, grid_y = np.meshgrid(x, y)
+    # coords = np.column_stack((grid_x[~nan_mask], grid_y[~nan_mask]))
+
+    coords, nan_mask, vs30_da = _get_dataset_values(dataset_ffp)
 
     logger.info("Extracting Jaehwi's estimates...")
     with rasterio.open(jaehwi_data_ffp) as ds:
-        assert ds.crs.to_epsg() == constants.NZTM2000_EPSG, "Dataset CRS is not WGS84"
+        assert ds.crs.to_epsg() == constants.NZTM2000_EPSG, "Dataset CRS is not NZTM"
 
         jw_data = ds.read([1, 2])
 
         rows, cols = transform.rowcol(ds.transform, coords[:, 0], coords[:, 1])
         jw_vs30_mean, jw_vs30_std = jw_data[0, rows, cols], jw_data[1, rows, cols]
 
-    # Compute residual
-    res = jw_vs30_mean - vs30_da.values[~nan_mask]
-    ln_res = np.log(jw_vs30_mean) - np.log(vs30_da.values[~nan_mask])
+    # # Compute residual
+    # res = jw_vs30_mean - vs30_da.values[~nan_mask]
+    # ln_res = np.log(jw_vs30_mean) - np.log(vs30_da.values[~nan_mask])
 
-    # Create data arrays
-    jw_vs30_mean_da = xr.DataArray(
-        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    # # Create data arrays
+    # jw_vs30_mean_da = xr.DataArray(
+    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    # )
+    # jw_vs30_mean_da.values[~nan_mask] = jw_vs30_mean
+    # jw_vs30_std_da = xr.DataArray(
+    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    # )
+    # jw_vs30_std_da.values[~nan_mask] = jw_vs30_std
+    # res_da = xr.DataArray(
+    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    # )
+    # res_da.values[~nan_mask] = res
+    # ln_res_da = xr.DataArray(
+    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
+    # )
+    # ln_res_da.values[~nan_mask] = ln_res
+    ds = _create_dataset_from_estimates(
+        vs30_da,
+        nan_mask,
+        jw_vs30_mean,
+        prefix,
+        std_estimate=jw_vs30_std,
     )
-    jw_vs30_mean_da.values[~nan_mask] = jw_vs30_mean
-    jw_vs30_std_da = xr.DataArray(
-        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    )
-    jw_vs30_std_da.values[~nan_mask] = jw_vs30_std
-    res_da = xr.DataArray(
-        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    )
-    res_da.values[~nan_mask] = res
-    ln_res_da = xr.DataArray(
-        data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    )
-    ln_res_da.values[~nan_mask] = ln_res
 
     # Save
     logger.info("Saving Jaehwi's estimates to dataset...")
-    xr.Dataset(
-        {
-            f"{prefix}_vs30_mean": jw_vs30_mean_da,
-            f"{prefix}_vs30_std": jw_vs30_std_da,
-            f"{prefix}_vs30_res": res_da,
-            f"{prefix}_vs30_ln_res": ln_res_da,
-        }
-    ).to_netcdf(dataset_ffp, mode="a")
+    # xr.Dataset(
+    #     {
+    #         f"{prefix}_vs30_mean": jw_vs30_mean_da,
+    #         f"{prefix}_vs30_std": jw_vs30_std_da,
+    #         f"{prefix}_vs30_res": res_da,
+    #         f"{prefix}_vs30_ln_res": ln_res_da,
+    #     }
+    # )
+    ds.to_netcdf(dataset_ffp, mode="a")
 
+
+def add_foster_original_nz_estimates(dataset_ffp: Path, foster_original_ffp: Path):
+    logger.info(f"Adding original Foster et al. result to database {dataset_ffp}...")
+    coords, nan_mask, vs30_da = _get_dataset_values(dataset_ffp)
+
+    logger.info("Extracting original Foster et al. estimates...")
+    with rasterio.open(foster_original_ffp) as ds:
+        assert ds.crs.to_epsg() == constants.NZTM2000_EPSG, "Dataset CRS is not NZTM"
+
+        foster_original_data = ds.read(1)
+
+        rows, cols = transform.rowcol(ds.transform, coords[:, 0], coords[:, 1])
+        foster_original_vs30_mean = foster_original_data[rows, cols]
+
+    ds = _create_dataset_from_estimates(
+        vs30_da,
+        nan_mask,
+        foster_original_vs30_mean,
+        "foster_original",
+    )
+
+    # Save
+    logger.info("Saving original Foster et al. estimates to dataset...")
+    ds.to_netcdf(dataset_ffp, mode="a")
+
+
+def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
+    logger.info(
+        f"Adding residuals with respect to {other_dataset_ffp.parent.name} to {dataset_ffp.parent.name}"
+    )
+    coords, nan_mask, vs30_da = _get_dataset_values(dataset_ffp)
+    other_coords, other_nan_mask, other_vs30_da = _get_dataset_values(other_dataset_ffp)
+
+    assert np.array_equal(
+        coords, other_coords
+    ), "Coordinates of the two datasets do not match. Cannot compute residuals."
+    assert np.array_equal(
+        nan_mask, other_nan_mask
+    ), "NaN masks of the two datasets do not match. Cannot compute residuals."
+
+    res = other_vs30_da.values[~nan_mask] - vs30_da.values[~nan_mask]
+    ln_res = np.log(other_vs30_da.values[~nan_mask]) - np.log(vs30_da.values[~nan_mask])
+
+    res_da = xr.DataArray(
+        data=np.full(vs30_da.shape, np.nan), coords=[vs30_da.y.values, vs30_da.x.values], dims=["y", "x"]
+    )
+    res_da.values[~nan_mask] = res
+
+    ln_res_da = xr.DataArray(
+        data=np.full(vs30_da.shape, np.nan), coords=[vs30_da.y.values, vs30_da.x.values], dims=["y", "x"]
+    )
+    ln_res_da.values[~nan_mask] = ln_res
+
+    ds = xr.Dataset(
+        {
+            f"{other_dataset_ffp.parent.name}_vs30_res": res_da,
+            f"{other_dataset_ffp.parent.name}_vs30_ln_res": ln_res_da,
+        }
+    )
+
+    # Save
+    ds.to_netcdf(dataset_ffp, mode="a")
+
+    print("wtf")

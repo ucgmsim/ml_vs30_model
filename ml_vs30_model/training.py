@@ -38,6 +38,10 @@ def cv_train(
     dataset_df = pd.read_parquet(run_config.dataset_ffp)
     logger.info(f"Dataset loaded with {len(dataset_df)} samples")
 
+    # Drop test sites 
+    dataset_df = dataset_df[~dataset_df.index.isin(run_config.test_sites)]
+    logger.info(f"Dataset size after dropping test sites: {len(dataset_df)} samples")
+
     kf = ms.KFold(
         n_splits=run_config.n_cv_folds, shuffle=True, random_state=run_config.seed
     )

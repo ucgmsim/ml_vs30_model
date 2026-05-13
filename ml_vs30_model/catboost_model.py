@@ -37,6 +37,10 @@ def full_train(run_config: RunConfig, out_dir: Path, run_post_processing: bool =
     dataset_df = pd.read_parquet(run_config.dataset_ffp)
     logger.info(f"Dataset loaded with {len(dataset_df)} samples")
 
+    # Drop test sites 
+    dataset_df = dataset_df[~dataset_df.index.isin(run_config.test_sites)]
+    logger.info(f"Dataset size after dropping test sites: {len(dataset_df)} samples")
+
     run_model_training(
         dataset_df,
         dataset_df.index.values,
@@ -54,6 +58,7 @@ def full_train(run_config: RunConfig, out_dir: Path, run_post_processing: bool =
         train_results_df = post_processing.add_residuals(train_results_df)
         train_results_df = post_processing.add_mae(train_results_df)
         train_results_df = post_processing.add_lnVs30_mse(train_results_df)
+        train_results_df.to_parquet(out_dir / "train_results.parquet")
         shap_values = post_processing.compute_shap_feature_importance(out_dir)
 
         # Plots
@@ -75,6 +80,10 @@ def run_model_training(
     save_train_results: bool = False,
     compute_shap: bool = False,
 ) -> None:
+    assert (
+        np.isin(run_config.test_sites, dataset_df.index.values.astype(str)).sum() == 0
+    ), "Test sites must not be present in the training dataset"
+
     run_config, train_X, train_y, train_df, val_X, val_y, val_df = (
         pre_processing.get_pre_processed_train_val_df(
             dataset_df,
@@ -167,26 +176,22 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path):
 
         # NaN values in numerical variables
         null_mask = np.any(
-            np.isnan(
-                input_ds[run_config.numerical_variables].to_array().values
-            ),
+            np.isnan(input_ds[run_config.numerical_variables].to_array().values),
             axis=0,
         )
         # -9999 values in categorial variables
-        null_mask |= np.any(
-            input_ds[run_config.categorial_variables].to_array().values
-            == -9999,
-            axis=0,
-        )
+        if len(run_config.categorial_variables) > 0:
+            null_mask |= np.any(
+                input_ds[run_config.categorial_variables].to_array().values == -9999,
+                axis=0,
+            )
         logger.info(
             f"Input dataset contains {null_mask.sum() - (~land_mask).sum()} NaN/-9999 values. Dropping these for prediction."
         )
 
         # Get predictions
         logger.info("Running Vs30 estimation across New Zealand...")
-        input_df = (
-            input_ds.to_dataframe().loc[(~null_mask).ravel()].reset_index()
-        )
+        input_df = input_ds.to_dataframe().loc[(~null_mask).ravel()].reset_index()
         pre_input_df, _ = pre_processing.pre_process_features(input_df, run_config)
         model = CatBoostRegressor()
         model.load_model(model_dir / "model.cbm")

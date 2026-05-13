@@ -5,6 +5,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from functools import partial
 
+import plotly.graph_objects as go
 import xarray as xr
 import numpy as np
 import pandas as pd
@@ -82,7 +83,9 @@ class DataConfig:
         return cls.from_dict(config_dict)
 
 
-def gen_dataset(data_config: DataConfig, out_ffp: Path) -> None:
+def gen_dataset(
+    data_config: DataConfig, out_ffp: Path, address_missing: bool = True
+) -> None:
     """
     Generates a dataset containing Vs30 values and additional input variables,
     based on the given data configuration.
@@ -109,7 +112,9 @@ def gen_dataset(data_config: DataConfig, out_ffp: Path) -> None:
     # Add input variable values
     logger.info(f"Retrieving input variable values for {len(df)} sites.")
     for variable in data_config.input_variables:
-        df[variable.value] = get_input_values(df[["lon", "lat"]].to_numpy(), variable)
+        df[variable.value] = get_input_values(
+            df[["lon", "lat"]].to_numpy(), variable, address_missing=address_missing
+        )
 
     # Add derived variables
     logger.info("Computing derived variable values.")
@@ -187,9 +192,7 @@ def get_input_values(
     elif data_source == constants.DataSource.GlobalGWT:
         logger.info(f"Using GlobalGWT data source for variable: {variable.value}")
         global_gwt = data_loaders.GlobalGWT()
-        values = global_gwt.get_values(
-            points, variable
-        )
+        values = global_gwt.get_values(points, variable)
     elif data_source == constants.DataSource.ShapeLoader:
         logger.info(f"Using ShapeLoader data source for variable: {variable.value}")
         shape_loader = data_loaders.ShapeLoader()
@@ -205,8 +208,9 @@ def get_input_values(
         logger.error(error_msg)
         raise NotImplementedError(error_msg)
 
+    print("wtf")
     assert not address_missing or (
-        address_missing and np.any(values == -9999) or np.any(np.isnan(values))
+        address_missing and (np.all(values != -9999) and np.all(~np.isnan(values)))
     ), f"Variable {variable} contains missing values after processing."
     logger.info(f"Completed processing for variable: {variable.value}")
     return values
@@ -351,7 +355,7 @@ def create_nz_nztm_input_grid(
     map_data = gmt_plotting.NZMapData.load()
 
     start = time.time()
-    coast_mask, water_mask = gmt_plotting.get_coast_water_mask_optimised(
+    coast_mask, water_mask = gmt_plotting.get_coast_water_mask(
         map_data,
         grid_points_latlon,
     )
@@ -411,3 +415,51 @@ def create_nz_nztm_input_grid(
         )
         xr.Dataset({variable.value: variable_da}).to_netcdf(out_ffp, mode="a")
         del variable_da
+
+
+def select_test_sites(dataset_ffp: Path, output_dir: Path, seed: int):
+    """
+    Selects test sites from the dataset, stratified by Vs30 bins.
+    """
+    np.random.seed(seed)
+    dataset_df = pd.read_parquet(dataset_ffp)
+
+    sites_to_sample = {
+        "0-180": 5,
+        "180-360": 15,
+        "360-760": 15,
+        "760-10000": 10,
+    }
+
+    test_sites = []
+    for vs30_bin in constants.VS30_WEIGHTING_BIN_NAMES:
+        n_sites_to_sample = sites_to_sample[vs30_bin]
+        bin_sites = dataset_df.loc[dataset_df["vs30_bin"] == vs30_bin].index.values
+
+        assert (
+            len(bin_sites) >= n_sites_to_sample
+        ), f"Not enough sites in Vs30 bin {vs30_bin} to sample {n_sites_to_sample} test sites."
+
+        sites = np.random.choice(bin_sites, size=n_sites_to_sample, replace=False)
+        test_sites.extend(sites)
+    np.save(output_dir / "test_sites.npy", np.array(test_sites))
+
+    # Create spatial plot of test sites to check distribution
+    test_df = dataset_df.loc[test_sites]
+    fig = go.Figure()
+    fig.update_layout(
+        margin=dict(l=10, r=10, t=30, b=10),
+        map=dict(zoom=3, center=dict(lat=test_df.lat.mean(), lon=test_df.lon.mean())),
+        showlegend=False,
+    )
+    fig.add_trace(
+        go.Scattermap(
+            lon=test_df["lon"],
+            lat=test_df["lat"],
+            name="Measurements",
+            mode="markers",
+            marker=dict(size=4, color="blue"),
+        )
+    )
+    fig.write_html(output_dir / "test_sites_map.html")
+

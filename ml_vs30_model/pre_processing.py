@@ -98,15 +98,16 @@ def get_pre_processed_train_val_df(
     train_df = dataset_df.loc[train_sites].copy()
     val_df = dataset_df.loc[val_sites].copy() if val_sites is not None else None
 
-    if train_df[run_config.input_variables].isna().any().any():
-        mask = train_df[run_config.input_variables].isna().any(axis=1)
-        logger.warning(f"Missing values found in training data, dropping {mask.sum()} rows.")
-        train_df = train_df.loc[~mask]
+    train_missing_mask = (train_df[run_config.input_variables].isna() | (train_df[run_config.input_variables] == -9999)).any(axis=1)
+    if train_missing_mask.any():
+        logger.warning(f"Missing values found in training data, dropping {train_missing_mask.sum()} rows.")
+        train_df = train_df.loc[~train_missing_mask]
 
-    if val_df is not None and val_df[run_config.input_variables].isna().any().any():
-        mask = val_df[run_config.input_variables].isna().any(axis=1)
-        logger.warning(f"Missing values found in validation data, dropping {mask.sum()} rows.")
-        val_df = val_df.loc[~mask]
+    if val_df is not None :
+        val_missing_mask = (val_df[run_config.input_variables].isna() | (val_df[run_config.input_variables] == -9999)).any(axis=1)
+        if val_missing_mask.any():
+            logger.warning(f"Missing values found in validation data, dropping {val_missing_mask.sum()} rows.")
+            val_df = val_df.loc[~val_missing_mask]
 
     train_df, val_df = train_df.copy(), val_df.copy() if val_df is not None else None
 

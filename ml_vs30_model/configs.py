@@ -1,8 +1,9 @@
-import copy
 from pathlib import Path
+import copy
 import dataclasses
 from enum import StrEnum
 
+import numpy as np
 import ml_tools as mlt
 
 from . import constants
@@ -34,6 +35,7 @@ class RunConfig:
     model_type: ModelType | str
 
     rel_dataset_ffp: str
+    rel_test_sites_ffp: str
     input_variables: list[str]  
 
     apply_vs30_sample_weights: bool
@@ -58,6 +60,14 @@ class RunConfig:
             self._dataset_ffp = constants.BASE_DATA_DIR / self.rel_dataset_ffp
 
         return self._dataset_ffp
+    
+    @property
+    def test_sites_ffp(self) -> Path:
+        return constants.BASE_DATA_DIR / self.rel_test_sites_ffp
+    
+    @property
+    def test_sites(self) -> np.ndarray:
+        return np.load(self.test_sites_ffp)
 
     @property  
     def results_dir(self) -> Path:
@@ -106,7 +116,11 @@ class RunConfig:
             if cur_val is None: 
                 continue
 
-            if cur_key == "iterations":
+            if cur_key == "extra_input_variables":
+                config_dict["input_variables"] = list(
+                    set(config_dict["input_variables"] + cur_val)
+                )
+            elif cur_key == "iterations":
                 config_dict["model_config"]["iterations"] = cur_val
             else:
                 config_dict[cur_key] = cur_val
@@ -133,6 +147,7 @@ class RunConfig:
             "seed": int(self.seed),
             "model_type": str(self.model_type),
             "rel_dataset_ffp": str(self.rel_dataset_ffp),
+            "rel_test_sites_ffp": str(self.rel_test_sites_ffp),
             "input_variables": list(self.input_variables),
             "n_cv_folds": int(self.n_cv_folds),
             "rel_results_dir": str(self.rel_results_dir),

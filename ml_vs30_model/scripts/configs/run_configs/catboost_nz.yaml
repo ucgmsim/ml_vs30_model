@@ -5,19 +5,21 @@ pre_process_categorial: false
 apply_vs30_sample_weights: true
 max_vs30_weight: 1.5
 
+rel_dataset_ffp: datasets/nz_site_db_dataset.parquet
+rel_test_sites_ffp: datasets/nz_site_db_test_sites/test_sites.npy
+
 input_variables:
   - compound_topographic_index
   - nz_geology_age_ln_mid
-  - nz_geology_category
   - nz_combined_groundwater_depth_ln
   - nzenvds_slope_deg
   - nzenvds_topo_normalised_height
   - nzenvds_topo_position
   - nzenvds_topo_roughness
-  - nzenvds_topo_wetness
 
 n_cv_folds: 25
 rel_results_dir: results
 
 model_config:
   iterations: 20
+  

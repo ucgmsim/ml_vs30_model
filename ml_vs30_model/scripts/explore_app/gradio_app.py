@@ -1,10 +1,16 @@
+from PIL import Image
+from pathlib import Path
 import json
 import base64
 from io import BytesIO
 
+
 import matplotlib
+from branca.element import IFrame
+
 matplotlib.use("Agg")
 import numpy as np
+import pandas as pd
 import gradio as gr
 import matplotlib.pyplot as plt
 import folium
@@ -23,9 +29,14 @@ datasets = [f.name for f in vs30.constants.BASE_DATA_DIR.glob("grids/*") if f.is
 models = [
     f.name
     for f in vs30.constants.BASE_DATA_DIR.glob("results/*")
-    if f.is_dir() and "full" in f.name
+    if f.is_dir() and "full" in f.name and not f.name.startswith("_")
 ]
 
+QUALITY_COLOR_MAPPTING = {
+    "Q1": "blue",
+    "Q2": "magenta",
+    "Q3": "red",
+}
 
 VS30_CMAP_MIN, VS30_CMAP_MAX = 0, 1200
 VS30_CMAP_RES_MIN, VS30_CMAP_RES_MAX = -250, 250
@@ -37,11 +48,20 @@ STD_CMAP = "Reds"
 RES_CMAP = "bwr_r"
 
 
+def _get_model_dir(model_name: str) -> Path:
+    return vs30.constants.BASE_DATA_DIR / "results" / model_name
+
+
 def make_cbar_html(cmap_name: str, cmap_min: float, cmap_max: float, label: str) -> str:
     fig, ax = plt.subplots(figsize=(8, 0.4))
     norm = plt.Normalize(vmin=cmap_min, vmax=cmap_max)
     cmap = plt.get_cmap(cmap_name)
-    fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=ax, orientation="horizontal", label=label)
+    fig.colorbar(
+        plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+        cax=ax,
+        orientation="horizontal",
+        label=label,
+    )
     fig.patch.set_alpha(0.7)
     fig.tight_layout(pad=0.2)
 
@@ -50,8 +70,9 @@ def make_cbar_html(cmap_name: str, cmap_min: float, cmap_max: float, label: str)
     plt.close(fig)
     buf.seek(0)
     b64 = base64.b64encode(buf.read()).decode("utf-8")
-    
+
     return f'<img src="data:image/png;base64,{b64}" style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); z-index:1000; width:400px;">'
+
 
 def get_input_variable_stats(dataset_name: str, variable: str):
     params = {
@@ -124,7 +145,12 @@ def inputs_supported_variables(dataset_name: str):
 
 
 def create_inputs_map(
-    dataset_name: str, variable: str, cmap: str, cmap_min: float, cmap_max: float
+    dataset_name: str,
+    variable: str,
+    model_name: str,
+    cmap: str,
+    cmap_min: float,
+    cmap_max: float,
 ):
     tiler_url = (
         BASE_URL
@@ -142,6 +168,13 @@ def create_inputs_map(
         overlay=True,
         control=True,
     ).add_to(m)
+
+    if model_name is not None:
+        marker_group = get_model_markers(model_name)
+        marker_group.add_to(m)
+
+    # Layer control
+    folium.LayerControl(collapsed=False).add_to(m)
 
     # Colorbar
     fig, ax = plt.subplots(figsize=(16, 1))
@@ -181,6 +214,40 @@ def gen_inputs_hist_plot(variable: str, variable_stats: dict):
     return fig
 
 
+def get_model_markers(model_name: str):
+    marker_group = folium.FeatureGroup(name="Sites", show=True)
+    model_dir = _get_model_dir(model_name)
+    train_df = pd.read_parquet(model_dir / "train_results.parquet")
+    run_config = vs30.RunConfig.from_yaml(model_dir / "run_config.yaml")
+    dataset_df = pd.read_parquet(run_config.dataset_ffp)
+
+    for k, row in train_df.iterrows():
+        cur_quality_score = dataset_df.loc[k, "quality_score"]
+
+        popup_html = f"Name: {k}<br>Vs30: {row['vs30']:.1f}<br>Pred: {row['pred_vs30']:.1f}<br>Quality: {cur_quality_score}"
+
+        if (plot_ffp := model_dir / f"plots/waterfall_plots/{k}.png").exists():
+            with open(plot_ffp, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode()
+
+            popup_html += (
+                f'<br><img src="data:image/png;base64,{encoded}" width="800"><br>'
+            )
+
+        folium.CircleMarker(
+            location=[row["lat"], row["lon"]],
+            radius=5,
+            popup=folium.Popup(
+                popup_html,
+                max_width=800,
+            ),
+            color=QUALITY_COLOR_MAPPTING[cur_quality_score],
+            fill=True,
+        ).add_to(marker_group)
+
+    return marker_group
+
+
 def create_model_map(model_name: str, variable: str):
     if variable.endswith("_ln_res"):
         cmap_min, cmap_max = VS30_CMAP_LN_RES_MIN, VS30_CMAP_LN_RES_MAX
@@ -212,15 +279,16 @@ def create_model_map(model_name: str, variable: str):
         control=True,
     ).add_to(m)
 
+    # Add markers
+    marker_group = get_model_markers(model_name)
+    marker_group.add_to(m)
+
+    # Layer control
+    folium.LayerControl(collapsed=False).add_to(m)
+
     map_html = m._repr_html_()
     cbar_html = make_cbar_html(cmap, cmap_min, cmap_max, variable)
     combined = f'<div style="position:relative">{map_html}{cbar_html}</div>'
-
-    # if variable.endswith("_ln_res"):
-    #     folium_cmap = branca.colormap.linear.RdBu_05.scale(VS30_CMAP_LN_RES_MIN, VS30_CMAP_LN_RES_MAX)
-
-    # folium_cmap.caption = variable
-    # m.add_child(folium_cmap)
 
     return combined
 
@@ -232,10 +300,32 @@ def models_supported_variables(model_name: str):
     return gr.Dropdown(choices=vars)
 
 
+def update_site_selection(model_name: str):
+    model_dir = _get_model_dir(model_name)
+    train_df = pd.read_parquet(model_dir / "train_results.parquet")
+    site_names = train_df.index.astype(str).tolist()
+    return gr.Dropdown(choices=site_names)
+
+
+def update_site_plot(model_name: str, site_name: str):
+    model_dir = _get_model_dir(model_name)
+
+    if (ffp := model_dir / f"plots/waterfall_plots/{site_name}.png").exists():
+        return gr.Image(value=Image.open(ffp))
+
+    return None
+
+
 with gr.Blocks() as demo:
-    
+
     with gr.Tab("Model"):
         model_map = gr.HTML("<h1>Model predictions...</h1>")
+
+        # gr.Markdown("----------------------")
+        # gr.Markdown("# Site Analysis")
+
+        # site_selection = gr.Dropdown(interactive=True, label="Select a site")
+        # site_plot = gr.Image(interactive=False, container=False)
 
     with gr.Tab("Inputs"):
         inputs_map = gr.HTML("<h1>Select a dataset and variable...</h1>")
@@ -246,9 +336,7 @@ with gr.Blocks() as demo:
 
         inputs_var_stats = gr.State()
 
-
     with gr.Sidebar(open=True):
-
         with gr.Accordion("Model Options"):
             with gr.Group():
                 model_selection = gr.Dropdown(
@@ -266,23 +354,9 @@ with gr.Blocks() as demo:
                 )
                 model_update_btn = gr.Button("Update", variant="primary")
 
-            # with gr.Group():
-            #     # model_cmap_dropdown = gr.Dropdown(
-            #     #     choices=["viridis", "plasma", "inferno", "magma", "greys"],
-            #     #     label="Colormap",
-            #     #     value="viridis",
-            #     #     show_label=True,
-            #     # )
-            #     model_cmap_update_btn = gr.Button("Update", variant="primary")
-
-                # _cmap_min_slider = gr.Slider(
-                #     label="Colormap min", interactive=True, precision=3
-                # )
-                # input_cmap_max_slider = gr.Slider(
-                #     label="Colormap max", interactive=True, precision=3
-                # )
-        
-        with gr.Accordion("Input Variable Options", open=True) as input_options_accordion:
+        with gr.Accordion(
+            "Input Variable Options", open=True
+        ) as input_options_accordion:
             with gr.Group():
                 gr.Markdown("### Dataset/Variable")
                 dataset_dropdown = gr.Dropdown(
@@ -333,6 +407,7 @@ with gr.Blocks() as demo:
         inputs=[
             dataset_dropdown,
             var_dropdown,
+            model_selection,
             input_cmap_dropdown,
             input_cmap_min_slider,
             input_cmap_max_slider,
@@ -350,6 +425,7 @@ with gr.Blocks() as demo:
         inputs=[
             dataset_dropdown,
             var_dropdown,
+            model_selection,
             input_cmap_dropdown,
             input_cmap_min_slider,
             input_cmap_max_slider,
@@ -371,6 +447,17 @@ with gr.Blocks() as demo:
         # inputs=[model_selection, model_variable_dropdown, model_cmap_dropdown],
         outputs=model_map,
     )
+    # .then(
+    #     update_site_selection,
+    #     inputs=model_selection,
+    #     outputs=site_selection,
+    # )
+
+    # site_selection.change(
+    #     update_site_plot,
+    #     inputs=[model_selection, site_selection],
+    #     outputs=site_plot,
+    # )
 
     # model_cmap_update_btn.click(
     #     create_model_map,

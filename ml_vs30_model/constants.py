@@ -283,6 +283,7 @@ NORM_VARS = [
 ]
 
 MIN_MAX_SCALE_PARAMS = {
+    InputVariable.Elevation: (0, 1500),
     InputVariable.NZCombinedGroundwaterDepthLn: (-6, 3.2188758249), # (0.002478752177, 25) (m)
     InputVariable.CompoundTopgraphicIndex: (-4.0, 10.0),
     InputVariable.LandformEntropy: (0, 3.0),

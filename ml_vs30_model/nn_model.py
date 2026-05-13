@@ -39,6 +39,10 @@ def run_model_training(
     save_train_results: bool = False,
 ) -> None:
     """Runs training of the neural network model."""
+    assert (
+        np.isin(run_config.test_sites, dataset_df.index.values.astype(str)).sum() == 0
+    ), "Test sites must not be present in the training dataset"
+
     run_config, train_X, train_y, train_df, val_X, val_y, val_df = (
         pre_processing.get_pre_processed_train_val_df(
             dataset_df,

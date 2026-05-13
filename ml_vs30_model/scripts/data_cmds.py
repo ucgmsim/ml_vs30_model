@@ -14,7 +14,12 @@ app = typer.Typer(
 
 
 @app.command("gen-dataset")
-def gen_dataset(config_ffp: Path, out_ffp: Path, log_ffp: Path | None = None):
+def gen_dataset(
+    config_ffp: Path,
+    out_ffp: Path,
+    log_ffp: Path | None = None,
+    address_missing: bool = True,
+):
     """
     Creates a dataset for training a VS30 model,
     based on the provided configuration file.
@@ -23,7 +28,7 @@ def gen_dataset(config_ffp: Path, out_ffp: Path, log_ffp: Path | None = None):
     logging.getLogger("rclone").setLevel(logging.WARNING)
 
     config = vs30.DataConfig.from_yaml(config_ffp)
-    vs30.data.gen_dataset(config, out_ffp)
+    vs30.data.gen_dataset(config, out_ffp, address_missing=address_missing)
 
 
 @app.command("create-nz-nztm-input-grid")
@@ -65,6 +70,16 @@ def create_nz_input_grid(
         min_area=min_area,
         n_procs=n_procs,
     )
+
+@app.command("select-test-sites")
+def select_test_sites(dataset_ffp: Path, output_dir: Path, seed: int):
+    """
+    Selects test sites from the dataset, stratified by Vs30 bins.
+    """
+    mlt.utils.setup_logging()
+    vs30.data.select_test_sites(dataset_ffp, output_dir, seed)
+
+    
 
 
 if __name__ == "__main__":
