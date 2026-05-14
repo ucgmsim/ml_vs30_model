@@ -1,5 +1,6 @@
 from pathlib import Path
 import typer
+import xarray as xr
 
 import ml_tools as mlt
 import ml_vs30_model as vs30
@@ -39,7 +40,9 @@ def cv_train_nn(
         run_config.results_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
     )
 
-    vs30.nn_model.cv_train(run_config, base_out_dir, run_post_processing=run_post_processing)
+    vs30.nn_model.cv_train(
+        run_config, base_out_dir, run_post_processing=run_post_processing
+    )
 
 
 @app.command("cv-train-ngboost")
@@ -134,13 +137,20 @@ def run_post_processing(results_dir: Path, gen_waterfall_plots: bool = False):
 
 
 @app.command("estimate-vs30-nz")
-def estimate_vs30_nz(
-    model_dir: Path, input_dataset_ffp: Path):
+def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path):
     """
     Estimates Vs30 across New Zealand using the trained model.
     """
     mlt.utils.setup_logging()
-    vs30.catboost_model.estimate_vs30_nz(model_dir, input_dataset_ffp)
+    ffp = vs30.catboost_model.estimate_vs30_nz(model_dir, input_dataset_ffp)
+
+    # Create histogram
+    ds = xr.open_dataset(ffp)
+    vs30_values = ds["vs30"].values[~ds["vs30"].isnull()]
+    vs30.plotting.other.plot_nz_vs30_hist(
+        vs30_values, output_ffp=model_dir / "nz_vs30_histogram.png"
+    )
+
 
 @app.command("add-other-nz-estimates")
 def add_other_nz_estimates(dataset_ffp: Path):
@@ -152,11 +162,21 @@ def add_other_nz_estimates(dataset_ffp: Path):
     foster_data_dir = vs30.constants.BASE_DATA_DIR / "nz_estimates/vs30map_data_2023"
     vs30.post_processing.add_foster_nz_estimates(dataset_ffp, foster_data_dir)
 
-    foster_original_ffp = vs30.constants.BASE_DATA_DIR / "nz_estimates/foster_original/foster_paper_original.tif"
-    vs30.post_processing.add_foster_original_nz_estimates(dataset_ffp, foster_original_ffp)
+    foster_original_ffp = (
+        vs30.constants.BASE_DATA_DIR
+        / "nz_estimates/foster_original/foster_paper_original.tif"
+    )
+    vs30.post_processing.add_foster_original_nz_estimates(
+        dataset_ffp, foster_original_ffp
+    )
 
-    jaehwi_v1p0_ffp = vs30.constants.BASE_DATA_DIR / "nz_estimates/jaehwi_v1p0_26March/v1p0_26Mar.tif"
-    vs30.post_processing.add_jaehwi_nz_estimates(dataset_ffp, jaehwi_v1p0_ffp, prefix="jw_v1p0")
+    jaehwi_v1p0_ffp = (
+        vs30.constants.BASE_DATA_DIR / "nz_estimates/jaehwi_v1p0_26March/v1p0_26Mar.tif"
+    )
+    vs30.post_processing.add_jaehwi_nz_estimates(
+        dataset_ffp, jaehwi_v1p0_ffp, prefix="jw_v1p0"
+    )
+
 
 @app.command("add-ml-model-residuals")
 def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
@@ -165,7 +185,6 @@ def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
     """
     mlt.utils.setup_logging()
     vs30.post_processing.add_ml_model_residuals(dataset_ffp, other_dataset_ffp)
-
 
 
 if __name__ == "__main__":

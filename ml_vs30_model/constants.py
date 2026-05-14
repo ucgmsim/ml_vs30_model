@@ -310,6 +310,14 @@ DENSE_VS30_BIN_NAMES = [
     for i in range(len(DENSE_VS30_BINS) - 1)
 ]
 
+QUALITY_SCORE_COLORS = {
+    # "Q1": "tab:green",
+    "Q1": "blue",
+    # "Q2": "tab:blue",
+    "Q2": "purple",
+    "Q3": "black",
+}
+
 NZ_BOUNDING_BOX = [166.3, 179, -47.4, -36.0]
 
 NZTM_BOUNDING_BOX = [1079100.000, 2100800.000, 4736600.000, 6229700.000]

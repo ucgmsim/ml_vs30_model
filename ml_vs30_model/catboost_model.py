@@ -208,3 +208,5 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path):
     grid_dataset = grid_dataset.rio.write_crs(constants.NZTM2000_EPSG_STR)
     grid_dataset.to_netcdf(out_ffp)
     logger.info(f"Saved Vs30 estimates across New Zealand to {out_ffp}")
+
+    return out_ffp

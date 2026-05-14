@@ -32,11 +32,13 @@ models = [
     if f.is_dir() and "full" in f.name and not f.name.startswith("_")
 ]
 
-QUALITY_COLOR_MAPPTING = {
-    "Q1": "blue",
-    "Q2": "magenta",
-    "Q3": "red",
-}
+# QUALITY_COLOR_MAPPTING = {
+#     "Q1": "blue",
+#     "Q2": "magenta",
+#     "Q3": "red",
+# }
+
+QUALITY_COLOR_MAPPTING = vs30.constants.QUALITY_SCORE_COLORS
 
 VS30_CMAP_MIN, VS30_CMAP_MAX = 0, 1200
 VS30_CMAP_RES_MIN, VS30_CMAP_RES_MAX = -250, 250
@@ -224,15 +226,16 @@ def get_model_markers(model_name: str):
     for k, row in train_df.iterrows():
         cur_quality_score = dataset_df.loc[k, "quality_score"]
 
-        popup_html = f"Name: {k}<br>Vs30: {row['vs30']:.1f}<br>Pred: {row['pred_vs30']:.1f}<br>Quality: {cur_quality_score}"
 
         if (plot_ffp := model_dir / f"plots/waterfall_plots/{k}.png").exists():
             with open(plot_ffp, "rb") as f:
                 encoded = base64.b64encode(f.read()).decode()
 
-            popup_html += (
-                f'<br><img src="data:image/png;base64,{encoded}" width="800"><br>'
-            )
+            popup_html = f"Name: {k}, Vs30: {row['vs30']:.1f}, Pred: {row['pred_vs30']:.1f}, Quality: {cur_quality_score}"
+            popup_html += f'<br><img src="data:image/png;base64,{encoded}" width="800"><br>'
+        else:
+            popup_html = f"Name: {k}<br>Vs30: {row['vs30']:.1f}<br>Pred: {row['pred_vs30']:.1f}<br>Quality: {cur_quality_score}"
+
 
         folium.CircleMarker(
             location=[row["lat"], row["lon"]],

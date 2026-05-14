@@ -116,31 +116,52 @@ def gen_model_perfomance_plots(
         logger.info("Reading results dataframe from parquet file val_results.parquet.")
         results_df = pd.read_parquet(results_dir / "val_results.parquet")
 
+    # Add quality score to results_df
+    run_config = RunConfig.from_yaml(results_dir / "run_config.yaml")
+    dataset_df = pd.read_parquet(run_config.dataset_ffp)
+    results_df["quality_score"] = dataset_df.loc[results_df.index, "quality_score"]
+
     logger.info("Generating model performance plots...")
     (outdir := results_dir / "plots").mkdir(exist_ok=True, parents=False)
     model_perf_plots.one_to_one_plot(results_df, outdir / "one_to_one_plot.png")
+    model_perf_plots.one_to_one_plot(
+        results_df, outdir / "one_to_one_plot_Q1.png", quality_score="Q1"
+    )
+    model_perf_plots.one_to_one_plot(
+        results_df, outdir / "one_to_one_plot_Q2.png", quality_score="Q2"
+    )
+    model_perf_plots.one_to_one_plot(
+        results_df, outdir / "one_to_one_plot_Q3.png", quality_score="Q3"
+    )
+    model_perf_plots.pred_vs30_variable_scatter_plot(
+        results_df,
+        dataset_df,
+        "elevation",
+        outdir / "pred_vs30_elevation_scatter.png",
+        x_limits=(0, None),
+    )
     model_perf_plots.residuals_histogram(results_df, outdir / "residuals_histogram.png")
     model_perf_plots.residual_kde(results_df, outdir / "residuals_kde.png")
     model_perf_plots.metric_scatter_plot(
         results_df,
         outdir / "mae_scatter_plot.png",
         metric_name="mae",
-        x_limits=(0, 2000),
+        x_limits=(0, 1550),
         y_limits=(0, 1000),
         show_geyin_maurer_model=True,
     )
-    model_perf_plots.metric_scatter_plot(
-        results_df,
-        outdir / "lnVs30_mse_scatter_plot.png",
-        metric_name="lnVs30_mse",
-        x_limits=(0, 2000),
-        # y_limits=(0, 1000),
-    )
+    # model_perf_plots.metric_scatter_plot(
+    #     results_df,
+    #     outdir / "lnVs30_mse_scatter_plot.png",
+    #     metric_name="lnVs30_mse",
+    #     x_limits=(0, 2000),
+    #     # y_limits=(0, 1000),
+    # )
     model_perf_plots.metric_scatter_plot(
         results_df,
         outdir / "ln_residual_scatter_plot.png",
         metric_name="ln_residual",
-        x_limits=(0, 2000),
+        x_limits=(0, 1550),
         y_limits=(-1.5, 1.5),
     )
 
@@ -341,28 +362,6 @@ def add_foster_nz_estimates(dataset_ffp: Path, foster_data_dir: Path):
         foster_combined_mvn_vs30_mean = foster_data[0, rows, cols]
         foster_combined_mvn_vs30_std = foster_data[1, rows, cols]
 
-    # # Compute residual
-    # res = foster_combined_mvn_vs30_mean - vs30_da.values[~nan_mask]
-    # ln_res = np.log(foster_combined_mvn_vs30_mean) - np.log(vs30_da.values[~nan_mask])
-
-    # # Create data arrays
-    # foster_combined_mvn_vs30_mean_da = xr.DataArray(
-    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    # )
-    # foster_combined_mvn_vs30_mean_da.values[~nan_mask] = foster_combined_mvn_vs30_mean
-    # foster_combined_mvn_vs30_std_da = xr.DataArray(
-    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    # )
-    # foster_combined_mvn_vs30_std_da.values[~nan_mask] = foster_combined_mvn_vs30_std
-    # res_da = xr.DataArray(
-    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    # )
-    # res_da.values[~nan_mask] = res
-    # ln_res_da = xr.DataArray(
-    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    # )
-    # ln_res_da.values[~nan_mask] = ln_res
-
     ds = _create_dataset_from_estimates(
         vs30_da,
         nan_mask,
@@ -373,14 +372,6 @@ def add_foster_nz_estimates(dataset_ffp: Path, foster_data_dir: Path):
 
     # Save
     logger.info("Saving modified Foster et al. estimates to dataset...")
-    # xr.Dataset(
-    #     {
-    #         "foster_combined_mvn_vs30_mean": foster_combined_mvn_vs30_mean_da,
-    #         "foster_combined_mvn_vs30_std": foster_combined_mvn_vs30_std_da,
-    #         "foster_combined_mvn_vs30_res": res_da,
-    #         "foster_combined_mvn_vs30_ln_res": ln_res_da,
-    #     }
-    # )
     ds.to_netcdf(dataset_ffp, mode="a")
 
 
@@ -394,14 +385,6 @@ def add_jaehwi_nz_estimates(
         f"Adding Jaehwi's estimates to result ({jaehwi_data_ffp.parent.name}) database {dataset_ffp}..."
     )
 
-    # with xr.open_dataset(dataset_ffp, mode="r") as ds:
-    #     vs30_da = ds["vs30"]
-    #     y, x = vs30_da.y.values, vs30_da.x.values
-    #     nan_mask = vs30_da.isnull().values
-
-    # grid_x, grid_y = np.meshgrid(x, y)
-    # coords = np.column_stack((grid_x[~nan_mask], grid_y[~nan_mask]))
-
     coords, nan_mask, vs30_da = _get_dataset_values(dataset_ffp)
 
     logger.info("Extracting Jaehwi's estimates...")
@@ -413,27 +396,6 @@ def add_jaehwi_nz_estimates(
         rows, cols = transform.rowcol(ds.transform, coords[:, 0], coords[:, 1])
         jw_vs30_mean, jw_vs30_std = jw_data[0, rows, cols], jw_data[1, rows, cols]
 
-    # # Compute residual
-    # res = jw_vs30_mean - vs30_da.values[~nan_mask]
-    # ln_res = np.log(jw_vs30_mean) - np.log(vs30_da.values[~nan_mask])
-
-    # # Create data arrays
-    # jw_vs30_mean_da = xr.DataArray(
-    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    # )
-    # jw_vs30_mean_da.values[~nan_mask] = jw_vs30_mean
-    # jw_vs30_std_da = xr.DataArray(
-    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    # )
-    # jw_vs30_std_da.values[~nan_mask] = jw_vs30_std
-    # res_da = xr.DataArray(
-    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    # )
-    # res_da.values[~nan_mask] = res
-    # ln_res_da = xr.DataArray(
-    #     data=np.full(vs30_da.shape, np.nan), coords=[y, x], dims=["y", "x"]
-    # )
-    # ln_res_da.values[~nan_mask] = ln_res
     ds = _create_dataset_from_estimates(
         vs30_da,
         nan_mask,
@@ -444,14 +406,6 @@ def add_jaehwi_nz_estimates(
 
     # Save
     logger.info("Saving Jaehwi's estimates to dataset...")
-    # xr.Dataset(
-    #     {
-    #         f"{prefix}_vs30_mean": jw_vs30_mean_da,
-    #         f"{prefix}_vs30_std": jw_vs30_std_da,
-    #         f"{prefix}_vs30_res": res_da,
-    #         f"{prefix}_vs30_ln_res": ln_res_da,
-    #     }
-    # )
     ds.to_netcdf(dataset_ffp, mode="a")
 
 
@@ -498,12 +452,16 @@ def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
     ln_res = np.log(other_vs30_da.values[~nan_mask]) - np.log(vs30_da.values[~nan_mask])
 
     res_da = xr.DataArray(
-        data=np.full(vs30_da.shape, np.nan), coords=[vs30_da.y.values, vs30_da.x.values], dims=["y", "x"]
+        data=np.full(vs30_da.shape, np.nan),
+        coords=[vs30_da.y.values, vs30_da.x.values],
+        dims=["y", "x"],
     )
     res_da.values[~nan_mask] = res
 
     ln_res_da = xr.DataArray(
-        data=np.full(vs30_da.shape, np.nan), coords=[vs30_da.y.values, vs30_da.x.values], dims=["y", "x"]
+        data=np.full(vs30_da.shape, np.nan),
+        coords=[vs30_da.y.values, vs30_da.x.values],
+        dims=["y", "x"],
     )
     ln_res_da.values[~nan_mask] = ln_res
 
