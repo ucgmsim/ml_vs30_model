@@ -26,10 +26,22 @@ class CatboostModelConfig:
         return {
             "iterations": int(self.iterations),
         }
+    
+@dataclasses.dataclass
+class NGBoostModelConfig:
+    iterations: int
+
+    @classmethod
+    def from_dict(cls, config_dict: dict) -> "NGBoostModelConfig":
+        return cls(**config_dict)
+    
+    def to_dict(self) -> dict:
+        return {
+            "iterations": int(self.iterations),
+        }
 
 @dataclasses.dataclass
 class RunConfig:
-
     seed: int
 
     model_type: ModelType | str
@@ -46,7 +58,7 @@ class RunConfig:
 
     rel_results_dir: str
 
-    model_config: CatboostModelConfig
+    model_config: CatboostModelConfig | NGBoostModelConfig
     pre_process_categorial: bool
 
     _scale_params: dict = None
@@ -131,7 +143,13 @@ class RunConfig:
     def from_dict(cls, config_dict: dict) -> "RunConfig":
         """Creates an instance from the given config dictionary."""
         config_dict["model_type"] = ModelType(config_dict["model_type"])
-        config_dict["model_config"] = CatboostModelConfig.from_dict(config_dict["model_config"])
+
+        if config_dict["model_type"] == ModelType.NGBoost:
+            config_dict["model_config"] = NGBoostModelConfig.from_dict(config_dict["model_config"])
+        elif config_dict["model_type"] == ModelType.CatBoost:
+            config_dict["model_config"] = CatboostModelConfig.from_dict(config_dict["model_config"])
+        else:
+            raise ValueError(f"Unsupported model type: {config_dict['model_type']}")
 
         return cls(**config_dict)
     

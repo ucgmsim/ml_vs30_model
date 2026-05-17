@@ -15,7 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 def cv_train(
-    model_train_fn: callable, run_config: RunConfig, base_out_dir: Path, run_post_processing: bool = True, **model_fn_kwargs: dict
+    model_train_fn: callable,
+    run_config: RunConfig,
+    base_out_dir: Path,
+    run_post_processing: bool = True,
+    **model_fn_kwargs: dict,
 ) -> None:
     """
     Runs cross-validation training and saves results per fold.
@@ -38,7 +42,7 @@ def cv_train(
     dataset_df = pd.read_parquet(run_config.dataset_ffp)
     logger.info(f"Dataset loaded with {len(dataset_df)} samples")
 
-    # Drop test sites 
+    # Drop test sites
     dataset_df = dataset_df[~dataset_df.index.isin(run_config.test_sites)]
     logger.info(f"Dataset size after dropping test sites: {len(dataset_df)} samples")
 
@@ -65,7 +69,7 @@ def cv_train(
             run_config,
             base_out_dir / f"cv_{i:02d}",
             cv_ix=i,
-            **model_fn_kwargs
+            **model_fn_kwargs,
         )
         logger.info(f"Completed fold {i+1}/{run_config.n_cv_folds}")
 
@@ -137,7 +141,7 @@ def cv_train(
             base_out_dir, train_metrics, val_metrics=val_metrics
         )
         post_processing.gen_model_perfomance_plots(
-            base_out_dir, results_df=val_results_df
+            base_out_dir, results_df=val_results_df, run_config=run_config
         )
         post_processing.gen_spatial_plots(
             base_out_dir, results_df=val_results_df, run_config=run_config

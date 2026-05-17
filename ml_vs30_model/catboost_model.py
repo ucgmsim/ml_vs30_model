@@ -148,7 +148,6 @@ def run_model_training(
 
         # Get training predictions
         train_result_df["pred_vs30"] = np.exp(model.predict(train_X))
-
         train_result_df.to_parquet(out_dir / "train_results.parquet")
 
     # Compute SHAP values

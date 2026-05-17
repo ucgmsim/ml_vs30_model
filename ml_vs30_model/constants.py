@@ -284,7 +284,7 @@ NORM_VARS = [
 
 MIN_MAX_SCALE_PARAMS = {
     InputVariable.Elevation: (0, 1500),
-    InputVariable.NZCombinedGroundwaterDepthLn: (-6, 3.2188758249), # (0.002478752177, 25) (m)
+    InputVariable.NZCombinedGroundwaterDepthLn: (-2, 3.2188758249), # (0.002478752177, 25) (m)
     InputVariable.CompoundTopgraphicIndex: (-4.0, 10.0),
     InputVariable.LandformEntropy: (0, 3.0),
     InputVariable.LandformUniformity: (0, 1.0),
@@ -318,7 +318,18 @@ QUALITY_SCORE_COLORS = {
     "Q3": "black",
 }
 
-NZ_BOUNDING_BOX = [166.3, 179, -47.4, -36.0]
+# NZ_BOUNDING_BOX = [166.3, 178.65, -47.1, -34.25]
+NZ_BOUNDING_BOX = [166.3, 178.65, -47.05, -35.5]
+CANTERBURY_BOUNDING_BOX = [171.54, 173.15, -43.96, -43.2025]
+WELLINGTON_BOUNDING_BOX = [174.67, 175.1, -41.42, -41.08]
+NORTH_ISLAND_BOUNDING_BOX = [172.55, 178.625, -41.65, -34.4]
+SOUTH_ISLAND_BOUNDING_BOX = [166.3, 174.4, -47.3, -40.3]
+
+REGION_MAPPING = {
+    "nz": NZ_BOUNDING_BOX,
+    "ni": NORTH_ISLAND_BOUNDING_BOX,
+    "si": SOUTH_ISLAND_BOUNDING_BOX,
+}
 
 NZTM_BOUNDING_BOX = [1079100.000, 2100800.000, 4736600.000, 6229700.000]
 

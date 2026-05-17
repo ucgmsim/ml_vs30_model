@@ -15,6 +15,7 @@ from .base_loader import BaseLoader
 
 logger = logging.getLogger(__name__)
 
+
 class TIFLoader(BaseLoader):
     """Class for retrieving data from downloaded TIFF files."""
 
@@ -37,10 +38,15 @@ class TIFLoader(BaseLoader):
     ) -> None:
         self.base_input_data_dir = base_input_data_dir
 
-    def get_values(self, coords: np.ndarray, variable: constants.InputVariable, address_missing: bool = True):
+    def get_values(
+        self,
+        coords: np.ndarray,
+        variable: constants.InputVariable,
+        address_missing: bool = True,
+    ):
         """
         Get values for the given WGS84 (lon, lat) coordinates.
-        
+
         Parameters
         ----------
         coords : np.ndarray
@@ -48,7 +54,7 @@ class TIFLoader(BaseLoader):
         variable : constants.InputVariable
             The variable to retrieve values for.
         address_missing : bool
-            Whether to address missing values (e.g. negative depth to bedrock) 
+            Whether to address missing values (e.g. negative depth to bedrock)
             by finding nearest valid value. Can be slow for large number of points.
         """
         if variable not in self.SUPPORTED_VARIABLES:
@@ -76,7 +82,10 @@ class TIFLoader(BaseLoader):
             values = data[0, rows, cols]
 
         # Deal with negative absolute depth to bedrock values
-        if address_missing and variable == constants.InputVariable.AbsoluteDepthToBedrock:
+        if (
+            address_missing
+            and variable == constants.InputVariable.AbsoluteDepthToBedrock
+        ):
             mask = values < 0
             if np.any(mask):
                 logger.info(
@@ -84,15 +93,16 @@ class TIFLoader(BaseLoader):
                     f"Using nearest non-zero value. This can be slow for large number of points."
                 )
 
-                values[mask] = find_nearest_valid(
+                values[mask] = find_nearest_valid_wgs84(
                     tif_ffp, coords[mask], lambda v: v >= 0, values.dtype
                 )
 
         return values
 
+
 class NZTMTIFLoader:
     """Class for retrieving data from downloaded TIFF files in NZTM projection.
-    
+
     Accepts WGS84 (lon/lat) coordinates and converts them to NZTM before querying.
     """
 
@@ -118,24 +128,11 @@ class NZTMTIFLoader:
     }
 
     VAR_TO_FILENAME_MAP = {
-        # constants.InputVariable.NZEnvDSDistanceRivers: "nzenvds_v1p1_nztm/final_layers_nztm/distance_rivers.tif",
-        # constants.InputVariable.NZEnvDSDistanceRiversVertical: "nzenvds_v1p1_nztm/final_layers_nztm/distance_riversVertical.tif",
-        # constants.InputVariable.NZEnvDSPrecipAnn: "nzenvds_v1p1_nztm/final_layers_nztm/precip_ann.tif",
-        # constants.InputVariable.NZEnvDSSlopeDeg: "nzenvds_v1p1_nztm/final_layers_nztm/slope_deg.tif",
         constants.InputVariable.NZEnvDSSoilAcidP: "nzenvds_v1p1_nztm/final_layers_nztm/soil_acidP.tif",
         constants.InputVariable.NZEnvDSSoilAge: "nzenvds_v1p1_nztm/final_layers_nztm/soil_age.tif",
-        # constants.InputVariable.NZEnvDSSoilDrainage: "nzenvds_v1p1_nztm/final_layers_nztm/soil_drainage.tif",
         constants.InputVariable.NZEnvDSSoilInduration: "nzenvds_v1p1_nztm/final_layers_nztm/soil_induration.tif",
-        # constants.InputVariable.NZEnvDSSoilParticleSize: "nzenvds_v1p1_nztm/final_layers_nztm/soil_particleSize.tif",
         constants.InputVariable.NZEnvDSTopoGeomorphons: "nzenvds_v1p1_nztm/final_layers_nztm/topo_geomorphons.tif",
-        # constants.InputVariable.NZEnvDSTopoNormalisedHeight: "nzenvds_v1p1_nztm/final_layers_nztm/topo_normalisedHeight.tif",
-        # constants.InputVariable.NZEnvDSTopoPosition: "nzenvds_v1p1_nztm/final_layers_nztm/topo_position.tif",
-        # constants.InputVariable.NZEnvDSTopoRoughness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_roughness.tif",
         constants.InputVariable.NZEnvDSTopoRuggedness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_ruggedness.tif",
-        # constants.InputVariable.NZEnvDSTopoValleyDepth: "nzenvds_v1p1_nztm/final_layers_nztm/topo_valleyDepth.tif",
-        # constants.InputVariable.NZEnvDSTopoWetness: "nzenvds_v1p1_nztm/final_layers_nztm/topo_wetness.tif",
-        # constants.InputVariable.NZNLMGroundwaterDepth: "nz_nlm/NLM_gwd.tif",
-        # constants.InputVariable.NZNWTGroundwaterDepth: "nz_nwt/nwt_wtd_NZ_20220825.tif",
     }
 
     _WGS84_TO_NZTM = Transformer.from_crs(
@@ -147,7 +144,12 @@ class NZTMTIFLoader:
     ) -> None:
         self.base_input_data_dir = base_input_data_dir
 
-    def get_values(self, coords: np.ndarray, variable: constants.InputVariable):
+    def get_values(
+        self,
+        coords: np.ndarray,
+        variable: constants.InputVariable,
+        address_missing: bool = True,
+    ):
         """
         Get values for the given WGS84 (lon, lat) coordinates.
 
@@ -182,8 +184,30 @@ class NZTMTIFLoader:
             ), "Dataset CRS is not NZTM2000."
             data = dataset.read()
             assert data.shape[0] == 1, "Expected single-band TIFF file."
-            rows, cols = transform.rowcol(dataset.transform, nztm_coords[:, 0], nztm_coords[:, 1])
+            rows, cols = transform.rowcol(
+                dataset.transform, nztm_coords[:, 0], nztm_coords[:, 1]
+            )
             values = data[0, rows, cols]
+
+            no_data_value = dataset.nodatavals[0]
+
+        if address_missing and variable not in [
+            constants.InputVariable.NZNLMGroundwaterDepth,
+            constants.InputVariable.NZNWTGroundwaterDepth,
+        ]:
+            mask = (values == no_data_value) | np.isnan(values)
+            if np.any(mask):
+                logger.info(
+                    f"Found {np.sum(mask)} missing values for variable {variable}. "
+                    f"Using nearest valid value. This can be slow for large number of points."
+                )
+
+                values[mask] = find_nearest_valid_nztm(
+                    tif_ffp,
+                    nztm_coords[mask],
+                    lambda v: (v != no_data_value) & ~np.isnan(v),
+                    values.dtype,
+                )
 
         return values
 
@@ -205,7 +229,7 @@ class NZTMTIFLoader:
         return np.column_stack([easting, northing])
 
 
-def find_nearest_valid(
+def find_nearest_valid_wgs84(
     tif_ffp: Path,
     invalid_coords: np.ndarray,
     valid_check: Callable[[np.ndarray], np.ndarray],
@@ -250,6 +274,72 @@ def find_nearest_valid(
             meshgrid_values = np.concatenate(list(dataset.sample(meshgrid_coords)))
 
         # Mask out negative values
+        valid_mask = valid_check(meshgrid_values)
+        if np.any(valid_mask):
+            nearest_idx = np.argmin(meshgrid_dist[valid_mask])
+            logger.debug(
+                f"Replacing value at coords {invalid_coords[i]} with nearest valid value "
+                f"at distance {meshgrid_dist[valid_mask][nearest_idx]:.2f} m."
+            )
+            updated_values[i] = meshgrid_values[valid_mask][nearest_idx]
+
+    return updated_values
+
+
+def find_nearest_valid_nztm(
+    tif_ffp: Path,
+    invalid_coords: np.ndarray,
+    valid_check: Callable[[np.ndarray], np.ndarray],
+    dtype: np.dtype,
+    search_radius_m: float = 250.0,
+    grid_size: int = 50,
+) -> np.ndarray:
+    """
+    Find nearest valid values for given coordinates in a NZTM-projected TIFF file.
+
+    Parameters
+    ----------
+    tif_ffp : Path
+        File path to the TIFF file.
+    invalid_coords : np.ndarray
+        Array of shape (N, 2) containing coordinates (easting, northing) in NZTM with invalid values.
+    valid_check : Callable[[np.ndarray], np.ndarray]
+        Function that takes an array of values and returns a boolean array indicating valid values.
+    dtype : np.dtype
+        Data type of the values to be returned.
+    search_radius_m : float
+        Search radius in metres around each invalid point. Default is 250m.
+    grid_size : int
+        Number of grid points in each direction. Default is 50.
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (N,) containing the nearest valid values for the given coordinates.
+    """
+    updated_values = np.empty(invalid_coords.shape[0], dtype=dtype)
+    half_radius = search_radius_m / 2
+
+    for i in range(invalid_coords.shape[0]):
+        easting, northing = invalid_coords[i]
+
+        east_grid = np.linspace(easting - half_radius, easting + half_radius, grid_size)
+        north_grid = np.linspace(
+            northing - half_radius, northing + half_radius, grid_size
+        )
+        meshgrid = np.array(np.meshgrid(east_grid, north_grid))
+
+        meshgrid_coords = einops.rearrange(meshgrid, "d h w -> (h w) d", d=2)
+
+        # Euclidean distance in metres (NZTM is a metric projection)
+        meshgrid_dist = np.sqrt(
+            (meshgrid_coords[:, 0] - easting) ** 2
+            + (meshgrid_coords[:, 1] - northing) ** 2
+        )
+
+        with rasterio.open(tif_ffp) as dataset:
+            meshgrid_values = np.concatenate(list(dataset.sample(meshgrid_coords)))
+
         valid_mask = valid_check(meshgrid_values)
         if np.any(valid_mask):
             nearest_idx = np.argmin(meshgrid_dist[valid_mask])

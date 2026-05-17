@@ -31,7 +31,7 @@ class ShapeLoader(BaseLoader):
     ) -> None:
         self.base_data_dir = base_data_dir
 
-    def get_values(self, coords: np.ndarray, variable: constants.InputVariable):
+    def get_values(self, coords: np.ndarray, variable: constants.InputVariable, address_missing: bool = True) -> np.ndarray:
         if variable not in self.SUPPORTED_VARIABLES:
             utils.raise_log(
                 ValueError,
@@ -71,7 +71,14 @@ class ShapeLoader(BaseLoader):
         assert shape_df.crs.to_epsg() == constants.NZTM2000_EPSG, "Shape dataframe CRS is not NZTM2000."
         merged_df = gpd.sjoin(point_df, shape_df, how="left", predicate="intersects")
 
-        if variable == constants.InputVariable.NZGeologyCategory:
-            merged_df["value"] = merged_df["value"].fillna(-9999).astype(int)
+        if address_missing:
+            logger.info(f"Addressing missing values for variable {variable} using nearest neighbor approach.")
+            missing_mask = merged_df["value"].isna() | (merged_df["value"] == -9999)  
+            nearest_df = gpd.sjoin_nearest(
+                point_df[missing_mask], shape_df, max_distance=250, distance_col="dist_to_shape")
+            merged_df.loc[missing_mask, "value"] = nearest_df["value"].values
+        else:
+            if variable == constants.InputVariable.NZGeologyCategory:
+                merged_df["value"] = merged_df["value"].fillna(-9999).astype(int)
 
         return merged_df["value"].to_numpy()

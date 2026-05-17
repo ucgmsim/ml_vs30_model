@@ -46,15 +46,37 @@ def cv_train_nn(
 
 
 @app.command("cv-train-ngboost")
-def cv_train_ngboost(config_ffp: Path):
+def cv_train_ngboost(
+    run_config_ffp: Path,
+    rel_dataset_ffp: Path | None = None,
+    n_cv_folds: int | None = None,
+    n_iterations: int | None = None,
+    apply_vs30_sample_weights: bool | None = None,
+    id_suffix: str | None = None,
+    run_post_processing: bool = True,
+    extra_input_variables: list[str] | None = None,
+):
     """
     Runs cross-validation training of the NGBoost model,
     based on the provided configuration file.
     """
     mlt.utils.setup_logging()
-    run_config = vs30.RunConfig.from_yaml(config_ffp)
 
-    vs30.ngboost_model.cv_train(run_config)
+    run_config = vs30.RunConfig.from_config_kwargs(
+        run_config_ffp,
+        rel_dataset_ffp=rel_dataset_ffp,
+        n_cv_folds=n_cv_folds,
+        apply_vs30_sample_weights=apply_vs30_sample_weights,
+        iterations=n_iterations,
+        extra_input_variables=extra_input_variables,
+    )
+
+    id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
+    base_out_dir = (
+        run_config.results_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
+    )
+
+    vs30.ngboost_model.cv_train(run_config, base_out_dir, run_post_processing=run_post_processing)
 
 
 @app.command("cv-train-catboost")
@@ -88,7 +110,7 @@ def cv_train_catboost(
         run_config.results_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
     )
 
-    vs30.catboost_model.cv_train(run_config, base_out_dir, run_post_processing)
+    vs30.ngboost_model.cv_train(run_config, base_out_dir, run_post_processing=run_post_processing)
 
 
 @app.command("full-train-catboost")

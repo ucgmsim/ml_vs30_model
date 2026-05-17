@@ -196,7 +196,9 @@ def get_input_values(
     elif data_source == constants.DataSource.ShapeLoader:
         logger.info(f"Using ShapeLoader data source for variable: {variable.value}")
         shape_loader = data_loaders.ShapeLoader()
-        values = shape_loader.get_values(points, variable)
+        values = shape_loader.get_values(
+            points, variable, address_missing=address_missing
+        )
     elif data_source == constants.DataSource.NZDistanceToCoast:
         logger.info(
             f"Using NZDistanceToCoast data source for variable: {variable.value}"
@@ -208,10 +210,22 @@ def get_input_values(
         logger.error(error_msg)
         raise NotImplementedError(error_msg)
 
-    print("wtf")
-    assert not address_missing or (
-        address_missing and (np.all(values != -9999) and np.all(~np.isnan(values)))
-    ), f"Variable {variable} contains missing values after processing."
+    if address_missing and (np.any(values == -9999) or np.any(np.isnan(values))):
+        if variable in [
+            constants.InputVariable.NZNLMGroundwaterDepth,
+            constants.InputVariable.NZNWTGroundwaterDepth,
+        ]:
+            logger.info(
+                f"Found missing values for variable {variable}. "
+                f"However, this is expected, therefore not addressing missing values."
+            )
+        else:
+            utils.raise_log(
+                ValueError,
+                f"Variable {variable} contains missing values after processing.",
+                logger,
+            )
+
     logger.info(f"Completed processing for variable: {variable.value}")
     return values
 
@@ -462,4 +476,3 @@ def select_test_sites(dataset_ffp: Path, output_dir: Path, seed: int):
         )
     )
     fig.write_html(output_dir / "test_sites_map.html")
-

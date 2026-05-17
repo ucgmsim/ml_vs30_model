@@ -12,9 +12,10 @@ import ml_tools as mlt
 
 
 from .plotting import model_perf_plots, spatial, feature_importance_plots
-from .configs import RunConfig
+from .configs import RunConfig, ModelType
 from . import pre_processing
 from . import constants
+from . import utils
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,13 @@ def compute_shap_feature_importance(
     Computes SHAP feature importance
     for the model in the provided directory.
     """
+    if run_config.model_type not in [ModelType.CatBoost, ModelType.NGBoost]:
+        utils.raise_log(
+            NotImplementedError,
+            f"SHAP feature importance computation not implemented for model type {run_config.model_type}",
+            logger,
+        )
+
     logger.info("Computing SHAP feature importance...")
     run_config = (
         RunConfig.from_yaml(model_dir / "run_config.yaml")
@@ -89,17 +97,22 @@ def compute_shap_feature_importance(
     assert val_results is None or val_results.index.equals(val_X.index)
 
     if model is None:
-        if run_config.model_type == "catboost":
+        if run_config.model_type == ModelType.CatBoost:
             model = CatBoostRegressor()
             model.load_model(model_dir / "model.cbm")
+        elif run_config.model_type == ModelType.NGBoost:
+            model = mlt.utils.load_pickle(model_dir / "model.pkl")
         else:
             raise ValueError(
                 f"Unsupported model type {run_config.model_type} "
                 "for SHAP feature importance computation."
             )
 
-    explainer = shap.TreeExplainer(model, train_X)
-    # explainer = shap.TreeExplainer(model)
+    explainer = shap.TreeExplainer(
+        model,
+        train_X,
+        model_output="raw" if run_config.model_type == ModelType.CatBoost else 0,
+    )
     explainer_values = explainer(train_X if val_results is None else val_X)
     mlt.utils.write_pickle(explainer_values, model_dir / "shap_values.pkl")
 
@@ -107,7 +120,9 @@ def compute_shap_feature_importance(
 
 
 def gen_model_perfomance_plots(
-    results_dir: Path, results_df: pd.DataFrame | None = None
+    results_dir: Path,
+    results_df: pd.DataFrame | None = None,
+    run_config: RunConfig | None = None,
 ) -> None:
     """
     Generates model performance plots for the provided results directory.
@@ -117,7 +132,11 @@ def gen_model_perfomance_plots(
         results_df = pd.read_parquet(results_dir / "val_results.parquet")
 
     # Add quality score to results_df
-    run_config = RunConfig.from_yaml(results_dir / "run_config.yaml")
+    run_config = (
+        RunConfig.from_yaml(results_dir / "run_config.yaml")
+        if run_config is None
+        else run_config
+    )
     dataset_df = pd.read_parquet(run_config.dataset_ffp)
     results_df["quality_score"] = dataset_df.loc[results_df.index, "quality_score"]
 

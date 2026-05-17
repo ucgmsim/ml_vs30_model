@@ -10,7 +10,7 @@ from rclone_python import rclone
 
 from .. import constants
 from .. import utils
-from .tif_loader import find_nearest_valid
+from .tif_loader import find_nearest_valid_wgs84
 from .base_loader import BaseLoader
 
 
@@ -62,7 +62,7 @@ class OpenTopographyS3Loader(BaseLoader):
                     f"Found {np.sum(missing_mask)}/{cur_values.shape[0]} missing values for variable {variable} "
                     f"for filename {filename}. Using nearest non-missing value."
                 )
-                cur_values[missing_mask] = find_nearest_valid(
+                cur_values[missing_mask] = find_nearest_valid_wgs84(
                     data_dir / filename,
                     cur_coords[missing_mask],
                     lambda v: v != -9999,

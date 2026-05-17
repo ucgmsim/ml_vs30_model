@@ -1,0 +1,24 @@
+seed: 42
+model_type: ngboost
+pre_process_categorial: true
+
+apply_vs30_sample_weights: true
+max_vs30_weight: 1.5
+
+rel_dataset_ffp: datasets/nz_site_db_dataset.parquet
+rel_test_sites_ffp: datasets/nz_site_db_test_sites/test_sites.npy
+
+input_variables:
+  - compound_topographic_index
+  - nz_geology_age_ln_mid
+  - nz_combined_groundwater_depth_ln
+  - nzenvds_slope_deg
+  - nzenvds_topo_normalised_height
+  - nzenvds_topo_position
+  - nzenvds_topo_roughness
+
+n_cv_folds: 25
+rel_results_dir: results
+
+model_config:
+  iterations: 20

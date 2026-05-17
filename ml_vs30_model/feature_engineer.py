@@ -85,7 +85,7 @@ class FeatureEngineer:
                 self._compute_values(constants.InputVariable.NZCombinedGroundwaterDepth)
 
             self.data_df[variable] = np.log(
-                self.data_df[constants.InputVariable.NZCombinedGroundwaterDepth].clip(lower=np.exp(-6))
+                self.data_df[constants.InputVariable.NZCombinedGroundwaterDepth].clip(lower=np.exp(-2))
             )
         else:
             utils.raise_log(
