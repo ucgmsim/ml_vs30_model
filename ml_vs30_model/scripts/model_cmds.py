@@ -86,6 +86,7 @@ def cv_train_catboost(
     n_cv_folds: int | None = None,
     n_iterations: int | None = None,
     apply_vs30_sample_weights: bool | None = None,
+    apply_quality_sample_weights: bool | None = None,
     id_suffix: str | None = None,
     run_post_processing: bool = True,
     extra_input_variables: list[str] | None = None,
@@ -103,6 +104,7 @@ def cv_train_catboost(
         apply_vs30_sample_weights=apply_vs30_sample_weights,
         iterations=n_iterations,
         extra_input_variables=extra_input_variables,
+        apply_quality_sample_weights=apply_quality_sample_weights,
     )
 
     id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
@@ -110,7 +112,7 @@ def cv_train_catboost(
         run_config.results_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
     )
 
-    vs30.ngboost_model.cv_train(run_config, base_out_dir, run_post_processing=run_post_processing)
+    vs30.catboost_model.cv_train(run_config, base_out_dir, run_post_processing=run_post_processing)
 
 
 @app.command("full-train-catboost")

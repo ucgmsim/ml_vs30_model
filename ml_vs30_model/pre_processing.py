@@ -10,6 +10,7 @@ from . import constants
 
 logger = logging.getLogger(__name__)
 
+
 def normalize(
     series: pd.Series, mean: float | None = None, std: float | None = None
 ) -> pd.Series:
@@ -30,15 +31,13 @@ def min_max_scale(series: pd.Series, var: str | constants.InputVariable) -> pd.S
     return 2 * (series - cur_min) / (cur_max - cur_min) - 1
 
 
-def pre_process_features(
-    df: pd.DataFrame, run_config: RunConfig
-) -> pd.DataFrame:
+def pre_process_features(df: pd.DataFrame, run_config: RunConfig) -> pd.DataFrame:
     """Performs pre-processing on the features in the given DataFrame."""
     scaled_input_df = pd.DataFrame(index=df.index)
-    
+
     scale_params = run_config.scale_params
     if run_config.scale_params is None:
-        scale_params = {} 
+        scale_params = {}
 
     for var in run_config.input_variables:
         if var in constants.LN_NORM_VARS:
@@ -85,7 +84,21 @@ def add_sample_weights(train_df: pd.DataFrame, run_config: RunConfig) -> pd.Data
         )
 
         train_df.loc[:, "sample_weight"] += train_df["vs30_weight"]
-        
+
+    if run_config.apply_quality_sample_weights:
+        assert train_df.quality_score.isin(
+            ["Q1", "Q2", "Q3"]
+        ).all(), "Quality score must be one of Q1, Q2, or Q3"
+
+        quality_weight_map = {
+            "Q1": run_config.q1_weight_factor,
+            "Q2": run_config.q2_weight_factor,
+            "Q3": run_config.q3_weight_factor,
+        }
+        train_df.loc[:, "sample_weight"] = train_df["sample_weight"] * train_df[
+            "quality_score"
+        ].map(quality_weight_map)
+
     return train_df
 
 
@@ -98,15 +111,25 @@ def get_pre_processed_train_val_df(
     train_df = dataset_df.loc[train_sites].copy()
     val_df = dataset_df.loc[val_sites].copy() if val_sites is not None else None
 
-    train_missing_mask = (train_df[run_config.input_variables].isna() | (train_df[run_config.input_variables] == -9999)).any(axis=1)
+    train_missing_mask = (
+        train_df[run_config.input_variables].isna()
+        | (train_df[run_config.input_variables] == -9999)
+    ).any(axis=1)
     if train_missing_mask.any():
-        logger.warning(f"Missing values found in training data, dropping {train_missing_mask.sum()} rows.")
+        logger.warning(
+            f"Missing values found in training data, dropping {train_missing_mask.sum()} rows."
+        )
         train_df = train_df.loc[~train_missing_mask]
 
-    if val_df is not None :
-        val_missing_mask = (val_df[run_config.input_variables].isna() | (val_df[run_config.input_variables] == -9999)).any(axis=1)
+    if val_df is not None:
+        val_missing_mask = (
+            val_df[run_config.input_variables].isna()
+            | (val_df[run_config.input_variables] == -9999)
+        ).any(axis=1)
         if val_missing_mask.any():
-            logger.warning(f"Missing values found in validation data, dropping {val_missing_mask.sum()} rows.")
+            logger.warning(
+                f"Missing values found in validation data, dropping {val_missing_mask.sum()} rows."
+            )
             val_df = val_df.loc[~val_missing_mask]
 
     train_df, val_df = train_df.copy(), val_df.copy() if val_df is not None else None
@@ -115,20 +138,16 @@ def get_pre_processed_train_val_df(
     train_df = add_sample_weights(train_df, run_config)
 
     # Pre-process
-    train_X, scale_params = pre_process_features(
-        train_df, run_config
-    )
+    train_X, scale_params = pre_process_features(train_df, run_config)
     train_y = pre_process_vs30(train_df["vs30"])
     if run_config.scale_params is None:
         run_config = run_config.copy()
         run_config.scale_params = scale_params
     assert train_df.index.equals(train_X.index)
 
-    val_X, val_y= None, None
+    val_X, val_y = None, None
     if val_df is not None:
-        val_X, _ = pre_process_features(
-            val_df, run_config
-        )
+        val_X, _ = pre_process_features(val_df, run_config)
         val_y = pre_process_vs30(val_df["vs30"])
         assert val_df.index.equals(val_X.index)
 

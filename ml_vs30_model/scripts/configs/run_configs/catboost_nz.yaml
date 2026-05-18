@@ -5,6 +5,11 @@ pre_process_categorial: false
 apply_vs30_sample_weights: true
 max_vs30_weight: 1.5
 
+apply_quality_sample_weights: true
+q1_weight_factor: 1.25
+q2_weight_factor: 1.0
+q3_weight_factor: 0.75
+
 rel_dataset_ffp: datasets/nz_site_db_dataset.parquet
 rel_test_sites_ffp: datasets/nz_site_db_test_sites/test_sites.npy
 

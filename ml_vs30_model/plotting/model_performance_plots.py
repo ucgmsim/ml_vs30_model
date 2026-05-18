@@ -145,7 +145,7 @@ def pred_vs30_variable_scatter_plot(
     x_limits: tuple[float, float] | None = None,
 ):
     """
-    Generates a scatter plot comparing the specified input 
+    Generates a scatter plot comparing the specified input
     variable to predicted vs30 values,
     and saves it to the specified output file path.
     """
@@ -356,22 +356,6 @@ def metric_scatter_plot(
 
     A trend line is added to the plot to show how the metric varies with vs30.
     """
-    # scatter_options = mlt.plotting.ScatterOptions(
-    #     "vs30",
-    #     metric_name,
-    #     binning_method=mlt.plotting.BinningMethod.EqualCount,
-    #     trend_n_data_points=50,
-    #     trend_n_bins=None,
-    #     alpha=0.25,
-    #     color="blue",
-    #     trend_color="red",
-    #     use_fixed_color=False,
-    # )
-
-    # fig, ax = mlt.plotting.gen_scatter_trend_plot(
-    #     results_df, scatter_options, dpi=constants.FIG_DPI,
-    # )
-
     fig, ax = plt.subplots(figsize=(16, 10), dpi=constants.FIG_DPI)
     marker_size = {
         "Q1": 40,
@@ -383,7 +367,9 @@ def metric_scatter_plot(
         ax.scatter(
             results_df.loc[mask, "vs30"],
             results_df.loc[mask, metric_name],
-            label=f"Quality Score {k}",
+            label=rf"{k} (N={mask.sum()}, "
+                f"$\mu$={results_df.loc[mask, metric_name].mean():.3f}, "
+                f"$\sigma$={results_df.loc[mask, metric_name].std():.3f})",
             # alpha=0.5,
             color=color,
             zorder=10 - i,
@@ -419,7 +405,7 @@ def metric_scatter_plot(
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_xlabel("True vs30")
     ax.set_ylabel(metric_name)
-    ax.legend(title="Quality Score")
+    ax.legend()
     if y_limits is not None:
         ax.set_ylim(y_limits)
     if x_limits is not None:
@@ -475,7 +461,7 @@ def cv_iteration_metric_plot(
         train_metrics_df.mean(axis=1).values,
         c="blue",
         linestyle="-",
-        linewidth=2,
+        linewidth=3,
     )
 
     # Validation
@@ -487,14 +473,14 @@ def cv_iteration_metric_plot(
                 c="red",
                 linestyle="-",
                 linewidth=1,
-                alpha=0.5,
+                alpha=0.25,
             )
             plt.scatter(
                 val_metrics_df.idxmin().values,
                 val_metrics_df.min().values,
                 c="red",
                 s=50,
-                alpha=0.5,
+                alpha=0.25,
             )
         # Mean line
         ax.plot(
@@ -502,7 +488,26 @@ def cv_iteration_metric_plot(
             val_metrics_df.mean(axis=1).values,
             c="red",
             linestyle="-",
-            linewidth=2,
+            linewidth=3,
+        )
+
+        best_iter = val_metrics_df.mean(axis=1).idxmin()
+        ax.axvline(
+            best_iter,
+            color="black",
+            linestyle="--",
+            linewidth=1,
+        )
+
+        ax.text(
+            0.02,
+            0.98,
+            f"Metric: {metric} (Validation) - Best average: {val_metrics_df.loc[best_iter].mean():.4f}"
+            rf" ($\sigma$ = {val_metrics_df.loc[best_iter].std():.4f}), Best iteration: {best_iter}",
+            transform=ax.transAxes,
+            horizontalalignment="left",
+            verticalalignment="top",
+            fontweight="bold",
         )
 
     ax.set_xlim(

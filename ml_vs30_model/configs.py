@@ -53,6 +53,15 @@ class RunConfig:
     apply_vs30_sample_weights: bool
     max_vs30_weight: float
 
+    apply_quality_sample_weights: bool
+    q1_weight_factor: float
+    q2_weight_factor: float
+    q3_weight_factor: float
+    """Sample weighting based on quality score, applied
+    after all other sample weighting adjustments, as 
+    a multiplicative factor. 
+    """
+
     n_cv_folds: int 
     """Number of CV folds to use. Only applicable when using CV."""
 
@@ -172,6 +181,10 @@ class RunConfig:
             "model_config": self.model_config.to_dict(),
             "apply_vs30_sample_weights": bool(self.apply_vs30_sample_weights),
             "max_vs30_weight": float(self.max_vs30_weight),
+            "apply_quality_sample_weights": bool(self.apply_quality_sample_weights),
+            "q1_weight_factor": float(self.q1_weight_factor),
+            "q2_weight_factor": float(self.q2_weight_factor),
+            "q3_weight_factor": float(self.q3_weight_factor),
             "pre_process_categorial": bool(self.pre_process_categorial),
         }
 
