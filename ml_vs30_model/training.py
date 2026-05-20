@@ -1,5 +1,9 @@
+import functools
 from pathlib import Path
 import logging
+import multiprocessing as mp
+
+
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -13,12 +17,12 @@ from . import post_processing
 
 logger = logging.getLogger(__name__)
 
-
 def cv_train(
     model_train_fn: callable,
     run_config: RunConfig,
     base_out_dir: Path,
     run_post_processing: bool = True,
+    n_procs: int = 1,
     **model_fn_kwargs: dict,
 ) -> None:
     """
@@ -51,27 +55,43 @@ def cv_train(
     )
     logger.info(f"Starting {run_config.n_cv_folds}-fold cross-validation")
 
-    for i, (train, val) in enumerate(kf.split(dataset_df)):
-        logger.info(f"Processing fold {i+1}/{run_config.n_cv_folds}")
-        train_sites, val_sites = (
-            dataset_df.iloc[train].index.values,
-            dataset_df.iloc[val].index.values,
-        )
-        # train_y, val_y = dataset_df.iloc[train]["vs30"], dataset_df.iloc[val]["vs30"]
-        logger.info(
-            f"Train size: {train_sites.size}, Validation size: {val_sites.size}"
-        )
+    if n_procs == 1:
+        for i, (train_ind, val_ind) in enumerate(kf.split(dataset_df)):
+            _run_helper(
+                (train_ind, val_ind),
+                i,
+                None,
+                dataset_df,
+                run_config,
+                model_train_fn,
+                base_out_dir,
+                **model_fn_kwargs,
+            )
+    else:
+        logger.info(f"Running cross-validation in parallel on {n_procs} processes")
+        with mp.Pool(processes=n_procs) as pool:
+            fn_call = functools.partial(
+                _run_helper,
+                dataset_df=dataset_df,
+                run_config=run_config,
+                model_train_fn=model_train_fn,
+                base_out_dir=base_out_dir,
+                **model_fn_kwargs,
+            )
 
-        model_train_fn(
-            dataset_df,
-            train_sites,
-            val_sites,
-            run_config,
-            base_out_dir / f"cv_{i:02d}",
-            cv_ix=i,
-            **model_fn_kwargs,
-        )
-        logger.info(f"Completed fold {i+1}/{run_config.n_cv_folds}")
+            pool.starmap(
+                fn_call,
+                [
+                    (
+                        (train_ind, val_ind),
+                        i,
+                        p_ix,
+                    )
+                    for i, ((train_ind, val_ind), p_ix) in enumerate(
+                        zip(kf.split(dataset_df), range(run_config.n_cv_folds))
+                    )
+                ],
+            )
 
     logger.info("Cross-validation training completed")
 
@@ -124,15 +144,16 @@ def cv_train(
 
     # Compute combined shap values across folds
     explanations = [
-        pd.read_pickle(base_out_dir / cv_id / "shap_values.pkl") for cv_id in cv_ids
+        pd.read_pickle(ffp) for cv_id in cv_ids if (ffp := base_out_dir / cv_id / "shap_values.pkl").exists()
     ]
-    shap_values = shap.Explanation(
-        values=np.concatenate([e.values for e in explanations], axis=0),
-        base_values=np.concatenate([e.base_values for e in explanations], axis=0),
-        data=np.concatenate([e.data for e in explanations], axis=0),
-        feature_names=explanations[0].feature_names,
-    )
-    mlt.utils.write_pickle(shap_values, base_out_dir / "shap_values.pkl")
+    if len(explanations) > 0:
+        shap_values = shap.Explanation(
+            values=np.concatenate([e.values for e in explanations], axis=0),
+            base_values=np.concatenate([e.base_values for e in explanations], axis=0),
+            data=np.concatenate([e.data for e in explanations], axis=0),
+            feature_names=explanations[0].feature_names,
+        )
+        mlt.utils.write_pickle(shap_values, base_out_dir / "shap_values.pkl")
 
     # Generate post-processing plots
     if run_post_processing:
@@ -151,6 +172,52 @@ def cv_train(
         )
 
     run_config.to_yaml(base_out_dir / "run_config.yaml")
+
+
+def _run_helper(
+    train_val_inds: tuple,
+    cv_ix: int,
+    p_ix: int | None,
+    dataset_df: pd.DataFrame,
+    run_config: RunConfig,
+    model_train_fn: callable,
+    base_out_dir: Path,
+    **model_fn_kwargs,
+):
+    (out_dir := base_out_dir / f"cv_{cv_ix:02d}").mkdir(parents=True, exist_ok=False)
+
+    # Setup logging for the fold
+    log_ffp = out_dir / f"training_cv_{cv_ix:02d}.log"
+    if p_ix is None:
+        root_logger = logging.getLogger()
+        file_handler = logging.FileHandler(log_ffp)
+        file_handler.setLevel(logging.DEBUG)
+        root_logger.addHandler(file_handler)
+        fold_logger = logging.getLogger(__name__)
+        fold_logger.info(f"Processing fold {cv_ix+1}/{run_config.n_cv_folds}")
+    else:
+        fold_logger = mlt.utils.setup_logging(log_ffp, enable_console=False)
+        fold_logger.info(
+            f"Running CV iteration {cv_ix + 1} on process {p_ix}."
+        )
+
+    train_ind, val_ind = train_val_inds
+    train_sites, val_sites = (
+        dataset_df.iloc[train_ind].index.values,
+        dataset_df.iloc[val_ind].index.values,
+    )
+    fold_logger.info(f"Train size: {train_sites.size}, Validation size: {val_sites.size}")
+
+    model_train_fn(
+        dataset_df,
+        train_sites,
+        val_sites,
+        run_config,
+        out_dir,
+        cv_ix=cv_ix,
+        **model_fn_kwargs,
+    )
+    fold_logger.info(f"Completed fold {cv_ix+1}/{run_config.n_cv_folds}")
 
 
 # def full_train(run_config: RunConfig, out_dir: Path, run_post_processing: bool = True):

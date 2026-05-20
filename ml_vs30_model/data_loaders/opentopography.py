@@ -6,11 +6,12 @@ import logging
 import pandas as pd
 import numpy as np
 import rasterio
+from rasterio import transform
 from rclone_python import rclone
 
 from .. import constants
 from .. import utils
-from .tif_loader import find_nearest_valid_wgs84
+from . import utils as data_loader_utils
 from .base_loader import BaseLoader
 
 
@@ -56,16 +57,16 @@ class OpenTopographyS3Loader(BaseLoader):
             if values is None:
                 values = np.empty(coords.shape[0], dtype=cur_values.dtype)
 
-            missing_mask = cur_values == -9999
+            missing_mask = (cur_values == constants.INTEGER_NO_DATA_VALUE) | np.isnan(cur_values)
             if address_missing and np.any(missing_mask):
                 logger.info(
                     f"Found {np.sum(missing_mask)}/{cur_values.shape[0]} missing values for variable {variable} "
                     f"for filename {filename}. Using nearest non-missing value."
                 )
-                cur_values[missing_mask] = find_nearest_valid_wgs84(
+                cur_values[missing_mask] = data_loader_utils.find_nearest_valid_wgs84(
                     data_dir / filename,
                     cur_coords[missing_mask],
-                    lambda v: v != -9999,
+                    lambda v: (v != -9999) & ~np.isnan(v),
                     cur_values.dtype,
                 )
 
@@ -179,7 +180,15 @@ class OpenTopographyS3Loader(BaseLoader):
                 dataset.crs.to_epsg() == constants.WGS84_EPSG
             ), "Dataset CRS is not WGS84"
 
-            return np.concatenate(list(dataset.sample(coords)))
+            data = dataset.read()
+            assert data.shape[0] == 1, "Expected single-band TIFF file."
+            rows, cols = transform.rowcol(dataset.transform, coords[:, 0], coords[:, 1])
+            values = data[0, rows, cols]
+
+            values = data_loader_utils.convert_dtype_and_handle_nodata(values, dataset.nodatavals[0])
+
+        return values
+        # return np.concatenate(list(dataset.sample(coords)))
 
 
 class SRTMGL1(OpenTopographyS3Loader):

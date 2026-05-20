@@ -40,7 +40,7 @@ def xr_resolve_url(url: str = Query(...)) -> str:
     return str(ffp)
 
 def xr_model_resolve_url(url: str = Query(...)) -> str:
-    ffp = vs30.constants.BASE_DATA_DIR / "results" / url / "nz_vs30_results.nc"
+    ffp = vs30.constants.BASE_DATA_DIR / "results/ind_results" / url / "nz_vs30_results.nc"
     if not ffp.exists():
         raise HTTPException(
             status_code=404, detail=f"Dataset not found: '{url}'"

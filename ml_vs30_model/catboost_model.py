@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def cv_train(
-    run_config: RunConfig, base_out_dir: Path, run_post_processing: bool = True
+    run_config: RunConfig, base_out_dir: Path, run_post_processing: bool = True, n_procs: int = 1
 ) -> None:
     """Runs cross-validation training of the catboost model."""
     training.cv_train(
@@ -28,6 +28,7 @@ def cv_train(
         base_out_dir,
         run_post_processing=run_post_processing,
         compute_shap=True,
+        n_procs=n_procs,
     )
 
 
@@ -110,7 +111,7 @@ def run_model_training(
         sample_weight=train_df["sample_weight"].values,
     )
 
-    out_dir.mkdir(parents=True, exist_ok=False)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     # Save iteration metrics
     eval_results = model.get_evals_result()

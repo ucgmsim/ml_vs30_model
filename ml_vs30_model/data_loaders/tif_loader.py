@@ -4,7 +4,7 @@ from typing import Callable
 
 import einops
 import numpy as np
-from pyproj import Geod, Transformer
+from pyproj import Transformer
 
 import rasterio
 from rasterio import transform
@@ -12,6 +12,7 @@ from rasterio import transform
 from .. import constants
 from .. import utils
 from .base_loader import BaseLoader
+from . import utils as data_loader_utils
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,9 @@ class TIFLoader(BaseLoader):
             rows, cols = transform.rowcol(dataset.transform, coords[:, 0], coords[:, 1])
             values = data[0, rows, cols]
 
+            # Convert to appropriate dtype and set no-data values to standard constants
+            values = data_loader_utils.convert_dtype_and_handle_nodata(values, dataset.nodatavals[0])
+
         # Deal with negative absolute depth to bedrock values
         if (
             address_missing
@@ -93,7 +97,7 @@ class TIFLoader(BaseLoader):
                     f"Using nearest non-zero value. This can be slow for large number of points."
                 )
 
-                values[mask] = find_nearest_valid_wgs84(
+                values[mask] = data_loader_utils.find_nearest_valid_wgs84(
                     tif_ffp, coords[mask], lambda v: v >= 0, values.dtype
                 )
 
@@ -159,6 +163,8 @@ class NZTMTIFLoader:
             Array of shape (N, 2) containing coordinates as (lon, lat) in WGS84.
         variable : constants.InputVariable
             The variable to retrieve values for.
+        address_missing : bool
+            Whether to address missing values by finding the nearest valid value.
         """
         if variable not in self.SUPPORTED_VARIABLES:
             utils.raise_log(
@@ -189,13 +195,14 @@ class NZTMTIFLoader:
             )
             values = data[0, rows, cols]
 
-            no_data_value = dataset.nodatavals[0]
+            # Convert to appropriate dtype and set no-data values to standard constants
+            values = data_loader_utils.convert_dtype_and_handle_nodata(values, dataset.nodatavals[0])
 
         if address_missing and variable not in [
             constants.InputVariable.NZNLMGroundwaterDepth,
             constants.InputVariable.NZNWTGroundwaterDepth,
         ]:
-            mask = (values == no_data_value) | np.isnan(values)
+            mask = (values == constants.INTEGER_NO_DATA_VALUE) | np.isnan(values)
             if np.any(mask):
                 logger.info(
                     f"Found {np.sum(mask)} missing values for variable {variable}. "
@@ -205,7 +212,7 @@ class NZTMTIFLoader:
                 values[mask] = find_nearest_valid_nztm(
                     tif_ffp,
                     nztm_coords[mask],
-                    lambda v: (v != no_data_value) & ~np.isnan(v),
+                    lambda v: (v != constants.INTEGER_NO_DATA_VALUE) & ~np.isnan(v),
                     values.dtype,
                 )
 
@@ -227,63 +234,6 @@ class NZTMTIFLoader:
         """
         easting, northing = cls._WGS84_TO_NZTM.transform(coords[:, 0], coords[:, 1])
         return np.column_stack([easting, northing])
-
-
-def find_nearest_valid_wgs84(
-    tif_ffp: Path,
-    invalid_coords: np.ndarray,
-    valid_check: Callable[[np.ndarray], np.ndarray],
-    dtype: np.dtype,
-) -> np.ndarray:
-    """
-    Find nearest valid values for given coordinates in a TIFF file.
-
-    Parameters
-    ----------
-    tif_ffp : Path
-        File path to the TIFF file.
-    invalid_coords : np.ndarray
-        Array of shape (N, 2) containing coordinates (lon, lat) with invalid values.
-    valid_check : Callable[[np.ndarray], np.ndarray]
-        Function that takes an array of values and returns a boolean array indicating valid values.
-    dtype : np.dtype
-        Data type of the values to be returned.
-
-    Returns
-    -------
-    np.ndarray
-        Array of shape (N,) containing the nearest valid values for the given coordinates.
-    """
-    geod = Geod(ellps="WGS84")
-    updated_values = np.empty(invalid_coords.shape[0], dtype=dtype)
-    for i in range(invalid_coords.shape[0]):
-        # Create small meshgrid around the point
-        lon, lat = invalid_coords[i]
-        lat_grid = np.linspace(lat - (0.0001 * 50 / 2), lat + (0.0001 * 50 / 2), 50)
-        lon_grid = np.linspace(lon - (0.0001 * 50 / 2), lon + (0.0001 * 50 / 2), 50)
-        meshgrid = np.array(np.meshgrid(lon_grid, lat_grid))
-
-        meshgrid_coords = einops.rearrange(meshgrid, "d h w -> (h w) d", d=2)
-        meshgrid_dist = geod.inv(
-            np.full(meshgrid_coords.shape[0], lon),
-            np.full(meshgrid_coords.shape[0], lat),
-            meshgrid_coords[:, 0],
-            meshgrid_coords[:, 1],
-        )[2]
-        with rasterio.open(tif_ffp) as dataset:
-            meshgrid_values = np.concatenate(list(dataset.sample(meshgrid_coords)))
-
-        # Mask out negative values
-        valid_mask = valid_check(meshgrid_values)
-        if np.any(valid_mask):
-            nearest_idx = np.argmin(meshgrid_dist[valid_mask])
-            logger.debug(
-                f"Replacing value at coords {invalid_coords[i]} with nearest valid value "
-                f"at distance {meshgrid_dist[valid_mask][nearest_idx]:.2f} m."
-            )
-            updated_values[i] = meshgrid_values[valid_mask][nearest_idx]
-
-    return updated_values
 
 
 def find_nearest_valid_nztm(

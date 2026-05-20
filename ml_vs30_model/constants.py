@@ -8,6 +8,7 @@ if (BASE_DATA_DIR := os.getenv("VS30_MODEL_BASE_DATA_DIR")) is None:
     raise EnvironmentError("Environment variable VS30_MODEL_BASE_DATA_DIR is not set.")
 BASE_DATA_DIR = Path(BASE_DATA_DIR)
 
+INTEGER_NO_DATA_VALUE = -9999
 
 class DataSource(StrEnum):
     GeoMorpho90 = "geomorpho90"
@@ -17,6 +18,7 @@ class DataSource(StrEnum):
     GlobalGWT = "global_gwt"  # Global Groundwater Table
     ShapeLoader = "shape_loader"
     NZDistanceToCoast = "nz_distance_to_coast"
+    NZDistanceToRiver = "nz_distance_to_river"
 
 
 class InputVariable(StrEnum):
@@ -39,10 +41,20 @@ class InputVariable(StrEnum):
     # NZ
     NZGeologyCategory = "nz_geology_category"  # Foster et al.
     NZDistanceToCoast = "nz_distance_to_coast"  # Manually computed
+    NZDistanceToRiver_ST1 = "nz_distance_to_river_st1"  # Manually computed distance to river (Strahler 1st order)
+    NZDistanceToRiver_ST2 = "nz_distance_to_river_st2"  # Manually computed distance to river (Strahler 2nd order)
+    NZDistanceToRiver_ST3 = "nz_distance_to_river_st3"  # Manually computed distance to river (Strahler 3rd order)
+    NZDistanceToRiver_ST4 = "nz_distance_to_river_st4"  # Manually computed distance to river (Strahler 4th order)
+    NZDistanceToRiver_ST5 = "nz_distance_to_river_st5"  # Manually computed distance to river (Strahler 5th order)
+    NZDistanceToRiver_ST6 = "nz_distance_to_river_st6"  # Manually computed distance to river (Strahler 6th order)
+    NZDistanceToRiver_ST7 = "nz_distance_to_river_st7"  # Manually computed distance to river (Strahler 7th order)
+    NZDistanceToRiver_ST8 = "nz_distance_to_river_st8"  # Manually computed distance to river (Strahler 8th order)
     NZGeologyAgeMin = "nz_geology_age_min"  # GNS Geology Units
     NZGeologyAgeMax = "nz_geology_age_max"  # GNS Geology Units
     NZGeologyAgeMid = "nz_geology_age_mid"
     NZGeologyAgeLnMid = "nz_geology_age_ln_mid"
+    NZLithologyCategory = "nz_lithology_category"  # GNS Lithology Units
+    NZGeologicalUnit = "nz_geological_unit"  # GNS Geological Unit ID
     NZNLMGroundwaterDepth = "nz_nlm_groundwater_depth"  # NLM Groundwater Depth Model
     NZNWTGroundwaterDepth = "nz_nwt_groundwater_depth"  # National Water Table
     NZCombinedGroundwaterDepth = (
@@ -86,8 +98,18 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.Elevation: DataSource.SRTMGL1,
     InputVariable.NZGeologyCategory: DataSource.ShapeLoader,
     InputVariable.NZDistanceToCoast: DataSource.NZDistanceToCoast,
+    InputVariable.NZDistanceToRiver_ST1: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST2: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST3: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST4: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST5: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST6: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST7: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST8: DataSource.NZDistanceToRiver,
     InputVariable.NZGeologyAgeMin: DataSource.ShapeLoader,
     InputVariable.NZGeologyAgeMax: DataSource.ShapeLoader,
+    InputVariable.NZLithologyCategory: DataSource.ShapeLoader,
+    InputVariable.NZGeologicalUnit: DataSource.ShapeLoader,
     InputVariable.NZNLMGroundwaterDepth: DataSource.NZTMTIFLoader,
     InputVariable.NZNWTGroundwaterDepth: DataSource.NZTMTIFLoader,
     InputVariable.NZEnvDSDistanceRivers: DataSource.NZTMTIFLoader,

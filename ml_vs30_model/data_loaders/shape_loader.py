@@ -18,12 +18,16 @@ class ShapeLoader(BaseLoader):
         constants.InputVariable.NZGeologyCategory,
         constants.InputVariable.NZGeologyAgeMin,
         constants.InputVariable.NZGeologyAgeMax,
+        constants.InputVariable.NZLithologyCategory,
+        constants.InputVariable.NZGeologicalUnit,
     }
 
     VAR_TO_FILENAME_MAP = {
         constants.InputVariable.NZGeologyCategory: "foster_geological_category/qmap.shp",
         constants.InputVariable.NZGeologyAgeMin: "nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp",
         constants.InputVariable.NZGeologyAgeMax: "nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp",
+        constants.InputVariable.NZLithologyCategory: "nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp",
+        constants.InputVariable.NZGeologicalUnit: "nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp",
     }
 
     def __init__(
@@ -61,6 +65,10 @@ class ShapeLoader(BaseLoader):
             shape_df = shape_df.rename(columns={"ABSMIN_MA": "value"})
         elif variable in constants.InputVariable.NZGeologyAgeMax:
             shape_df = shape_df.rename(columns={"ABSMAX_MA": "value"})
+        elif variable == constants.InputVariable.NZLithologyCategory:
+            shape_df = shape_df.rename(columns={"LITHO2014": "value"})
+        elif variable == constants.InputVariable.NZGeologicalUnit:
+            shape_df = shape_df.rename(columns={"MAPSYMBOL": "value"})
         else:
             utils.raise_log(
                 NotImplementedError,

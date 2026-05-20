@@ -1,0 +1,21 @@
+rel_base_out_dir: results/hp_opt
+
+n_iterations: 1000
+
+hp_params:
+  learning_rate: 
+    min: 0.001
+    max: 0.1
+  minibatch_frac: 
+    min: 0.5
+    max: 1.0
+  col_sample: 
+    min: 0.5
+    max: 1.0
+  base_max_depth: 
+    min: 3
+    max: 10
+  base_min_samples_leaf: 
+    min: 1
+    max: 10
+

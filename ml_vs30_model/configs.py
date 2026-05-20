@@ -31,6 +31,12 @@ class CatboostModelConfig:
 class NGBoostModelConfig:
     iterations: int
 
+    learning_rate: float
+    minibatch_frac: float
+    col_sample: float
+    base_max_depth: int
+    base_min_samples_leaf: int
+
     @classmethod
     def from_dict(cls, config_dict: dict) -> "NGBoostModelConfig":
         return cls(**config_dict)
@@ -38,6 +44,11 @@ class NGBoostModelConfig:
     def to_dict(self) -> dict:
         return {
             "iterations": int(self.iterations),
+            "learning_rate": float(self.learning_rate),
+            "minibatch_frac": float(self.minibatch_frac),
+            "col_sample": float(self.col_sample),
+            "base_max_depth": int(self.base_max_depth),
+            "base_min_samples_leaf": int(self.base_min_samples_leaf),
         }
 
 @dataclasses.dataclass

@@ -188,7 +188,7 @@ def get_input_values(
     elif data_source == constants.DataSource.NZTMTIFLoader:
         logger.info(f"Using NZTMTIFLoader data source for variable: {variable.value}")
         nztm_loader = data_loaders.NZTMTIFLoader()
-        values = nztm_loader.get_values(points, variable)
+        values = nztm_loader.get_values(points, variable, address_missing=address_missing)
     elif data_source == constants.DataSource.GlobalGWT:
         logger.info(f"Using GlobalGWT data source for variable: {variable.value}")
         global_gwt = data_loaders.GlobalGWT()
@@ -205,12 +205,28 @@ def get_input_values(
         )
         dist_to_coast_loader = data_loaders.NZDistanceToCoast()
         values = dist_to_coast_loader.get_values(points, variable)
+    elif data_source == constants.DataSource.NZDistanceToRiver:
+        logger.info(
+            f"Using NZDistanceToRiver data source for variable: {variable.value}"
+        )
+        dist_to_river_loader = data_loaders.NZDistanceToRiver()
+        values = dist_to_river_loader.get_values(points, variable)
     else:
         error_msg = f"Data source for variable {variable} not implemented."
         logger.error(error_msg)
         raise NotImplementedError(error_msg)
 
-    if address_missing and (np.any(values == -9999) or np.any(np.isnan(values))):
+    if (
+        address_missing
+        # Skip as categorical variable of type str (object)
+        and variable
+        not in [
+            constants.InputVariable.NZLithologyCategory,
+            constants.InputVariable.NZGeologicalUnit,
+        ]
+        and (np.any(values == constants.INTEGER_NO_DATA_VALUE) or np.any(np.isnan(values)))
+        and variable
+    ):
         if variable in [
             constants.InputVariable.NZNLMGroundwaterDepth,
             constants.InputVariable.NZNWTGroundwaterDepth,
@@ -379,14 +395,16 @@ def create_nz_nztm_input_grid(
     land_mask = land_mask.reshape(grid_x.shape)
 
     on_land_da = xr.DataArray(
-        land_mask.astype(int), coords=[nztm_y, nztm_x], dims=["y", "x"]
+        land_mask.astype(np.int16), coords=[nztm_y, nztm_x], dims=["y", "x"]
     )
+    on_land_da.attrs["_FillValue"] = np.int16(-9999)
     grid_dataset = xr.Dataset({"on_land": on_land_da})
     grid_dataset = grid_dataset.rio.write_crs(constants.NZTM2000_EPSG_STR)
 
     # Create output directory if it doesn't exist
     output_dir.mkdir(parents=True, exist_ok=True)
     out_ffp = output_dir / "input_grid.nc"
+    # grid_dataset.to_netcdf(out_ffp, encoding={"on_land": {"dtype": np.int16, "_FillValue": -9999}})
     grid_dataset.to_netcdf(out_ffp)
     del grid_dataset
 
@@ -408,7 +426,8 @@ def create_nz_nztm_input_grid(
             _, variable_da = _get_variable_nztm_da(
                 land_points_lonlat, land_mask, nztm_y, nztm_x, variable
             )
-            xr.Dataset({variable.value: variable_da}).to_netcdf(out_ffp, mode="a")
+            _write_variable_to_netcdf(variable_da, variable, out_ffp)
+            # xr.Dataset({variable.value: variable_da}).to_netcdf(out_ffp, mode="a")
             del variable_da
     else:
         initializer_fn = partial(mlt.utils.setup_logging)
@@ -419,7 +438,8 @@ def create_nz_nztm_input_grid(
             results = p.imap_unordered(fn_call, og_variables)
 
             for variable, variable_da in results:
-                xr.Dataset({variable.value: variable_da}).to_netcdf(out_ffp, mode="a")
+                _write_variable_to_netcdf(variable_da, variable, out_ffp)
+                # xr.Dataset({variable.value: variable_da}).to_netcdf(out_ffp, mode="a")
                 del variable_da
 
     logger.info("Computing derived variable values.")
@@ -427,9 +447,20 @@ def create_nz_nztm_input_grid(
         _, variable_da = _compute_derived_variables_nztm_da(
             out_ffp, land_mask, nztm_y, nztm_x, variable
         )
-        xr.Dataset({variable.value: variable_da}).to_netcdf(out_ffp, mode="a")
+        _write_variable_to_netcdf(variable_da, variable, out_ffp)
+        # xr.Dataset({variable.value: variable_da}).to_netcdf(out_ffp, mode="a")
         del variable_da
 
+
+def _write_variable_to_netcdf(variable_da: xr.DataArray, variable: constants.InputVariable, out_ffp: Path) -> None:
+    """Writes a variable DataArray to a NetCDF file, preserving dtype."""
+    variable_da.attrs.pop("_FillValue", None)
+    ds = xr.Dataset({variable.value: variable_da})
+    if np.issubdtype(variable_da.dtype, np.integer):
+        encoding = {variable.value: {"dtype": variable_da.dtype, "_FillValue": -9999}}
+    else:
+        encoding = {variable.value: {"dtype": variable_da.dtype, "_FillValue": None}}
+    ds.to_netcdf(out_ffp, mode="a", encoding=encoding)
 
 def select_test_sites(dataset_ffp: Path, output_dir: Path, seed: int):
     """

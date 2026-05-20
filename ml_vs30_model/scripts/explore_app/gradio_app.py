@@ -4,11 +4,9 @@ import json
 import base64
 from io import BytesIO
 
-
 import matplotlib
-from branca.element import IFrame
-
 matplotlib.use("Agg")
+
 import numpy as np
 import pandas as pd
 import gradio as gr
@@ -28,15 +26,49 @@ datasets = [f.name for f in vs30.constants.BASE_DATA_DIR.glob("grids/*") if f.is
 
 models = [
     f.name
-    for f in vs30.constants.BASE_DATA_DIR.glob("results/*")
+    for f in vs30.constants.BASE_DATA_DIR.glob("results/ind_results/*")
     if f.is_dir() and "full" in f.name and not f.name.startswith("_")
 ]
 
-# QUALITY_COLOR_MAPPTING = {
-#     "Q1": "blue",
-#     "Q2": "magenta",
-#     "Q3": "red",
-# }
+CMAP_LIMITS = {
+    vs30.constants.InputVariable.NZEnvDSSlopeDeg: (0, 30, 60),
+    vs30.constants.InputVariable.NZNWTGroundwaterDepth: (0, 400, 1000),
+    vs30.constants.InputVariable.NZNLMGroundwaterDepth: (0, 10, 25),
+    vs30.constants.InputVariable.NZEnvDSDistanceRivers: (0, 10_000, 100_000),
+    vs30.constants.InputVariable.NZEnvDSDistanceRiversVertical: (0, 1500, 3500),
+    vs30.constants.InputVariable.NZEnvDSPrecipAnn: (0, 5000, 10_000),
+    vs30.constants.InputVariable.NZEnvDSSoilAcidP: (0, 5),
+    vs30.constants.InputVariable.NZEnvDSSoilAge: (0, 2),
+    vs30.constants.InputVariable.NZEnvDSSoilDrainage: (0, 5),
+    vs30.constants.InputVariable.NZEnvDSSoilInduration: (0, 5),
+    vs30.constants.InputVariable.NZEnvDSTopoGeomorphons: (0, 10),
+    vs30.constants.InputVariable.NZEnvDSSoilParticleSize: (0, 5),
+    vs30.constants.InputVariable.NZEnvDSTopoNormalisedHeight: (0, 1),
+    vs30.constants.InputVariable.NZEnvDSTopoPosition: (-25, 25, -50, -50),
+    vs30.constants.InputVariable.NZEnvDSTopoRoughness: (0, 200, 500),
+    vs30.constants.InputVariable.NZEnvDSTopoRuggedness: (0, 50, 100),
+    vs30.constants.InputVariable.NZEnvDSTopoValleyDepth: (0, 250, 750),
+    vs30.constants.InputVariable.NZEnvDSTopoWetness: (2, 12, 14),
+    vs30.constants.InputVariable.DepthToGroundwater: (-200, 0, -500, 0),
+    vs30.constants.InputVariable.NZDistanceToCoast: (0, 80_000, 150_000),
+    vs30.constants.InputVariable.NZDistanceToRiver_ST1: (0, 1_000, 200_000),
+    vs30.constants.InputVariable.NZDistanceToRiver_ST2: (0, 1_000, 200_000),
+    vs30.constants.InputVariable.NZDistanceToRiver_ST3: (0, 5_000, 200_000),
+    vs30.constants.InputVariable.NZDistanceToRiver_ST4: (0, 15_000, 200_000),
+    vs30.constants.InputVariable.NZDistanceToRiver_ST5: (0, 30_000, 200_000),
+    vs30.constants.InputVariable.NZDistanceToRiver_ST6: (0, 60_000, 200_000),
+    vs30.constants.InputVariable.NZDistanceToRiver_ST7: (0, 80_000, 200_000),
+    vs30.constants.InputVariable.NZDistanceToRiver_ST8: (0, 100_000, 200_000),
+    vs30.constants.InputVariable.NZGeologyCategory: (0, 15),
+    vs30.constants.InputVariable.NZGeologyAgeMin: (0, 500),
+    vs30.constants.InputVariable.NZGeologyAgeMax: (0, 500),
+    vs30.constants.InputVariable.CompoundTopgraphicIndex: (-5.0, 5.0, -10, 10),
+    vs30.constants.InputVariable.Elevation: (0, 1500, 3500),
+    vs30.constants.InputVariable.NZGeologyAgeMid: (0, 500),
+    vs30.constants.InputVariable.NZGeologyAgeLnMid: (-5, 6),
+    vs30.constants.InputVariable.NZCombinedGroundwaterDepth: (0, 50, 1000),
+    vs30.constants.InputVariable.NZCombinedGroundwaterDepthLn: (-2, 6),
+}
 
 QUALITY_COLOR_MAPPTING = vs30.constants.QUALITY_SCORE_COLORS
 
@@ -51,7 +83,7 @@ RES_CMAP = "bwr_r"
 
 
 def _get_model_dir(model_name: str) -> Path:
-    return vs30.constants.BASE_DATA_DIR / "results" / model_name
+    return vs30.constants.BASE_DATA_DIR / "results/ind_results" / model_name
 
 
 def make_cbar_html(cmap_name: str, cmap_min: float, cmap_max: float, label: str) -> str:
@@ -77,71 +109,84 @@ def make_cbar_html(cmap_name: str, cmap_min: float, cmap_max: float, label: str)
 
 
 def get_input_variable_stats(dataset_name: str, variable: str):
-    params = {
-        "url": dataset_name,
-        "variable": variable,
-    }
+    if variable in CMAP_LIMITS:
+        limits = CMAP_LIMITS[variable]
+        if len(limits) == 2:
+            min_val, max_val = limits
+            allowed_min, allowed_max = limits
+        elif len(limits) == 3:
+            min_val, max_val, allowed_max = limits
+            allowed_min = min_val
+        elif len(limits) == 4:
+            min_val, max_val, allowed_min, allowed_max = limits
+        else:
+            raise ValueError(f"Invalid CMAP_LIMITS entry for variable {variable}: {limits}")
+    else:
+        params = {
+            "url": dataset_name,
+            "variable": variable,
+        }
 
-    # Get full dataset bounds
-    info = requests.get(
-        f"{BASE_URL}/info",
-        params=params,
-    ).json()
-    bounds = info["bounds"]  # [minx, miny, maxx, maxy]
+        # Get full dataset bounds
+        info = requests.get(
+            f"{BASE_URL}/info",
+            params=params,
+        ).json()
+        bounds = info["bounds"]  # [minx, miny, maxx, maxy]
 
-    # Build a GeoJSON polygon from bounds
-    minx, miny, maxx, maxy = bounds
-    min_lat, min_lon = coordinates.nztm_to_wgs_depth(np.array([miny, minx]))
-    max_lat, max_lon = coordinates.nztm_to_wgs_depth(np.array([maxy, maxx]))
+        # Build a GeoJSON polygon from bounds
+        minx, miny, maxx, maxy = bounds
+        min_lat, min_lon = coordinates.nztm_to_wgs_depth(np.array([miny, minx]))
+        max_lat, max_lon = coordinates.nztm_to_wgs_depth(np.array([maxy, maxx]))
 
-    geojson = {
-        "type": "Feature",
-        "geometry": {
-            "type": "Polygon",
-            "coordinates": [
-                [
-                    [min_lon, min_lat],
-                    [max_lon, min_lat],
-                    [max_lon, max_lat],
-                    [min_lon, max_lat],
-                    [min_lon, min_lat],
-                ]
-            ],
-        },
-        "properties": {},
-    }
+        geojson = {
+            "type": "Feature",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [min_lon, min_lat],
+                        [max_lon, min_lat],
+                        [max_lon, max_lat],
+                        [min_lon, max_lat],
+                        [min_lon, min_lat],
+                    ]
+                ],
+            },
+            "properties": {},
+        }
 
-    response = requests.post(f"{BASE_URL}/statistics", params=params, json=geojson)
+        response = requests.post(f"{BASE_URL}/statistics", params=params, json=geojson)
 
-    if response.status_code != 200:
-        raise ValueError(f"Error fetching variable stats: {response.text}")
+        if response.status_code != 200:
+            raise ValueError(f"Error fetching variable stats: {response.text}")
 
-    stats_dict = json.loads(response.text)["properties"]["statistics"]["b1"]
-    counts, bin_edges = stats_dict["histogram"]
-    stats = {
-        "histogram": (counts, bin_edges),
-        "min": stats_dict["min"],
-        "max": stats_dict["max"],
-    }
+        stats_dict = json.loads(response.text)["properties"]["statistics"]["b1"]
+        counts, bin_edges = stats_dict["histogram"]
+        stats = {
+            "histogram": (counts, bin_edges),
+            "min": stats_dict["min"],
+            "max": stats_dict["max"],
+        }
 
-    min_val, max_val = float(np.round((stats["min"]), 3)), float(
-        np.round(stats["max"], 3)
-    )
+        min_val, max_val = float(np.round((stats["min"]), 3)), float(
+            np.round(stats["max"], 3)
+        )
+        allowed_min, allowed_max = min_val, max_val
+        
     step_size = (max_val - min_val) / 100
-
     return (
-        stats,
-        gr.Slider(minimum=min_val, maximum=max_val, value=min_val, step=step_size),
-        gr.Slider(minimum=min_val, maximum=max_val, value=max_val, step=step_size),
+        gr.Slider(minimum=allowed_min, maximum=allowed_max, value=min_val, step=step_size),
+        gr.Slider(minimum=allowed_min, maximum=allowed_max, value=max_val, step=step_size),
     )
-
 
 def inputs_supported_variables(dataset_name: str):
     """Gets the list of variables available in the dataset for tiling."""
     variables_tiler_url = f"{BASE_URL}/variables?url={dataset_name}"
 
     vars = json.loads(requests.get(variables_tiler_url).text)
-    vars.remove("spatial_ref")  # Remove the spatial_ref
+    if "spatial_ref" in vars:
+        vars.remove("spatial_ref")  # Remove the spatial_ref
 
     return gr.Dropdown(choices=vars)
 
@@ -153,6 +198,8 @@ def create_inputs_map(
     cmap: str,
     cmap_min: float,
     cmap_max: float,
+    site_ln_res_min: float,
+    site_ln_res_max: float,
 ):
     tiler_url = (
         BASE_URL
@@ -172,7 +219,7 @@ def create_inputs_map(
     ).add_to(m)
 
     if model_name is not None:
-        marker_group = get_model_markers(model_name)
+        marker_group = get_model_markers(model_name, site_ln_res_min, site_ln_res_max)
         marker_group.add_to(m)
 
     # Layer control
@@ -197,26 +244,9 @@ def create_inputs_map(
     )
 
 
-def gen_inputs_hist_plot(variable: str, variable_stats: dict):
-    min_val, max_val = variable_stats["min"], variable_stats["max"]
-    counts, bin_edges = variable_stats["histogram"]
-
-    bin_width = np.diff(bin_edges)[0]
-    bin_centres = bin_edges[:-1] + (bin_width / 2)
-
-    fig, ax = plt.subplots(figsize=(16, 6))
-    ax.bar(bin_centres, counts, width=bin_width, align="center")
-    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-
-    ax.set_xlim(min_val, max_val)
-    ax.set_xlabel(variable)
-
-    fig.tight_layout()
-    plt.close()
-    return fig
-
-
-def get_model_markers(model_name: str):
+def get_model_markers(
+    model_name: str, site_ln_res_min: float, site_ln_res_max: float
+):
     marker_group = folium.FeatureGroup(name="Sites", show=True)
     model_dir = _get_model_dir(model_name)
     train_df = pd.read_parquet(model_dir / "train_results.parquet")
@@ -224,18 +254,23 @@ def get_model_markers(model_name: str):
     dataset_df = pd.read_parquet(run_config.dataset_ffp)
 
     for k, row in train_df.iterrows():
-        cur_quality_score = dataset_df.loc[k, "quality_score"]
+        if (site_ln_res_min is not None and row.ln_residual < site_ln_res_min) or (
+            site_ln_res_max is not None and row.ln_residual > site_ln_res_max
+        ):
+            continue
 
+        cur_quality_score = dataset_df.loc[k, "quality_score"]
 
         if (plot_ffp := model_dir / f"plots/waterfall_plots/{k}.png").exists():
             with open(plot_ffp, "rb") as f:
                 encoded = base64.b64encode(f.read()).decode()
 
             popup_html = f"Name: {k}, Vs30: {row['vs30']:.1f}, Pred: {row['pred_vs30']:.1f}, Quality: {cur_quality_score}"
-            popup_html += f'<br><img src="data:image/png;base64,{encoded}" width="800"><br>'
+            popup_html += (
+                f'<br><img src="data:image/png;base64,{encoded}" width="800"><br>'
+            )
         else:
             popup_html = f"Name: {k}<br>Vs30: {row['vs30']:.1f}<br>Pred: {row['pred_vs30']:.1f}<br>Quality: {cur_quality_score}"
-
 
         folium.CircleMarker(
             location=[row["lat"], row["lon"]],
@@ -251,7 +286,12 @@ def get_model_markers(model_name: str):
     return marker_group
 
 
-def create_model_map(model_name: str, variable: str):
+def create_model_map(
+    model_name: str,
+    variable: str,
+    site_ln_res_min: float | None,
+    site_ln_res_max: float | None,
+):
     if variable.endswith("_ln_res"):
         cmap_min, cmap_max = VS30_CMAP_LN_RES_MIN, VS30_CMAP_LN_RES_MAX
         cmap = RES_CMAP
@@ -283,7 +323,7 @@ def create_model_map(model_name: str, variable: str):
     ).add_to(m)
 
     # Add markers
-    marker_group = get_model_markers(model_name)
+    marker_group = get_model_markers(model_name, site_ln_res_min, site_ln_res_max)
     marker_group.add_to(m)
 
     # Layer control
@@ -299,7 +339,8 @@ def create_model_map(model_name: str, variable: str):
 def models_supported_variables(model_name: str):
     model_variables_url = f"{MODEL_BASE_URL}/variables?url={model_name}"
     vars = json.loads(requests.get(model_variables_url).text)
-    vars.remove("spatial_ref")  # Remove the spatial_ref
+    if "spatial_ref" in vars:
+        vars.remove("spatial_ref")  # Remove the spatial_ref
     return gr.Dropdown(choices=vars)
 
 
@@ -334,10 +375,10 @@ with gr.Blocks() as demo:
         inputs_map = gr.HTML("<h1>Select a dataset and variable...</h1>")
         inputs_cbar_plot = gr.Plot(container=False)
 
-        gr.Markdown("# Variable histogram")
-        inputs_hist_plot = gr.Plot(container=False)
+        # gr.Markdown("# Variable histogram")
+        # inputs_hist_plot = gr.Plot(container=False)
 
-        inputs_var_stats = gr.State()
+        # inputs_var_stats = gr.State()
 
     with gr.Sidebar(open=True):
         with gr.Accordion("Model Options"):
@@ -387,13 +428,23 @@ with gr.Blocks() as demo:
                     )
 
                     input_cmap_min_slider = gr.Slider(
-                        label="Colormap min", interactive=True, precision=3
+                        label="Colormap min", interactive=True, precision=3,
                     )
                     input_cmap_max_slider = gr.Slider(
                         label="Colormap max", interactive=True, precision=3
                     )
 
                     input_vis_update_btn = gr.Button("Update", variant="primary")
+
+        with gr.Accordion("Site Options", open=False):
+            with gr.Group():
+                site_ln_residual_min_slider = gr.Slider(
+                    label="Ln Residual Min", interactive=True, precision=3, value=-1.5, minimum=-3, maximum=3
+                )
+                site_ln_residual_max_slider = gr.Slider(
+                    label="Ln Residual Max", interactive=True, precision=3, value=1.5, minimum=-3, maximum=3
+                )
+                site_update_btn = gr.Button("Update", variant="primary")
 
     # On dataset change, retrieve supported variables
     dataset_dropdown.change(
@@ -404,7 +455,7 @@ with gr.Blocks() as demo:
     data_update_btn.click(
         get_input_variable_stats,
         inputs=[dataset_dropdown, var_dropdown],
-        outputs=[inputs_var_stats, input_cmap_min_slider, input_cmap_max_slider],
+        outputs=[input_cmap_min_slider, input_cmap_max_slider],
     ).then(
         create_inputs_map,
         inputs=[
@@ -414,13 +465,16 @@ with gr.Blocks() as demo:
             input_cmap_dropdown,
             input_cmap_min_slider,
             input_cmap_max_slider,
+            site_ln_residual_min_slider,
+            site_ln_residual_max_slider,
         ],
         outputs=[inputs_map, inputs_cbar_plot],
-    ).then(
-        gen_inputs_hist_plot,
-        inputs=[var_dropdown, inputs_var_stats],
-        outputs=inputs_hist_plot,
     )
+    # .then(
+    #     gen_inputs_hist_plot,
+    #     inputs=[var_dropdown, inputs_var_stats],
+    #     outputs=inputs_hist_plot,
+    # )
 
     # Visualization update button
     input_vis_update_btn.click(
@@ -432,6 +486,8 @@ with gr.Blocks() as demo:
             input_cmap_dropdown,
             input_cmap_min_slider,
             input_cmap_max_slider,
+            site_ln_residual_min_slider,
+            site_ln_residual_max_slider,
         ],
         outputs=[inputs_map, inputs_cbar_plot],
     )
@@ -446,15 +502,45 @@ with gr.Blocks() as demo:
     # Model update button
     model_update_btn.click(
         create_model_map,
-        inputs=[model_selection, model_variable_dropdown],
+        inputs=[
+            model_selection,
+            model_variable_dropdown,
+            site_ln_residual_min_slider,
+            site_ln_residual_max_slider,
+        ],
         # inputs=[model_selection, model_variable_dropdown, model_cmap_dropdown],
         outputs=model_map,
     )
+    
     # .then(
     #     update_site_selection,
     #     inputs=model_selection,
     #     outputs=site_selection,
     # )
+
+    site_update_btn.click(
+        create_model_map,
+        inputs=[
+            model_selection,
+            model_variable_dropdown,
+            site_ln_residual_min_slider,
+            site_ln_residual_max_slider,
+        ],
+        outputs=model_map,
+    ).then(
+        create_inputs_map,
+        inputs=[
+            dataset_dropdown,
+            var_dropdown,
+            model_selection,
+            input_cmap_dropdown,
+            input_cmap_min_slider,
+            input_cmap_max_slider,
+            site_ln_residual_min_slider,
+            site_ln_residual_max_slider,
+        ],
+        outputs=[inputs_map, inputs_cbar_plot],
+    )
 
     # site_selection.change(
     #     update_site_plot,

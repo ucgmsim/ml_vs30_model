@@ -14,6 +14,17 @@ def raise_log(ex_type: Exception, error_msg: str, logger: logging.Logger) -> Non
     raise ex_type(error_msg)
 
 
+def safe_cast(arr, dtype):
+    arr = np.asarray(arr)
+    info = np.iinfo(dtype) if np.issubdtype(dtype, np.integer) else np.finfo(dtype)
+
+    if np.any(arr < info.min) or np.any(arr > info.max):
+        raise OverflowError("Value out of bounds for dtype")
+
+    return arr.astype(dtype)
+
+
+
 def get_vs30_weights(df: pd.DataFrame, max_weight: int) -> pd.DataFrame:
     """
     Computes the additional sample weight due to Vs30,
@@ -84,3 +95,5 @@ def get_bounding_box_corners(
         ],
         axis=1,
     )
+
+

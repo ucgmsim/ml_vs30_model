@@ -5,18 +5,29 @@ input_variables:
   # - elevation
   # - nz_geology_age_min
   # - nz_geology_age_max
-  - nz_nlm_groundwater_depth
-  - nz_nwt_groundwater_depth
-  - depth_to_groundwater
+  # - nz_nlm_groundwater_depth
+  # - nz_nwt_groundwater_depth
+  # - depth_to_groundwater
   # - nz_geology_category
+  # - nz_lithology_category
+  # - nz_geological_unit
   # - nzenvds_distance_rivers
+  - nz_distance_to_river_st1
+  - nz_distance_to_river_st2
+  - nz_distance_to_river_st3
+  - nz_distance_to_river_st4
+  - nz_distance_to_river_st5
+  - nz_distance_to_river_st6
+  - nz_distance_to_river_st7
+  - nz_distance_to_river_st8
+  # - compound_topographic_index
   
   # - terrain_ruggedness_index
 
 derived_variables:
   # - nz_geology_age_mid
   # - nz_geology_age_ln_mid
-  - nz_combined_groundwater_depth
-  - nz_combined_groundwater_depth_ln
+  # - nz_combined_groundwater_depth
+  # - nz_combined_groundwater_depth_ln
 
 

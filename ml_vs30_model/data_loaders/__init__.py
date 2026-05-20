@@ -4,7 +4,7 @@ from .opentopography import GeoMorpho90, SRTMGL1
 from .tif_loader import TIFLoader, NZTMTIFLoader
 from .global_gwt import GlobalGWT
 from .shape_loader import ShapeLoader
-from .dist_to_coast import NZDistanceToCoast
+from .distance_to_shape import NZDistanceToCoast, NZDistanceToRiver
 
 __all__ = [
     "BaseLoader",
@@ -15,4 +15,5 @@ __all__ = [
     "GlobalGWT",
     "ShapeLoader",
     "NZDistanceToCoast",
+    "NZDistanceToRiver",
 ]

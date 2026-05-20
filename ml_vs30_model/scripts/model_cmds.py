@@ -52,9 +52,11 @@ def cv_train_ngboost(
     n_cv_folds: int | None = None,
     n_iterations: int | None = None,
     apply_vs30_sample_weights: bool | None = None,
+    apply_quality_sample_weights: bool | None = None,
     id_suffix: str | None = None,
     run_post_processing: bool = True,
     extra_input_variables: list[str] | None = None,
+    n_procs: int = 1,
 ):
     """
     Runs cross-validation training of the NGBoost model,
@@ -67,6 +69,7 @@ def cv_train_ngboost(
         rel_dataset_ffp=rel_dataset_ffp,
         n_cv_folds=n_cv_folds,
         apply_vs30_sample_weights=apply_vs30_sample_weights,
+        apply_quality_sample_weights=apply_quality_sample_weights,
         iterations=n_iterations,
         extra_input_variables=extra_input_variables,
     )
@@ -76,7 +79,36 @@ def cv_train_ngboost(
         run_config.results_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
     )
 
-    vs30.ngboost_model.cv_train(run_config, base_out_dir, run_post_processing=run_post_processing)
+    vs30.ngboost_model.cv_train(
+        run_config,
+        base_out_dir,
+        run_post_processing=run_post_processing,
+        n_procs=n_procs,
+    )
+
+
+@app.command("hp-opt-ngboost")
+def hp_opt_ngboost(
+    hp_config_ffp: Path,
+    base_run_config_ffp: Path,
+    n_trials: int,
+    n_procs: int = 1,
+    suffix: str = "",
+    n_startup_trials: int = 25,
+    n_iterations: int | None = None,
+):
+    """
+    Runs hyperparameter optimization for the NGBoost model,
+    based on the provided configuration file.
+    """
+    mlt.utils.setup_logging()
+
+    hp_config = vs30.ngboost_model.NGBoostHPOptConfig.from_config(
+        hp_config_ffp, base_run_config_ffp, n_iterations=n_iterations
+    )
+    vs30.ngboost_model.run_ngboost_hp_opt(
+        hp_config, n_startup_trials, n_trials, n_procs, suffix
+    )
 
 
 @app.command("cv-train-catboost")
@@ -90,6 +122,7 @@ def cv_train_catboost(
     id_suffix: str | None = None,
     run_post_processing: bool = True,
     extra_input_variables: list[str] | None = None,
+    n_procs: int = 1,
 ):
     """
     Runs cross-validation training of the CatBoost model,
@@ -112,7 +145,12 @@ def cv_train_catboost(
         run_config.results_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
     )
 
-    vs30.catboost_model.cv_train(run_config, base_out_dir, run_post_processing=run_post_processing)
+    vs30.catboost_model.cv_train(
+        run_config,
+        base_out_dir,
+        run_post_processing=run_post_processing,
+        n_procs=n_procs,
+    )
 
 
 @app.command("full-train-catboost")
