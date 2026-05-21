@@ -11,6 +11,7 @@ from . import utils
 from . import plotting
 from . import training
 from . import nn_model
+from . import feature_selection
 
 __all__ = [
     "GeoMorpho90",
@@ -28,4 +29,5 @@ __all__ = [
     "plotting",
     "training",
     "nn_model",
+    "feature_selection",
 ]

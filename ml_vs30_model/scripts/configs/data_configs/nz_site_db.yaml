@@ -1,6 +1,11 @@
 rel_vs30_values_ffp: cleaned_vs30_data/nz_site_db_v1p5.csv
 index_col: "sta"
 
+drop_sites: 
+  # Loacted on Whakaari/White Island, most input variables are 
+  # garbage for this site.
+  - WSRZ 
+
 input_variables: 
   # - roughness
   # - topographic_slope
@@ -21,6 +26,14 @@ input_variables:
   - nz_geological_unit
   # - nz_geology_category
   - nz_distance_to_coast
+  - nz_distance_to_river_st1
+  - nz_distance_to_river_st2
+  - nz_distance_to_river_st3
+  - nz_distance_to_river_st4
+  - nz_distance_to_river_st5
+  - nz_distance_to_river_st6
+  - nz_distance_to_river_st7
+  - nz_distance_to_river_st8
   - nz_geology_age_min
   - nz_geology_age_max
   - nz_nlm_groundwater_depth

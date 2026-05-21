@@ -249,5 +249,31 @@ def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
     vs30.post_processing.add_ml_model_residuals(dataset_ffp, other_dataset_ffp)
 
 
+@app.command("run-feature-selection")
+def run_feature_selection(
+    base_run_config_ffp: Path,
+    variables: list[vs30.constants.InputVariable],
+    base_out_dir: Path,
+    n_iterations: int | None = None,
+    id_suffix: str | None = None,
+    n_procs: int = 1,
+):
+    """
+    Runs feature selection
+    """
+    mlt.utils.setup_logging()
+
+    id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
+    base_out_dir = (
+        base_out_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
+    )
+    base_out_dir.mkdir(parents=True, exist_ok=False)
+
+    base_run_config = vs30.RunConfig.from_config_kwargs(base_run_config_ffp, iterations=n_iterations)
+    vs30.feature_selection.run_feature_selection(
+        base_run_config, variables, base_out_dir, n_procs=n_procs
+    )
+
+
 if __name__ == "__main__":
     app()

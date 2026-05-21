@@ -164,9 +164,9 @@ def cv_train(
         post_processing.gen_model_perfomance_plots(
             base_out_dir, results_df=val_results_df, run_config=run_config
         )
-        post_processing.gen_spatial_plots(
-            base_out_dir, results_df=val_results_df, run_config=run_config
-        )
+        # post_processing.gen_spatial_plots(
+        #     base_out_dir, results_df=val_results_df, run_config=run_config
+        # )
         post_processing.gen_feature_importance_plots(
             base_out_dir, shap_values, results_df=val_results_df
         )

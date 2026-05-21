@@ -26,7 +26,7 @@ n_cv_folds: 50
 rel_results_dir: results/ind_results
 
 model_config:
-  iterations: 20
+  iterations: 70
   learning_rate: 0.035
   minibatch_frac: 0.5
   col_sample: 0.7

@@ -83,7 +83,7 @@ class TIFLoader(BaseLoader):
             values = data[0, rows, cols]
 
             # Convert to appropriate dtype and set no-data values to standard constants
-            values = data_loader_utils.convert_dtype_and_handle_nodata(values, dataset.nodatavals[0])
+            values = data_loader_utils.convert_dtype_and_handle_nodata(values, dataset.nodatavals[0], variable)
 
         # Deal with negative absolute depth to bedrock values
         if (
@@ -196,7 +196,7 @@ class NZTMTIFLoader:
             values = data[0, rows, cols]
 
             # Convert to appropriate dtype and set no-data values to standard constants
-            values = data_loader_utils.convert_dtype_and_handle_nodata(values, dataset.nodatavals[0])
+            values = data_loader_utils.convert_dtype_and_handle_nodata(values, dataset.nodatavals[0], variable)
 
         if address_missing and variable not in [
             constants.InputVariable.NZNLMGroundwaterDepth,

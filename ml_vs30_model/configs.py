@@ -14,19 +14,21 @@ class ModelType(StrEnum):
     NGBoost = "ngboost"
     CatBoost = "catboost"
 
-@dataclasses.dataclass  
+
+@dataclasses.dataclass
 class CatboostModelConfig:
     iterations: int
 
     @classmethod
     def from_dict(cls, config_dict: dict) -> "CatboostModelConfig":
         return cls(**config_dict)
-    
+
     def to_dict(self) -> dict:
         return {
             "iterations": int(self.iterations),
         }
-    
+
+
 @dataclasses.dataclass
 class NGBoostModelConfig:
     iterations: int
@@ -40,7 +42,7 @@ class NGBoostModelConfig:
     @classmethod
     def from_dict(cls, config_dict: dict) -> "NGBoostModelConfig":
         return cls(**config_dict)
-    
+
     def to_dict(self) -> dict:
         return {
             "iterations": int(self.iterations),
@@ -51,6 +53,7 @@ class NGBoostModelConfig:
             "base_min_samples_leaf": int(self.base_min_samples_leaf),
         }
 
+
 @dataclasses.dataclass
 class RunConfig:
     seed: int
@@ -59,7 +62,7 @@ class RunConfig:
 
     rel_dataset_ffp: str
     rel_test_sites_ffp: str
-    input_variables: list[str]  
+    input_variables: list[str]
 
     apply_vs30_sample_weights: bool
     max_vs30_weight: float
@@ -73,7 +76,7 @@ class RunConfig:
     a multiplicative factor. 
     """
 
-    n_cv_folds: int 
+    n_cv_folds: int
     """Number of CV folds to use. Only applicable when using CV."""
 
     rel_results_dir: str
@@ -92,26 +95,32 @@ class RunConfig:
             self._dataset_ffp = constants.BASE_DATA_DIR / self.rel_dataset_ffp
 
         return self._dataset_ffp
-    
+
     @property
     def test_sites_ffp(self) -> Path:
         return constants.BASE_DATA_DIR / self.rel_test_sites_ffp
-    
+
     @property
     def test_sites(self) -> np.ndarray:
         return np.load(self.test_sites_ffp)
 
-    @property  
+    @property
     def results_dir(self) -> Path:
-        return constants.BASE_DATA_DIR / self.rel_results_dir    
-    
+        return constants.BASE_DATA_DIR / self.rel_results_dir
+
     @property
     def categorial_variables(self) -> list[constants.InputVariable]:
-        return [var for var in self.input_variables if var in constants.CATEGORIAL_VARIABLES]
-    
+        return [
+            var for var in self.input_variables if var in constants.CATEGORIAL_VARIABLES
+        ]
+
     @property
     def numerical_variables(self) -> list[constants.InputVariable]:
-        return [var for var in self.input_variables if var not in constants.CATEGORIAL_VARIABLES]
+        return [
+            var
+            for var in self.input_variables
+            if var not in constants.CATEGORIAL_VARIABLES
+        ]
 
     @property
     def scale_params(self):
@@ -123,7 +132,7 @@ class RunConfig:
             self._scale_params = value
         else:
             raise ValueError("Scale parameters are already set")
-        
+
     def get_scale_params(self, var: str | constants.InputVariable):
         if self._scale_params is None:
             return None, None
@@ -133,7 +142,7 @@ class RunConfig:
             return self._scale_params[var]
 
     def copy(self):
-        return copy.deepcopy(self)  
+        return copy.deepcopy(self)
 
     @classmethod
     def from_config_kwargs(cls, config_ffp: Path, **kwargs):
@@ -145,10 +154,13 @@ class RunConfig:
         config_dict = mlt.utils.load_yaml(config_ffp)
 
         for cur_key, cur_val in kwargs.items():
-            if cur_val is None: 
+            if cur_val is None:
                 continue
 
             if cur_key == "extra_input_variables":
+                assert all(
+                    [cur_var in constants.InputVariable for cur_var in cur_val]
+                ), "Not all extra input variables are valid."
                 config_dict["input_variables"] = list(
                     set(config_dict["input_variables"] + cur_val)
                 )
@@ -165,20 +177,24 @@ class RunConfig:
         config_dict["model_type"] = ModelType(config_dict["model_type"])
 
         if config_dict["model_type"] == ModelType.NGBoost:
-            config_dict["model_config"] = NGBoostModelConfig.from_dict(config_dict["model_config"])
+            config_dict["model_config"] = NGBoostModelConfig.from_dict(
+                config_dict["model_config"]
+            )
         elif config_dict["model_type"] == ModelType.CatBoost:
-            config_dict["model_config"] = CatboostModelConfig.from_dict(config_dict["model_config"])
+            config_dict["model_config"] = CatboostModelConfig.from_dict(
+                config_dict["model_config"]
+            )
         else:
             raise ValueError(f"Unsupported model type: {config_dict['model_type']}")
 
         return cls(**config_dict)
-    
+
     @classmethod
     def from_yaml(cls, config_ffp: Path) -> "RunConfig":
         """Creates an instance from the given YAML config file."""
         config_dict = mlt.utils.load_yaml(config_ffp)
         return cls.from_dict(config_dict)
-    
+
     def to_dict(self) -> dict:
         """Converts the RunConfig instance to a dictionary."""
         config_dict = {
@@ -207,7 +223,3 @@ class RunConfig:
     def to_yaml(self, ffp: Path):
         """Save the RunConfig to a YAML file."""
         mlt.utils.write_to_yaml(self.to_dict(), ffp)
-    
-    
-
-    

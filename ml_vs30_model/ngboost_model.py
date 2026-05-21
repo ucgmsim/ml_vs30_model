@@ -60,11 +60,6 @@ def run_model_training(
         np.isin(run_config.test_sites, dataset_df.index.values.astype(str)).sum() == 0
     ), "Test sites must not be present in the training dataset"
 
-    if len(run_config.categorial_variables) > 0:
-        raise NotImplementedError(
-            "Pre-processing of categorial variables is not implemented yet"
-        )
-
     run_config, train_X, train_y, train_df, val_X, val_y, val_df = (
         pre_processing.get_pre_processed_train_val_df(
             dataset_df,

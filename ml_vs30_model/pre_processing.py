@@ -4,6 +4,7 @@ import logging
 
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import OneHotEncoder
 
 from .configs import RunConfig
 from . import constants
@@ -39,7 +40,40 @@ def pre_process_features(df: pd.DataFrame, run_config: RunConfig) -> pd.DataFram
     if run_config.scale_params is None:
         scale_params = {}
 
+    # Categorial features
+    if run_config.pre_process_categorial and len(run_config.categorial_variables) > 0:
+        logger.info(f"One-hot encoding the following variables: {run_config.categorial_variables}")
+        if run_config.scale_params is None:
+            encoder = OneHotEncoder(handle_unknown="error", sparse_output=False)
+            one_hot_encoded = encoder.fit_transform(df[run_config.categorial_variables])
+
+            scale_params["categorical"] = {
+                "feature_names_in": encoder.feature_names_in_.tolist(),
+                "feature_names_out": encoder.get_feature_names_out().tolist(),
+                "categories": [cat_array.tolist() for cat_array in encoder.categories_],
+            }
+        else:
+            scale_params = run_config.scale_params
+            encoder = OneHotEncoder(
+                handle_unknown="error",
+                sparse_output=False,
+                categories=run_config.scale_params["categorical"]["categories"],
+            )
+            assert np.all(scale_params["categorical"]["feature_names_in"] == run_config.categorial_variables)
+            one_hot_encoded = encoder.fit_transform(df[run_config.categorial_variables])
+
+        scaled_input_df = pd.DataFrame(
+            one_hot_encoded,
+            columns=scale_params["categorical"]["feature_names_out"],
+            index=df.index
+        )
+
+    # Continous features
     for var in run_config.input_variables:
+        # Ignore categorial variables
+        if var in run_config.categorial_variables:
+            continue
+
         if var in constants.LN_NORM_VARS:
             scaled_input_df[var], scale_params[var] = normalize(
                 np.log1p(df[var]), *run_config.get_scale_params(var)
@@ -50,12 +84,6 @@ def pre_process_features(df: pd.DataFrame, run_config: RunConfig) -> pd.DataFram
             )
         elif var in constants.MIN_MAX_SCALE_PARAMS:
             scaled_input_df[var] = min_max_scale(df[var], var)
-        elif var in constants.CATEGORIAL_VARIABLES:
-            if run_config.pre_process_categorial:
-                one_hot_df = pd.get_dummies(df[var], prefix=var)
-                scaled_input_df = pd.concat([scaled_input_df, one_hot_df], axis=1)
-            else:
-                scaled_input_df[var] = df[var]
         else:
             raise ValueError(f"Variable {var} is not categorized for pre-processing.")
 

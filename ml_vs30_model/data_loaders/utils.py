@@ -8,22 +8,30 @@ import numpy as np
 from pyproj import Geod
 
 from .. import utils
+from .. import constants
 
 logger = logging.getLogger(__name__)
 
-def convert_dtype_and_handle_nodata(values: np.ndarray, no_data_value: float | int | None) -> np.ndarray:
+def convert_dtype_and_handle_nodata(values: np.ndarray, no_data_value: float | int | None, variable: constants.InputVariable) -> np.ndarray:
     """
     Converts the values to appropriate dtype 
     and sets no-data values to standard constants.
     """
-    if np.issubdtype(values.dtype, np.integer):
-        values = utils.safe_cast(values, np.int16)
-        if no_data_value is not None and no_data_value != -9999:
-            values[values == no_data_value] = -9999
-    elif np.issubdtype(values.dtype, np.floating):
-        values = utils.safe_cast(values, np.float32)
-        if no_data_value is not None and not np.isnan(no_data_value):
-            values[values == no_data_value] = np.nan
+    try:
+        if np.issubdtype(values.dtype, np.integer):
+            if no_data_value is not None and no_data_value != constants.INTEGER_NO_DATA_VALUE:
+                values[values == no_data_value] = constants.INTEGER_NO_DATA_VALUE
+            values = utils.safe_cast(values, np.int16)
+        elif np.issubdtype(values.dtype, np.floating):
+            if no_data_value is not None and not np.isnan(no_data_value):
+                values[values == no_data_value] = np.nan
+            values = utils.safe_cast(values, np.float32)
+    except OverflowError as e:
+        utils.raise_log(
+            OverflowError,
+            f"Values for variable {variable} contain values out of bounds for target dtype: {values.dtype}",
+            logger,
+        )
 
     return values
 

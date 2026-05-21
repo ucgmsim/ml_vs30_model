@@ -11,15 +11,16 @@ input_variables:
   # - nz_geology_category
   # - nz_lithology_category
   # - nz_geological_unit
+  - absolute_depth_to_bedrock
   # - nzenvds_distance_rivers
-  - nz_distance_to_river_st1
-  - nz_distance_to_river_st2
-  - nz_distance_to_river_st3
-  - nz_distance_to_river_st4
-  - nz_distance_to_river_st5
-  - nz_distance_to_river_st6
-  - nz_distance_to_river_st7
-  - nz_distance_to_river_st8
+  # - nz_distance_to_river_st1
+  # - nz_distance_to_river_st2
+  # - nz_distance_to_river_st3
+  # - nz_distance_to_river_st4
+  # - nz_distance_to_river_st5
+  # - nz_distance_to_river_st6
+  # - nz_distance_to_river_st7
+  # - nz_distance_to_river_st8
   # - compound_topographic_index
   
   # - terrain_ruggedness_index

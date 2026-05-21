@@ -27,6 +27,8 @@ class DataConfig:
     rel_vs30_values_ffp: str
     index_col: str | None
 
+    drop_sites: list[str] | None
+
     input_variables: list[constants.InputVariable]
     derived_variables: list[constants.InputVariable] | None
 
@@ -43,6 +45,7 @@ class DataConfig:
         return self._vs30_values_ffp
 
     def _derived_variables_check(self):
+        """Checks that derived variables have their dependencies met."""
         if self.derived_variables is not None:
             for derived_var in self.derived_variables:
                 if derived_var not in constants.DERIVED_VARIABLES_DEPENDENCIES:
@@ -98,6 +101,19 @@ def gen_dataset(
     vs30_values_df = pd.read_csv(data_config.vs30_values_ffp)
     vs30_values_df = vs30_values_df.astype({"vs30": float})
     assert np.all(np.isin(["lon", "lat", "vs30"], vs30_values_df.columns))
+
+    if data_config.drop_sites is not None:
+        drop_mask = vs30_values_df["sta"].isin(data_config.drop_sites)
+        if drop_mask.any():
+            vs30_values_df = vs30_values_df.loc[~drop_mask, :]
+            logger.info(
+                f"Dropped {drop_mask.sum()} sites based on drop_sites list in config."
+            )
+        else:
+            logger.warning(
+                "No sites were dropped based on drop_sites list in config. "
+                "Check that site identifiers in drop_sites match those in dataset."
+            )
 
     df = vs30_values_df[["lon", "lat", "vs30"]].copy()
     if data_config.index_col is not None:

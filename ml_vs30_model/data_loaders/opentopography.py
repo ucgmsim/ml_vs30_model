@@ -52,7 +52,7 @@ class OpenTopographyS3Loader(BaseLoader):
             # Get values
             mask = filenames == filename
             cur_coords = coords[mask]
-            cur_values = self._get_values(cur_coords, data_dir / filename)
+            cur_values = self._get_values(cur_coords, data_dir / filename, variable)
 
             if values is None:
                 values = np.empty(coords.shape[0], dtype=cur_values.dtype)
@@ -166,7 +166,7 @@ class OpenTopographyS3Loader(BaseLoader):
             "Subclasses must implement _download_tif_file method."
         )
 
-    def _get_values(self, coords: np.ndarray, tif_ffp: Path) -> np.ndarray:
+    def _get_values(self, coords: np.ndarray, tif_ffp: Path, variable: constants.InputVariable) -> np.ndarray:
         """Get the values from the TIFF file at the specified coordinates."""
         if not tif_ffp.exists():
             utils.raise_log(
@@ -185,10 +185,9 @@ class OpenTopographyS3Loader(BaseLoader):
             rows, cols = transform.rowcol(dataset.transform, coords[:, 0], coords[:, 1])
             values = data[0, rows, cols]
 
-            values = data_loader_utils.convert_dtype_and_handle_nodata(values, dataset.nodatavals[0])
+            values = data_loader_utils.convert_dtype_and_handle_nodata(values, dataset.nodatavals[0], variable)
 
         return values
-        # return np.concatenate(list(dataset.sample(coords)))
 
 
 class SRTMGL1(OpenTopographyS3Loader):
