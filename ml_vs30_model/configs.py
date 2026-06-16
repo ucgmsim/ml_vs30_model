@@ -64,17 +64,20 @@ class RunConfig:
     rel_test_sites_ffp: str
     input_variables: list[str]
 
+    ignore_quaternary_regions: list[str] | None
+
     apply_vs30_sample_weights: bool
     max_vs30_weight: float
 
     apply_quality_sample_weights: bool
-    q1_weight_factor: float
-    q2_weight_factor: float
-    q3_weight_factor: float
-    """Sample weighting based on quality score, applied
+    """
+    Sample weighting based on quality score, applied
     after all other sample weighting adjustments, as 
     a multiplicative factor. 
     """
+    q1_weight_factor: float
+    q2_weight_factor: float
+    q3_weight_factor: float
 
     n_cv_folds: int
     """Number of CV folds to use. Only applicable when using CV."""
@@ -203,6 +206,11 @@ class RunConfig:
             "rel_dataset_ffp": str(self.rel_dataset_ffp),
             "rel_test_sites_ffp": str(self.rel_test_sites_ffp),
             "input_variables": list(self.input_variables),
+            "ignore_quaternary_regions": (
+                list(self.ignore_quaternary_regions)
+                if self.ignore_quaternary_regions is not None
+                else None
+            ),
             "n_cv_folds": int(self.n_cv_folds),
             "rel_results_dir": str(self.rel_results_dir),
             "model_config": self.model_config.to_dict(),

@@ -5,6 +5,7 @@ from .tif_loader import TIFLoader, NZTMTIFLoader
 from .global_gwt import GlobalGWT
 from .shape_loader import ShapeLoader
 from .distance_to_shape import NZDistanceToCoast, NZDistanceToRiver
+from .quaternary_region import NZQuaternaryRegionLoader
 
 __all__ = [
     "BaseLoader",
@@ -16,4 +17,5 @@ __all__ = [
     "ShapeLoader",
     "NZDistanceToCoast",
     "NZDistanceToRiver",
+    "NZQuaternaryRegionLoader",
 ]

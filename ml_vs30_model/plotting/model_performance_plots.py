@@ -26,22 +26,41 @@ def one_to_one_plot(
 
     # Vs30
     fig, ax = plt.subplots(figsize=(10, 10))
-    for vs30_bin, color in zip(
-        constants.VS30_WEIGHTING_BIN_NAMES, constants.V30_BIN_COLORS
-    ):
-        mask = results_df["vs30_bin"] == vs30_bin
+    if quality_score is None:
+        for i, (k, color) in enumerate(constants.QUALITY_SCORE_COLORS.items()):
+            mask = results_df["quality_score"] == k
+            ax.scatter(
+                results_df.loc[mask, "vs30"],
+                results_df.loc[mask, "pred_vs30"],
+                label=rf"{k}, $\mu$={results_df.loc[mask, 'ln_residual'].mean():.3f}, "
+                rf"$\sigma$={results_df.loc[mask, 'ln_residual'].std():.3f} (N={mask.sum()})",
+                alpha=0.5,
+                color=color,
+                zorder=10 - i,
+                s=constants.QUALITY_SCORE_MARKER_SIZE[k],
+            )
+    else:
         ax.scatter(
-            results_df.loc[mask, "vs30"],
-            results_df.loc[mask, "pred_vs30"],
-            label=rf"{vs30_bin}, $\mu$={results_df.loc[mask, 'ln_residual'].mean():.3f}, "
-            rf"$\sigma$={results_df.loc[mask, 'ln_residual'].std():.3f} (N={mask.sum()})",
+            results_df["vs30"],
+            results_df["pred_vs30"],
             alpha=0.5,
-            color=color,
+            color=constants.QUALITY_SCORE_COLORS[quality_score],
         )
+
     ax.plot(
         [0, 1550],
         [0, 1550],
         "k",
+    )
+
+    ax.text(
+        0.02,
+        0.98,
+        rf"$\mu$={results_df['ln_residual'].mean():.3f}, "
+        rf"$\sigma$={results_df['ln_residual'].std():.3f} (N={len(results_df)})",
+        transform=ax.transAxes,
+        horizontalalignment="left",
+        verticalalignment="top",
     )
 
     ax.text(
@@ -56,13 +75,15 @@ def one_to_one_plot(
         horizontalalignment="center",
         verticalalignment="top",
         fontweight="bold",
+        fontdict={"size": 12},
     )
 
     ax.set_xlim(0, 1550)
     ax.set_ylim(0, 1550)
     ax.set_xlabel("True vs30")
     ax.set_ylabel("Predicted vs30")
-    ax.legend(title="Vs30 Bin")
+    if quality_score is None:
+        ax.legend(title="Quality Score")
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_aspect("equal", adjustable="box")
     fig.tight_layout()
@@ -82,22 +103,41 @@ def one_to_one_plot(
     # Ln(Vs30)
     ln_min, ln_max = 4.5, 7.5
     fig, ax = plt.subplots(figsize=(10, 10))
-    for vs30_bin, color in zip(
-        constants.VS30_WEIGHTING_BIN_NAMES, constants.V30_BIN_COLORS
-    ):
-        mask = results_df["vs30_bin"] == vs30_bin
+    if quality_score is None:
+        for i, (k, color) in enumerate(constants.QUALITY_SCORE_COLORS.items()):
+            mask = results_df["quality_score"] == k
+            ax.scatter(
+                np.log(results_df.loc[mask, "vs30"]),
+                np.log(results_df.loc[mask, "pred_vs30"]),
+                label=rf"{k}, $\mu$={results_df.loc[mask, 'ln_residual'].mean():.3f}, "
+                rf"$\sigma$={results_df.loc[mask, 'ln_residual'].std():.3f} (N={mask.sum()})",
+                alpha=0.5,
+                color=color,
+                zorder=10 - i,
+                s=constants.QUALITY_SCORE_MARKER_SIZE[k],
+            )
+    else:
         ax.scatter(
-            np.log(results_df.loc[mask, "vs30"]),
-            np.log(results_df.loc[mask, "pred_vs30"]),
-            label=rf"{vs30_bin}, $\mu$={results_df.loc[mask, 'ln_residual'].mean():.3f}, "
-            rf"$\sigma$={results_df.loc[mask, 'ln_residual'].std():.3f} (N={mask.sum()})",
+            np.log(results_df["vs30"]),
+            np.log(results_df["pred_vs30"]),
             alpha=0.5,
-            color=color,
+            color=constants.QUALITY_SCORE_COLORS[quality_score],
         )
+
     ax.plot(
         [ln_min, ln_max],
         [ln_min, ln_max],
         "k",
+    )
+
+    ax.text(
+        0.02,
+        0.98,
+        rf"$\mu$={results_df['ln_residual'].mean():.3f}, "
+        rf"$\sigma$={results_df['ln_residual'].std():.3f} (N={len(results_df)})",
+        transform=ax.transAxes,
+        horizontalalignment="left",
+        verticalalignment="top",
     )
 
     ax.text(
@@ -112,13 +152,15 @@ def one_to_one_plot(
         horizontalalignment="center",
         verticalalignment="top",
         fontweight="bold",
+        fontdict={"size": 12},
     )
 
     ax.set_xlim(ln_min, ln_max)
     ax.set_ylim(ln_min, ln_max)
     ax.set_xlabel("True ln(vs30)")
     ax.set_ylabel("Predicted ln(vs30)")
-    ax.legend(title="Vs30 Bin")
+    if quality_score is None:
+        ax.legend(title="Quality Score")
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_aspect("equal", adjustable="box")
     fig.tight_layout()
@@ -357,23 +399,19 @@ def metric_scatter_plot(
     A trend line is added to the plot to show how the metric varies with vs30.
     """
     fig, ax = plt.subplots(figsize=(16, 10), dpi=constants.FIG_DPI)
-    marker_size = {
-        "Q1": 40,
-        "Q2": 30,
-        "Q3": 15,
-    }
+
     for i, (k, color) in enumerate(constants.QUALITY_SCORE_COLORS.items()):
         mask = results_df["quality_score"] == k
         ax.scatter(
             results_df.loc[mask, "vs30"],
             results_df.loc[mask, metric_name],
             label=rf"{k} (N={mask.sum()}, "
-                f"$\mu$={results_df.loc[mask, metric_name].mean():.3f}, "
-                f"$\sigma$={results_df.loc[mask, metric_name].std():.3f})",
+            rf"$\mu$={results_df.loc[mask, metric_name].mean():.3f}, "
+            rf"$\sigma$={results_df.loc[mask, metric_name].std():.3f})",
             # alpha=0.5,
             color=color,
             zorder=10 - i,
-            s=marker_size[k],
+            s=constants.QUALITY_SCORE_MARKER_SIZE[k],
         )
 
     bin_centers, bin_means, bin_stds = mlt.utils.compute_count_binned_trend(
@@ -529,3 +567,57 @@ def cv_iteration_metric_plot(
         out_fp.with_name(out_fp.stem + ".yaml"),
         clobber=True,
     )
+
+
+def quaternary_region_residual(
+    results_df: pd.DataFrame, dataset_df: pd.DataFrame, output_ffp: Path
+):
+    """Generates a violin plot of the residuals by quaternary region,"""
+    results_df = results_df.copy()
+    results_df[constants.InputVariable.NZQuaternaryRegion] = dataset_df.loc[
+        results_df.index, constants.InputVariable.NZQuaternaryRegion
+    ].map(constants.QUATERNARY_ID_TO_REGION_MAPPING)
+
+    fig, ax = plt.subplots(figsize=(16, 10), dpi=constants.FIG_DPI)
+
+    sns.violinplot(
+        data=results_df,
+        x=constants.InputVariable.NZQuaternaryRegion,
+        y="ln_residual",
+        ax=ax,
+        order=results_df[constants.InputVariable.NZQuaternaryRegion].value_counts().index,  
+    )
+    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    ax.set_ylim(-1.5, 1.5)
+
+    region_means = results_df.groupby(
+        constants.InputVariable.NZQuaternaryRegion, observed=True
+    )["ln_residual"].mean()
+    region_stds = results_df.groupby(
+        constants.InputVariable.NZQuaternaryRegion, observed=True
+    )["ln_residual"].std()
+    region_counts = results_df.groupby(
+        [constants.InputVariable.NZQuaternaryRegion, "quality_score"], observed=True
+    ).size()
+    for cur_region in results_df[constants.InputVariable.NZQuaternaryRegion].unique():
+        ax.text(
+            cur_region,
+            -1.49,
+            f"{region_counts[cur_region].sum()} ({region_counts[(cur_region, 'Q1')]}/"
+            f"{region_counts.get((cur_region, 'Q2'), 0)}/"
+            f"{region_counts[(cur_region, 'Q3')]})",
+            horizontalalignment="center",
+            verticalalignment="bottom",
+            fontweight="bold",
+        )
+        ax.text(
+            cur_region,
+            1.49,
+            rf"$\mu$={region_means[cur_region]:.2f}, $\sigma$={region_stds[cur_region]:.2f}",
+            horizontalalignment="center",
+            verticalalignment="top",
+        )
+
+    fig.tight_layout()
+    fig.savefig(output_ffp)
+    plt.close(fig)

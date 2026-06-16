@@ -2,6 +2,8 @@ from enum import StrEnum
 from pathlib import Path
 import os
 
+from pyproj import Transformer
+import pandas as pd
 import numpy as np
 
 if (BASE_DATA_DIR := os.getenv("VS30_MODEL_BASE_DATA_DIR")) is None:
@@ -9,6 +11,11 @@ if (BASE_DATA_DIR := os.getenv("VS30_MODEL_BASE_DATA_DIR")) is None:
 BASE_DATA_DIR = Path(BASE_DATA_DIR)
 
 INTEGER_NO_DATA_VALUE = -9999
+
+QMAP_FFP = (
+    BASE_DATA_DIR / "input_data/nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp"
+)
+
 
 class DataSource(StrEnum):
     GeoMorpho90 = "geomorpho90"
@@ -19,6 +26,7 @@ class DataSource(StrEnum):
     ShapeLoader = "shape_loader"
     NZDistanceToCoast = "nz_distance_to_coast"
     NZDistanceToRiver = "nz_distance_to_river"
+    NZQuaternaryRegion = "nz_quaternary_region"
 
 
 class InputVariable(StrEnum):
@@ -61,6 +69,7 @@ class InputVariable(StrEnum):
         "nz_combined_groundwater_depth"  # Combined groundwater depth from NLM and NWT
     )
     NZCombinedGroundwaterDepthLn = "nz_combined_groundwater_depth_ln"
+    NZQuaternaryRegion = "nz_quaternary_region"
     # NZEnvDS
     NZEnvDSDistanceRivers = "nzenvds_distance_rivers"
     NZEnvDSDistanceRiversVertical = "nzenvds_distance_rivers_vertical"
@@ -110,6 +119,7 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.NZGeologyAgeMax: DataSource.ShapeLoader,
     InputVariable.NZLithologyCategory: DataSource.ShapeLoader,
     InputVariable.NZGeologicalUnit: DataSource.ShapeLoader,
+    InputVariable.NZQuaternaryRegion: DataSource.NZQuaternaryRegion,
     InputVariable.NZNLMGroundwaterDepth: DataSource.NZTMTIFLoader,
     InputVariable.NZNWTGroundwaterDepth: DataSource.NZTMTIFLoader,
     InputVariable.NZEnvDSDistanceRivers: DataSource.NZTMTIFLoader,
@@ -174,6 +184,10 @@ INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
     InputVariable.NZEnvDSTopoWetness: "NZEnvDS Topo Wetness",
 }
 
+REVERSE_NICE_NAME_TO_INPUT_VARIABLE_MAPPING = {
+    nice_name: var for var, nice_name in INPUT_VARIABLE_TO_NICE_NAME_MAPPING.items()
+}
+
 CATEGORIAL_VARIABLES = [
     InputVariable.Geomorphon,
     InputVariable.NZGeologyCategory,
@@ -185,6 +199,7 @@ CATEGORIAL_VARIABLES = [
     InputVariable.NZEnvDSSoilAcidP,
     InputVariable.NZGeologicalUnit,
     InputVariable.NZLithologyCategory,
+    InputVariable.NZQuaternaryRegion,
 ]
 
 GLOBAL_INPUT_VARS = np.array(
@@ -285,10 +300,14 @@ INPUT_VAR_TO_FFP_MAP = {
 }
 
 
+
 WGS84_EPSG_STR = "EPSG:4326"
 WGS84_EPSG = 4326
 NZTM2000_EPSG_STR = "EPSG:2193"
 NZTM2000_EPSG = 2193
+
+NZTM_TO_WGS84_TRANSFORMER = Transformer.from_crs(NZTM2000_EPSG, WGS84_EPSG, always_xy=True)
+WGS84_TO_NZTM_TRANSFORMER = Transformer.from_crs(WGS84_EPSG, NZTM2000_EPSG, always_xy=True)
 
 
 LN_NORM_VARS = [
@@ -317,7 +336,10 @@ NORM_VARS = [
 
 MIN_MAX_SCALE_PARAMS = {
     InputVariable.Elevation: (0, 1500),
-    InputVariable.NZCombinedGroundwaterDepthLn: (-2, 3.2188758249), # (0.002478752177, 25) (m)
+    InputVariable.NZCombinedGroundwaterDepthLn: (
+        -2,
+        3.2188758249,
+    ),  # (0.002478752177, 25) (m)
     InputVariable.CompoundTopgraphicIndex: (-4.0, 10.0),
     InputVariable.LandformEntropy: (0, 3.0),
     InputVariable.LandformUniformity: (0, 1.0),
@@ -331,9 +353,63 @@ MIN_MAX_SCALE_PARAMS = {
     InputVariable.NZDistanceToRiver_ST7: (0, 25_000),
     InputVariable.NZDistanceToRiver_ST8: (0, 30_000),
     InputVariable.NZEnvDSDistanceRiversVertical: (0, 200),
-
 }
 
+INPUT_VARIABLE_CMAP_LIMITS = {
+    InputVariable.NZEnvDSSlopeDeg: (0, 40),
+    InputVariable.NZNWTGroundwaterDepth: (0, 400),
+    InputVariable.NZNLMGroundwaterDepth: (0, 10),
+    InputVariable.NZEnvDSDistanceRivers: (0, 10_000),
+    InputVariable.NZEnvDSDistanceRiversVertical: (0, 1500),
+    InputVariable.NZEnvDSPrecipAnn: (0, 5000),
+    InputVariable.NZEnvDSSoilAcidP: (0, 5),
+    InputVariable.NZEnvDSSoilAge: (0, 2),
+    InputVariable.NZEnvDSSoilDrainage: (0, 5),
+    InputVariable.NZEnvDSSoilInduration: (0, 5),
+    InputVariable.NZEnvDSTopoGeomorphons: (0, 10),
+    InputVariable.NZEnvDSSoilParticleSize: (0, 5),
+    InputVariable.NZEnvDSTopoNormalisedHeight: (0, 1),
+    # InputVariable.NZEnvDSTopoPosition: (-25, 25),
+    InputVariable.NZEnvDSTopoPosition: (-15, 15),
+    InputVariable.NZEnvDSTopoRoughness: (0, 200),
+    InputVariable.NZEnvDSTopoRuggedness: (0, 50),
+    InputVariable.NZEnvDSTopoValleyDepth: (0, 250),
+    InputVariable.NZEnvDSTopoWetness: (2, 12),
+    InputVariable.DepthToGroundwater: (-200, 0),
+    InputVariable.NZDistanceToCoast: (0, 80_000),
+    InputVariable.NZDistanceToRiver_ST1: (0, 1_000),
+    InputVariable.NZDistanceToRiver_ST2: (0, 1_000),
+    InputVariable.NZDistanceToRiver_ST3: (0, 5_000),
+    InputVariable.NZDistanceToRiver_ST4: (0, 15_000),
+    InputVariable.NZDistanceToRiver_ST5: (0, 30_000),
+    InputVariable.NZDistanceToRiver_ST6: (0, 60_000),
+    InputVariable.NZDistanceToRiver_ST7: (0, 80_000),
+    InputVariable.NZDistanceToRiver_ST8: (0, 100_000),
+    InputVariable.NZGeologyCategory: (0, 15),
+    InputVariable.NZGeologyAgeMin: (0, 500),
+    InputVariable.NZGeologyAgeMax: (0, 500),
+    InputVariable.CompoundTopgraphicIndex: (-5.0, 5.0),
+    InputVariable.Elevation: (0, 1500),
+    InputVariable.NZGeologyAgeMid: (0, 500),
+    InputVariable.NZGeologyAgeLnMid: (-5, 6),
+    InputVariable.NZCombinedGroundwaterDepth: (0, 25),
+    InputVariable.NZCombinedGroundwaterDepthLn: (-2, 6),
+}
+
+QUATERNARY_REGION_TO_ID_MAPPING = pd.Series(
+    {
+        "no_region": 0,
+        "canterbury": 1,
+        "invercargill": 2,
+        "napier": 3,
+        "palmerston_north": 4,
+        "taranaki": 5,
+        "taupo": 6,
+        "wellington": 7,
+        "wellington_hutt": 8,
+    }
+)
+QUATERNARY_ID_TO_REGION_MAPPING = pd.Series({v: k for k, v in QUATERNARY_REGION_TO_ID_MAPPING.items()})
 
 VS30_WEIGHTING_BINS = np.asarray([0, 180, 360, 760, 10_000])
 VS30_WEIGHTING_BIN_NAMES = [
@@ -355,19 +431,75 @@ QUALITY_SCORE_COLORS = {
     "Q2": "purple",
     "Q3": "black",
 }
+QUALITY_SCORE_MARKER_SIZE = {
+    "Q1": 40,
+    "Q2": 30,
+    "Q3": 15,
+}
+QUALITY_SCORE_MARKERS = {
+    "Q1": "o",
+    "Q2": "D",
+    "Q3": "X",
+}
 
-# NZ_BOUNDING_BOX = [166.3, 178.65, -47.1, -34.25]
+NZ_FULL_BOUNDING_BOX = [166.3, 178.65, -47.1, -34.25]
 NZ_BOUNDING_BOX = [166.3, 178.65, -47.05, -35.5]
 CANTERBURY_BOUNDING_BOX = [171.54, 173.15, -43.96, -43.2025]
+CANTERBURY_NARROW_BOUNDING_BOX = [171.96, 173.15, -43.98, -43.04]
+CROMWELL_REGION = [168.448, 169.625, -45.388, -44.455]
 WELLINGTON_BOUNDING_BOX = [174.67, 175.1, -41.42, -41.08]
+WELLINGTON_LARGE_BOUNDING_BOX = [174.567, 175.744, -41.676, -40.742]
+WELLINGTON_MODERATE_BOUNDING_BOX = [174.554, 175.345, -41.515, -40.842]
 NORTH_ISLAND_BOUNDING_BOX = [172.55, 178.625, -41.65, -34.4]
 SOUTH_ISLAND_BOUNDING_BOX = [166.3, 174.4, -47.3, -40.3]
+AUCKLAND_HAMILTON_REGION_BOUNDING_BOX = [174.348, 175.726, -38.056, -36.612]
+TAURANGE_ROTORUA_REGION_BOUNDING_BOX = [175.805, 176.982, -38.368, -37.434]
 
 REGION_MAPPING = {
+    "nz_full": NZ_FULL_BOUNDING_BOX,
     "nz": NZ_BOUNDING_BOX,
     "ni": NORTH_ISLAND_BOUNDING_BOX,
     "si": SOUTH_ISLAND_BOUNDING_BOX,
+    "canterbury": CANTERBURY_BOUNDING_BOX,
+    "wellington": WELLINGTON_BOUNDING_BOX,
+    "canterbury_narrow": CANTERBURY_NARROW_BOUNDING_BOX,
+    "cromwell_region": CROMWELL_REGION,
+    "auckland_hamilton_region": AUCKLAND_HAMILTON_REGION_BOUNDING_BOX,
+    "taurange_rotorua_region": TAURANGE_ROTORUA_REGION_BOUNDING_BOX,
+    "wellington_large": WELLINGTON_LARGE_BOUNDING_BOX,
+    "wellington_moderate": WELLINGTON_MODERATE_BOUNDING_BOX,
 }
+
+CITY_COORDS = {
+    "Christchurch": (172.63669300877544, -43.531923487539935),
+    "Wellington": (174.77791888634852, -41.28387793785542),
+    "Auckland": (174.76555503318232, -36.850282550438685),
+    "Tauranga": (176.165822426251, -37.68682531361862),
+    "Hamilton": (175.25243436298052, -37.782667727885766),
+}
+
+TOWN_COORDS = {
+    "Rangiora": (172.59675756330435, -43.30336314429278),
+    "Kaiapoi": (172.66230663063166, -43.3787869396717),
+    "Amberley": (172.7304373827998, -43.15761096839294),
+    "Rolleston": (172.38365123459576, -43.59673064857969),
+    "Cromwell": (169.19552400667155, -45.04608046452913),
+    "Queenstown": (168.6620834594349, -45.030224565662294),
+    "Arrowtown": (168.82795518682846, -44.94257606312187),
+    "Wanaka": (169.14217408524496, -44.694323126053014),
+    "Lower Hutt": (174.89950374781867, -41.21267461217909),
+    "Upper Hutt": (175.0657471968382, -41.12496597728303),
+    "Johnsonville": (174.8079760665923, -41.22056779631806),
+    "Porirua": (174.84752179010113, -41.138059203524115),
+    "Rotorua": (176.23749341152626, -38.144628098911454),
+    # "Papamoa": (176.28481293859434, -37.69727293258872),
+    # "Mount Maunganui": (176.20818224666397, -37.6645311303861),
+    "Raglan": (174.87117463105753, -37.800733659242745),
+    "Huntly": (175.15937169874206, -37.55706591572003),
+    # "Manakau": (174.8740306499414, -36.99174153203661),
+    # "Glenfield": (174.7211172686564, -36.78178846008382)
+}
+
 
 NZTM_BOUNDING_BOX = [1079100.000, 2100800.000, 4736600.000, 6229700.000]
 
@@ -412,6 +544,10 @@ if (env_fig_group_linewidth := os.environ.get("fig_group_linewidth")) is not Non
 GMT_FIG_FONT_LABEL = "14p,Helvetica,black"
 if (env_gmt_fig_font_label := os.environ.get("gmt_fig_font_label")) is not None:
     GMT_FIG_FONT_LABEL = env_gmt_fig_font_label
+
+GMT_FIG_MINOR_FONT_LABEL = "10p,Helvetica,black"
+if (env_gmt_fig_minor_font_label := os.environ.get("gmt_fig_minor_font_label")) is not None:
+    GMT_FIG_MINOR_FONT_LABEL = env_gmt_fig_minor_font_label
 
 GMT_FIG_BOLD_FONT_LABEL = "14p,Helvetica-Bold,black"
 if (

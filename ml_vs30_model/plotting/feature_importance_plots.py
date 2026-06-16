@@ -163,3 +163,27 @@ def shap_waterfall(
             out_fp.with_suffix(".yaml"),
             clobber=True,
         )
+
+def shap_feature_trends(shap_values: shap.Explanation, shap_features: list[str], out_dir: Path):
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for nice_feature_name, feature in zip(shap_values.feature_names, shap_features):
+        # Skip categorial features
+        if feature in constants.CATEGORIAL_VARIABLES:
+            continue
+
+        out_fp = out_dir / f"shap_trend_{feature}.png"
+        fig, ax = plt.subplots(figsize=(8, 5), dpi=constants.FIG_DPI)
+        shap.plots.scatter(shap_values[:, nice_feature_name], show=False, ax=ax)
+
+        fig.savefig(out_fp)
+        plt.close(fig)
+
+        mlt.utils.write_to_yaml(
+            {
+                "type": "feature-trend",
+                "feature": str(feature),
+            },
+            out_fp.with_suffix(".yaml"),
+            clobber=True,
+        )

@@ -5,6 +5,7 @@ import base64
 from io import BytesIO
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import numpy as np
@@ -16,6 +17,7 @@ import requests
 
 
 import ml_vs30_model as vs30
+from ml_vs30_model.constants import InputVariable
 from qcore import coordinates
 
 BASE_URL = "http://127.0.0.1:8000/xr"
@@ -31,43 +33,269 @@ models = [
 ]
 
 CMAP_LIMITS = {
-    vs30.constants.InputVariable.NZEnvDSSlopeDeg: (0, 30, 60),
-    vs30.constants.InputVariable.NZNWTGroundwaterDepth: (0, 400, 1000),
-    vs30.constants.InputVariable.NZNLMGroundwaterDepth: (0, 10, 25),
-    vs30.constants.InputVariable.NZEnvDSDistanceRivers: (0, 10_000, 100_000),
-    vs30.constants.InputVariable.NZEnvDSDistanceRiversVertical: (0, 1500, 3500),
-    vs30.constants.InputVariable.NZEnvDSPrecipAnn: (0, 5000, 10_000),
-    vs30.constants.InputVariable.NZEnvDSSoilAcidP: (0, 5),
-    vs30.constants.InputVariable.NZEnvDSSoilAge: (0, 2),
-    vs30.constants.InputVariable.NZEnvDSSoilDrainage: (0, 5),
-    vs30.constants.InputVariable.NZEnvDSSoilInduration: (0, 5),
-    vs30.constants.InputVariable.NZEnvDSTopoGeomorphons: (0, 10),
-    vs30.constants.InputVariable.NZEnvDSSoilParticleSize: (0, 5),
-    vs30.constants.InputVariable.NZEnvDSTopoNormalisedHeight: (0, 1),
-    vs30.constants.InputVariable.NZEnvDSTopoPosition: (-25, 25, -50, -50),
-    vs30.constants.InputVariable.NZEnvDSTopoRoughness: (0, 200, 500),
-    vs30.constants.InputVariable.NZEnvDSTopoRuggedness: (0, 50, 100),
-    vs30.constants.InputVariable.NZEnvDSTopoValleyDepth: (0, 250, 750),
-    vs30.constants.InputVariable.NZEnvDSTopoWetness: (2, 12, 14),
-    vs30.constants.InputVariable.DepthToGroundwater: (-200, 0, -500, 0),
-    vs30.constants.InputVariable.NZDistanceToCoast: (0, 80_000, 150_000),
-    vs30.constants.InputVariable.NZDistanceToRiver_ST1: (0, 1_000, 200_000),
-    vs30.constants.InputVariable.NZDistanceToRiver_ST2: (0, 1_000, 200_000),
-    vs30.constants.InputVariable.NZDistanceToRiver_ST3: (0, 5_000, 200_000),
-    vs30.constants.InputVariable.NZDistanceToRiver_ST4: (0, 15_000, 200_000),
-    vs30.constants.InputVariable.NZDistanceToRiver_ST5: (0, 30_000, 200_000),
-    vs30.constants.InputVariable.NZDistanceToRiver_ST6: (0, 60_000, 200_000),
-    vs30.constants.InputVariable.NZDistanceToRiver_ST7: (0, 80_000, 200_000),
-    vs30.constants.InputVariable.NZDistanceToRiver_ST8: (0, 100_000, 200_000),
-    vs30.constants.InputVariable.NZGeologyCategory: (0, 15),
-    vs30.constants.InputVariable.NZGeologyAgeMin: (0, 500),
-    vs30.constants.InputVariable.NZGeologyAgeMax: (0, 500),
-    vs30.constants.InputVariable.CompoundTopgraphicIndex: (-5.0, 5.0, -10, 10),
-    vs30.constants.InputVariable.Elevation: (0, 1500, 3500),
-    vs30.constants.InputVariable.NZGeologyAgeMid: (0, 500),
-    vs30.constants.InputVariable.NZGeologyAgeLnMid: (-5, 6),
-    vs30.constants.InputVariable.NZCombinedGroundwaterDepth: (0, 50, 1000),
-    vs30.constants.InputVariable.NZCombinedGroundwaterDepthLn: (-2, 6),
+    InputVariable.NZEnvDSSlopeDeg: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSSlopeDeg][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSSlopeDeg][1],
+        60,
+    ),
+    InputVariable.NZNWTGroundwaterDepth: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZNWTGroundwaterDepth][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZNWTGroundwaterDepth][
+            1
+        ],
+        1000,
+    ),
+    InputVariable.NZNLMGroundwaterDepth: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZNLMGroundwaterDepth][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZNLMGroundwaterDepth][
+            1
+        ],
+        25,
+    ),
+    InputVariable.NZEnvDSDistanceRivers: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSDistanceRivers][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSDistanceRivers][
+            1
+        ],
+        100_000,
+    ),
+    InputVariable.NZEnvDSDistanceRiversVertical: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.NZEnvDSDistanceRiversVertical
+        ][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.NZEnvDSDistanceRiversVertical
+        ][1],
+        3500,
+    ),
+    InputVariable.NZEnvDSPrecipAnn: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSPrecipAnn][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSPrecipAnn][1],
+        10_000,
+    ),
+    InputVariable.NZEnvDSSoilAcidP: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSSoilAcidP][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSSoilAcidP][1],
+    ),
+    InputVariable.NZEnvDSSoilAge: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSSoilAge][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSSoilAge][1],
+    ),
+    InputVariable.NZEnvDSSoilDrainage: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSSoilDrainage][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSSoilDrainage][1],
+    ),
+    InputVariable.NZEnvDSSoilInduration: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSSoilInduration][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSSoilInduration][
+            1
+        ],
+    ),
+    InputVariable.NZEnvDSTopoGeomorphons: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoGeomorphons][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoGeomorphons][
+            1
+        ],
+    ),
+    InputVariable.NZEnvDSSoilParticleSize: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.NZEnvDSSoilParticleSize
+        ][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.NZEnvDSSoilParticleSize
+        ][1],
+    ),
+    InputVariable.NZEnvDSTopoNormalisedHeight: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.NZEnvDSTopoNormalisedHeight
+        ][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.NZEnvDSTopoNormalisedHeight
+        ][1],
+    ),
+    InputVariable.NZEnvDSTopoPosition: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoPosition][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoPosition][1],
+        -50,
+        -50,
+    ),
+    InputVariable.NZEnvDSTopoRoughness: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoRoughness][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoRoughness][
+            1
+        ],
+        500,
+    ),
+    InputVariable.NZEnvDSTopoRuggedness: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoRuggedness][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoRuggedness][
+            1
+        ],
+        100,
+    ),
+    InputVariable.NZEnvDSTopoValleyDepth: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoValleyDepth][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoValleyDepth][
+            1
+        ],
+        750,
+    ),
+    InputVariable.NZEnvDSTopoWetness: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoWetness][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZEnvDSTopoWetness][1],
+        14,
+    ),
+    InputVariable.DepthToGroundwater: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.DepthToGroundwater][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.DepthToGroundwater][1],
+        -500,
+        0,
+    ),
+    InputVariable.NZDistanceToCoast: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToCoast][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToCoast][1],
+        150_000,
+    ),
+    InputVariable.NZDistanceToRiver_ST1: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST1][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST1][
+            1
+        ],
+        200_000,
+    ),
+    InputVariable.NZDistanceToRiver_ST2: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST2][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST2][
+            1
+        ],
+        200_000,
+    ),
+    InputVariable.NZDistanceToRiver_ST3: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST3][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST3][
+            1
+        ],
+        200_000,
+    ),
+    InputVariable.NZDistanceToRiver_ST4: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST4][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST4][
+            1
+        ],
+        200_000,
+    ),
+    InputVariable.NZDistanceToRiver_ST5: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST5][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST5][
+            1
+        ],
+        200_000,
+    ),
+    InputVariable.NZDistanceToRiver_ST6: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST6][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST6][
+            1
+        ],
+        200_000,
+    ),
+    InputVariable.NZDistanceToRiver_ST7: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST7][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST7][
+            1
+        ],
+        200_000,
+    ),
+    InputVariable.NZDistanceToRiver_ST8: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST8][
+            0
+        ],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZDistanceToRiver_ST8][
+            1
+        ],
+        200_000,
+    ),
+    InputVariable.NZGeologyCategory: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZGeologyCategory][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZGeologyCategory][1],
+    ),
+    InputVariable.NZGeologyAgeMin: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZGeologyAgeMin][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZGeologyAgeMin][1],
+    ),
+    InputVariable.NZGeologyAgeMax: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZGeologyAgeMax][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZGeologyAgeMax][1],
+    ),
+    InputVariable.CompoundTopgraphicIndex: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.CompoundTopgraphicIndex
+        ][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.CompoundTopgraphicIndex
+        ][1],
+        -10,
+        10,
+    ),
+    InputVariable.Elevation: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.Elevation][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.Elevation][1],
+        3500,
+    ),
+    InputVariable.NZGeologyAgeMid: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZGeologyAgeMid][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZGeologyAgeMid][1],
+    ),
+    InputVariable.NZGeologyAgeLnMid: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZGeologyAgeLnMid][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[InputVariable.NZGeologyAgeLnMid][1],
+    ),
+    InputVariable.NZCombinedGroundwaterDepth: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.NZCombinedGroundwaterDepth
+        ][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.NZCombinedGroundwaterDepth
+        ][1],
+        1000,
+    ),
+    InputVariable.NZCombinedGroundwaterDepthLn: (
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.NZCombinedGroundwaterDepthLn
+        ][0],
+        vs30.constants.INPUT_VARIABLE_CMAP_LIMITS[
+            InputVariable.NZCombinedGroundwaterDepthLn
+        ][1],
+    ),
 }
 
 QUALITY_COLOR_MAPPTING = vs30.constants.QUALITY_SCORE_COLORS
@@ -120,7 +348,9 @@ def get_input_variable_stats(dataset_name: str, variable: str):
         elif len(limits) == 4:
             min_val, max_val, allowed_min, allowed_max = limits
         else:
-            raise ValueError(f"Invalid CMAP_LIMITS entry for variable {variable}: {limits}")
+            raise ValueError(
+                f"Invalid CMAP_LIMITS entry for variable {variable}: {limits}"
+            )
     else:
         params = {
             "url": dataset_name,
@@ -173,12 +403,17 @@ def get_input_variable_stats(dataset_name: str, variable: str):
             np.round(stats["max"], 3)
         )
         allowed_min, allowed_max = min_val, max_val
-        
+
     step_size = (max_val - min_val) / 100
     return (
-        gr.Slider(minimum=allowed_min, maximum=allowed_max, value=min_val, step=step_size),
-        gr.Slider(minimum=allowed_min, maximum=allowed_max, value=max_val, step=step_size),
+        gr.Slider(
+            minimum=allowed_min, maximum=allowed_max, value=min_val, step=step_size
+        ),
+        gr.Slider(
+            minimum=allowed_min, maximum=allowed_max, value=max_val, step=step_size
+        ),
     )
+
 
 def inputs_supported_variables(dataset_name: str):
     """Gets the list of variables available in the dataset for tiling."""
@@ -244,9 +479,7 @@ def create_inputs_map(
     )
 
 
-def get_model_markers(
-    model_name: str, site_ln_res_min: float, site_ln_res_max: float
-):
+def get_model_markers(model_name: str, site_ln_res_min: float, site_ln_res_max: float):
     marker_group = folium.FeatureGroup(name="Sites", show=True)
     model_dir = _get_model_dir(model_name)
     train_df = pd.read_parquet(model_dir / "train_results.parquet")
@@ -428,7 +661,9 @@ with gr.Blocks() as demo:
                     )
 
                     input_cmap_min_slider = gr.Slider(
-                        label="Colormap min", interactive=True, precision=3,
+                        label="Colormap min",
+                        interactive=True,
+                        precision=3,
                     )
                     input_cmap_max_slider = gr.Slider(
                         label="Colormap max", interactive=True, precision=3
@@ -439,10 +674,20 @@ with gr.Blocks() as demo:
         with gr.Accordion("Site Options", open=False):
             with gr.Group():
                 site_ln_residual_min_slider = gr.Slider(
-                    label="Ln Residual Min", interactive=True, precision=3, value=-1.5, minimum=-3, maximum=3
+                    label="Ln Residual Min",
+                    interactive=True,
+                    precision=3,
+                    value=-1.5,
+                    minimum=-3,
+                    maximum=3,
                 )
                 site_ln_residual_max_slider = gr.Slider(
-                    label="Ln Residual Max", interactive=True, precision=3, value=1.5, minimum=-3, maximum=3
+                    label="Ln Residual Max",
+                    interactive=True,
+                    precision=3,
+                    value=1.5,
+                    minimum=-3,
+                    maximum=3,
                 )
                 site_update_btn = gr.Button("Update", variant="primary")
 
@@ -511,7 +756,7 @@ with gr.Blocks() as demo:
         # inputs=[model_selection, model_variable_dropdown, model_cmap_dropdown],
         outputs=model_map,
     )
-    
+
     # .then(
     #     update_site_selection,
     #     inputs=model_selection,

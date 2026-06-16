@@ -8,6 +8,7 @@ import xarray as xr
 import numpy as np
 import pandas as pd
 from catboost import CatBoostRegressor
+from ngboost import NGBRegressor
 import ml_tools as mlt
 
 
@@ -53,12 +54,20 @@ def compute_shap_feature_importance(
     run_config: RunConfig | None = None,
     train_results: pd.DataFrame | None = None,
     val_results: pd.DataFrame | None = None,
-    model: CatBoostRegressor | None = None,
+    model: CatBoostRegressor | NGBRegressor | None = None,
 ) -> None:
     """
     Computes SHAP feature importance
     for the model in the provided directory.
     """
+    logger.info("Computing SHAP feature importance...")
+    run_config = (
+        RunConfig.from_yaml(model_dir / "run_config.yaml")
+        if run_config is None
+        else run_config
+    )
+    assert run_config.scale_params is not None
+
     if run_config.model_type not in [ModelType.CatBoost, ModelType.NGBoost]:
         utils.raise_log(
             NotImplementedError,
@@ -66,22 +75,13 @@ def compute_shap_feature_importance(
             logger,
         )
 
-    logger.info("Computing SHAP feature importance...")
-    run_config = (
-        RunConfig.from_yaml(model_dir / "run_config.yaml")
-        if run_config is None
-        else run_config
-    )
+    # Load data
     dataset_df = pd.read_parquet(run_config.dataset_ffp)
-
-    # Load training results
     train_results = (
         pd.read_parquet(model_dir / "train_results.parquet")
         if train_results is None
         else train_results
     )
-
-    # Load validation results if available
     if val_results or (val_results_ffp := model_dir / "val_results.parquet").exists():
         val_results = (
             pd.read_parquet(val_results_ffp) if val_results is None else val_results
@@ -143,15 +143,15 @@ def gen_model_perfomance_plots(
     logger.info("Generating model performance plots...")
     (outdir := results_dir / "plots").mkdir(exist_ok=True, parents=False)
     model_perf_plots.one_to_one_plot(results_df, outdir / "one_to_one_plot.png")
-    model_perf_plots.one_to_one_plot(
-        results_df, outdir / "one_to_one_plot_Q1.png", quality_score="Q1"
-    )
-    model_perf_plots.one_to_one_plot(
-        results_df, outdir / "one_to_one_plot_Q2.png", quality_score="Q2"
-    )
-    model_perf_plots.one_to_one_plot(
-        results_df, outdir / "one_to_one_plot_Q3.png", quality_score="Q3"
-    )
+    # model_perf_plots.one_to_one_plot(
+    #     results_df, outdir / "one_to_one_plot_Q1.png", quality_score="Q1"
+    # )
+    # model_perf_plots.one_to_one_plot(
+    #     results_df, outdir / "one_to_one_plot_Q2.png", quality_score="Q2"
+    # )
+    # model_perf_plots.one_to_one_plot(
+    #     results_df, outdir / "one_to_one_plot_Q3.png", quality_score="Q3"
+    # )
     model_perf_plots.pred_vs30_variable_scatter_plot(
         results_df,
         dataset_df,
@@ -161,6 +161,9 @@ def gen_model_perfomance_plots(
     )
     model_perf_plots.residuals_histogram(results_df, outdir / "residuals_histogram.png")
     model_perf_plots.residual_kde(results_df, outdir / "residuals_kde.png")
+    model_perf_plots.quaternary_region_residual(
+        results_df, dataset_df, outdir / "quaternary_region_residuals.png"
+    )
     model_perf_plots.metric_scatter_plot(
         results_df,
         outdir / "mae_scatter_plot.png",
@@ -268,6 +271,7 @@ def gen_feature_importance_plots(
         shap_values = pd.read_pickle(results_dir / "shap_values.pkl")
 
     # Use nice feature names
+    shap_features = shap_values.feature_names
     shap_values.feature_names = [
         (
             feat
@@ -293,6 +297,9 @@ def gen_feature_importance_plots(
     (outdir := results_dir / "plots").mkdir(exist_ok=True, parents=False)
     feature_importance_plots.shap_global(shap_values, results_df, outdir)
     feature_importance_plots.shap_beeswarm(shap_values, results_df, outdir)
+    feature_importance_plots.shap_feature_trends(
+        shap_values, shap_features, outdir / "feature_trends"
+    )
     if gen_waterfall_plots:
         feature_importance_plots.shap_waterfall(
             shap_values, results_df, outdir / "waterfall_plots"
@@ -374,12 +381,16 @@ def add_foster_nz_estimates(dataset_ffp: Path, foster_data_dir: Path):
     logger.info("Extracting Foster et al. combined MVN estimates...")
     with rasterio.open(foster_data_dir / "combined_mvn.tif") as ds:
         assert ds.crs.to_epsg() == constants.NZTM2000_EPSG, "Dataset CRS is not NZTM"
-
-        foster_data = ds.read([1, 2])
+        foster_data = ds.read([1, 2], masked=True).filled(np.nan)
 
         rows, cols = transform.rowcol(ds.transform, coords[:, 0], coords[:, 1])
         foster_combined_mvn_vs30_mean = foster_data[0, rows, cols]
         foster_combined_mvn_vs30_std = foster_data[1, rows, cols]
+
+    if (foster_nan_count := np.isnan(foster_combined_mvn_vs30_mean).sum()) > 0:
+        logger.warning(
+            f"Foster has {foster_nan_count} NaN estimates out of {len(foster_combined_mvn_vs30_mean)} total estimates."
+        )
 
     ds = _create_dataset_from_estimates(
         vs30_da,
@@ -410,10 +421,15 @@ def add_jaehwi_nz_estimates(
     with rasterio.open(jaehwi_data_ffp) as ds:
         assert ds.crs.to_epsg() == constants.NZTM2000_EPSG, "Dataset CRS is not NZTM"
 
-        jw_data = ds.read([1, 2])
+        jw_data = ds.read([1, 2], masked=True).filled(np.nan)
 
         rows, cols = transform.rowcol(ds.transform, coords[:, 0], coords[:, 1])
         jw_vs30_mean, jw_vs30_std = jw_data[0, rows, cols], jw_data[1, rows, cols]
+
+    if (jw_nan_count := np.isnan(jw_vs30_mean).sum()) > 0:
+        logger.warning(
+            f"Jaehwi's estimates have {jw_nan_count} NaN estimates out of {len(jw_vs30_mean)} total estimates."
+        )
 
     ds = _create_dataset_from_estimates(
         vs30_da,
@@ -435,11 +451,16 @@ def add_foster_original_nz_estimates(dataset_ffp: Path, foster_original_ffp: Pat
     logger.info("Extracting original Foster et al. estimates...")
     with rasterio.open(foster_original_ffp) as ds:
         assert ds.crs.to_epsg() == constants.NZTM2000_EPSG, "Dataset CRS is not NZTM"
-
-        foster_original_data = ds.read(1)
+        foster_original_data = ds.read(1, masked=True).filled(np.nan)
 
         rows, cols = transform.rowcol(ds.transform, coords[:, 0], coords[:, 1])
         foster_original_vs30_mean = foster_original_data[rows, cols]
+
+    if (foster_original_nan_count := np.isnan(foster_original_vs30_mean).sum()) > 0:
+        logger.warning(
+            f"Original Foster et al. estimates have {foster_original_nan_count} "
+            f"NaN estimates out of {len(foster_original_vs30_mean)} total estimates."
+        )
 
     ds = _create_dataset_from_estimates(
         vs30_da,
@@ -494,4 +515,3 @@ def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
     # Save
     ds.to_netcdf(dataset_ffp, mode="a")
 
-    print("wtf")

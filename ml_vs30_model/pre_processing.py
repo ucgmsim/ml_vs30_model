@@ -42,7 +42,9 @@ def pre_process_features(df: pd.DataFrame, run_config: RunConfig) -> pd.DataFram
 
     # Categorial features
     if run_config.pre_process_categorial and len(run_config.categorial_variables) > 0:
-        logger.info(f"One-hot encoding the following variables: {run_config.categorial_variables}")
+        logger.info(
+            f"One-hot encoding the following variables: {run_config.categorial_variables}"
+        )
         if run_config.scale_params is None:
             encoder = OneHotEncoder(handle_unknown="error", sparse_output=False)
             one_hot_encoded = encoder.fit_transform(df[run_config.categorial_variables])
@@ -59,16 +61,40 @@ def pre_process_features(df: pd.DataFrame, run_config: RunConfig) -> pd.DataFram
                 sparse_output=False,
                 categories=run_config.scale_params["categorical"]["categories"],
             )
-            assert np.all(scale_params["categorical"]["feature_names_in"] == run_config.categorial_variables)
+            assert np.all(
+                scale_params["categorical"]["feature_names_in"]
+                == run_config.categorial_variables
+            )
             one_hot_encoded = encoder.fit_transform(df[run_config.categorial_variables])
 
         scaled_input_df = pd.DataFrame(
             one_hot_encoded,
             columns=scale_params["categorical"]["feature_names_out"],
-            index=df.index
+            index=df.index,
         )
 
-    # Continous features
+        if (
+            constants.InputVariable.NZQuaternaryRegion
+            in run_config.categorial_variables
+        ):
+            # Drop the "no_region" category
+            scaled_input_df = scaled_input_df.drop(
+                columns=[
+                    f"{constants.InputVariable.NZQuaternaryRegion}_"
+                    f"{constants.QUATERNARY_REGION_TO_ID_MAPPING['no_region']}"
+                ]
+            )
+
+            # Drop any ignored quaternary regions
+            cols_to_drop = [
+                f"{constants.InputVariable.NZQuaternaryRegion}_{id}"
+                for id in constants.QUATERNARY_REGION_TO_ID_MAPPING[
+                    run_config.ignore_quaternary_regions
+                ].values
+            ]
+            scaled_input_df = scaled_input_df.drop(columns=cols_to_drop)
+
+    # Continuous features
     for var in run_config.input_variables:
         # Ignore categorial variables
         if var in run_config.categorial_variables:

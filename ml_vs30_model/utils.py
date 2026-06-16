@@ -95,5 +95,3 @@ def get_bounding_box_corners(
         ],
         axis=1,
     )
-
-

@@ -2,8 +2,11 @@ from pathlib import Path
 import typer
 import xarray as xr
 
+import pandas as pd
+import numpy as np
 import ml_tools as mlt
 import ml_vs30_model as vs30
+
 
 app = typer.Typer(
     pretty_exceptions_short=True,
@@ -45,6 +48,36 @@ def cv_train_nn(
     )
 
 
+@app.command("full-train-ngboost")
+def full_train_ngboost(
+    run_config_ffp: Path,
+    rel_dataset_ffp: Path | None = None,
+    n_iterations: int | None = None,
+    apply_vs30_sample_weights: bool | None = None,
+    id_suffix: str | None = None,
+    run_post_processing: bool = True,
+    extra_input_variables: list[str] | None = None,
+):
+    """
+    Runs training of the NGBoost model on the full dataset,
+    based on the provided configuration file.
+    """
+    mlt.utils.setup_logging()
+
+    run_config = vs30.RunConfig.from_config_kwargs(
+        run_config_ffp,
+        rel_dataset_ffp=rel_dataset_ffp,
+        apply_vs30_sample_weights=apply_vs30_sample_weights,
+        iterations=n_iterations,
+        extra_input_variables=extra_input_variables,
+    )
+
+    id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
+    out_dir = run_config.results_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
+
+    vs30.ngboost_model.full_train(run_config, out_dir, run_post_processing)
+
+
 @app.command("cv-train-ngboost")
 def cv_train_ngboost(
     run_config_ffp: Path,
@@ -57,6 +90,7 @@ def cv_train_ngboost(
     run_post_processing: bool = True,
     extra_input_variables: list[str] | None = None,
     n_procs: int = 1,
+    rel_results_dir: Path | None = None,
 ):
     """
     Runs cross-validation training of the NGBoost model,
@@ -72,6 +106,7 @@ def cv_train_ngboost(
         apply_quality_sample_weights=apply_quality_sample_weights,
         iterations=n_iterations,
         extra_input_variables=extra_input_variables,
+        rel_results_dir=rel_results_dir,
     )
 
     id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
@@ -204,15 +239,33 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path):
     Estimates Vs30 across New Zealand using the trained model.
     """
     mlt.utils.setup_logging()
-    ffp = vs30.catboost_model.estimate_vs30_nz(model_dir, input_dataset_ffp)
+
+    run_config = vs30.RunConfig.from_yaml(model_dir / "run_config.yaml")
+
+    if run_config.model_type == vs30.configs.ModelType.CatBoost:
+        ffp = vs30.catboost_model.estimate_vs30_nz(model_dir, input_dataset_ffp)
+    elif run_config.model_type == vs30.configs.ModelType.NGBoost:
+        ffp = vs30.ngboost_model.estimate_vs30_nz(model_dir, input_dataset_ffp)
+    else:
+        vs30.utils.raise_log(
+            NotImplementedError,
+            f"Model type {run_config.model_type} not supported for NZ-wide estimation.",
+        )
 
     # Create histogram
     ds = xr.open_dataset(ffp)
     vs30_values = ds["vs30"].values[~ds["vs30"].isnull()]
     vs30.plotting.other.plot_nz_vs30_hist(
-        vs30_values, output_ffp=model_dir / "nz_vs30_histogram.png"
+        vs30_values, model_dir / "nz_vs30_histogram.png"
     )
+    
+@app.command("test-predictions")
+def test_predictions(dataset_ffp: Path, full_model_dir: Path, test_sites_ffp: Path):
+    test_sites = np.load(test_sites_ffp)
+    dataset_df = pd.read_parquet(dataset_ffp)
 
+    results_df = vs30.ngboost_model.estimate_vs30(full_model_dir, dataset_df.loc[test_sites])
+    results_df.to_parquet(full_model_dir / "test_results.parquet")
 
 @app.command("add-other-nz-estimates")
 def add_other_nz_estimates(dataset_ffp: Path):
@@ -264,12 +317,12 @@ def run_feature_selection(
     mlt.utils.setup_logging()
 
     id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
-    base_out_dir = (
-        base_out_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
-    )
+    base_out_dir = base_out_dir / f"{mlt.utils.create_run_id(True)}{id_suffix}"
     base_out_dir.mkdir(parents=True, exist_ok=False)
 
-    base_run_config = vs30.RunConfig.from_config_kwargs(base_run_config_ffp, iterations=n_iterations)
+    base_run_config = vs30.RunConfig.from_config_kwargs(
+        base_run_config_ffp, iterations=n_iterations
+    )
     vs30.feature_selection.run_feature_selection(
         base_run_config, variables, base_out_dir, n_procs=n_procs
     )

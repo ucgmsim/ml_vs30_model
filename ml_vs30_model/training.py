@@ -14,6 +14,7 @@ import shap
 
 from .configs import RunConfig
 from . import post_processing
+from . import constants
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,8 @@ def cv_train(
     val_results_df = post_processing.add_residuals(val_results_df)
     val_results_df = post_processing.add_mae(val_results_df)
     val_results_df = post_processing.add_lnVs30_mse(val_results_df)
+    if "quality_score" in dataset_df.columns:
+        val_results_df["quality_score"] = dataset_df.loc[val_results_df.index, "quality_score"]
     val_results_df.to_parquet(base_out_dir / "val_results.parquet")
 
     # Combine metrics into a single file

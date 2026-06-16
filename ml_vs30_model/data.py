@@ -5,10 +5,16 @@ from pathlib import Path
 from dataclasses import dataclass
 from functools import partial
 
-import plotly.graph_objects as go
 import xarray as xr
 import numpy as np
 import pandas as pd
+import shapely
+import networkx as nx
+import geopandas as gpd
+import plotly.graph_objects as go
+from pyproj import Transformer
+from tqdm import tqdm
+
 import ml_tools as mlt
 from pygmt_helper import plotting as gmt_plotting
 from qcore import coordinates
@@ -227,6 +233,12 @@ def get_input_values(
         )
         dist_to_river_loader = data_loaders.NZDistanceToRiver()
         values = dist_to_river_loader.get_values(points, variable)
+    elif data_source == constants.DataSource.NZQuaternaryRegion:
+        logger.info(
+            f"Using NZQuaternaryRegion data source for variable: {variable.value}"
+        )
+        quaternary_region_loader = data_loaders.NZQuaternaryRegionLoader()
+        values = quaternary_region_loader.get_values(points, variable)
     else:
         error_msg = f"Data source for variable {variable} not implemented."
         logger.error(error_msg)
@@ -239,6 +251,7 @@ def get_input_values(
         not in [
             constants.InputVariable.NZLithologyCategory,
             constants.InputVariable.NZGeologicalUnit,
+            constants.InputVariable.NZQuaternaryRegion,
         ]
         and (np.any(values == constants.INTEGER_NO_DATA_VALUE) or np.any(np.isnan(values)))
         and variable
@@ -413,15 +426,14 @@ def create_nz_nztm_input_grid(
     on_land_da = xr.DataArray(
         land_mask.astype(np.int16), coords=[nztm_y, nztm_x], dims=["y", "x"]
     )
-    on_land_da.attrs["_FillValue"] = np.int16(-9999)
+    # on_land_da.attrs["_FillValue"] = np.int16(-9999)
     grid_dataset = xr.Dataset({"on_land": on_land_da})
     grid_dataset = grid_dataset.rio.write_crs(constants.NZTM2000_EPSG_STR)
 
     # Create output directory if it doesn't exist
     output_dir.mkdir(parents=True, exist_ok=True)
     out_ffp = output_dir / "input_grid.nc"
-    # grid_dataset.to_netcdf(out_ffp, encoding={"on_land": {"dtype": np.int16, "_FillValue": -9999}})
-    grid_dataset.to_netcdf(out_ffp)
+    grid_dataset.to_netcdf(out_ffp, encoding={"on_land": {"dtype": np.int16, "_FillValue": -9999}})
     del grid_dataset
 
     og_variables = [
@@ -523,3 +535,88 @@ def select_test_sites(dataset_ffp: Path, output_dir: Path, seed: int):
         )
     )
     fig.write_html(output_dir / "test_sites_map.html")
+
+
+def compute_nz_quaternary_polygon_groups(geo_df: gpd.GeoDataFrame, dataset_df: gpd.GeoDataFrame, q1_count_threshold: int = 3, min_group_area: float = 1e6):
+    """Computes connected polygon groups for quaternary regions in New Zealand."""
+    GROUPING_SITE_MAPPING = {
+        "ICCS": "invercargill",
+        "ROLC": "canterbury",
+        "WEMS": "wellington",
+        "SOCS": "wellington_hutt",
+        "PNRS": "palmerston_north",
+        "OPSS": "taranaki",
+        "GWTS": "gisborne",
+        "NCHS": "napier",
+        "RPCS": "taupo",
+    }
+
+    polygons = geo_df["geometry"].values
+    tree = shapely.strtree.STRtree(polygons)
+
+    # Create groupings
+    G = nx.Graph()
+    for i, poly in tqdm(enumerate(polygons), total=len(polygons)):
+        G.add_node(i)
+
+        # candidate neighbors via spatial index
+        candidates = tree.query(poly)
+
+        for j in candidates:
+            # Ensure we only check each pair once
+            if i >= j:
+                continue
+
+            other = polygons[j]
+            if poly.intersects(other) and (
+                shapely.intersection(poly, other).length > 1_000
+                or (poly.contains(other) or other.contains(poly))
+            ):
+                G.add_edge(i, j)
+    groups = list(nx.connected_components(G))
+
+    raw_comb_group_polygons = {}
+    raw_ind_group_polygons = {}
+    for i, group in enumerate(groups):
+        if len(group) <= 1:
+            continue
+
+        cur_group_polygon = shapely.unary_union([polygons[j] for j in group])
+        if cur_group_polygon.area < min_group_area:
+            continue
+
+        raw_comb_group_polygons[i] = cur_group_polygon
+        raw_ind_group_polygons[i] = [polygons[j] for j in group]
+
+    raw_comb_group_polygons_df = gpd.GeoDataFrame(
+        geometry=list(raw_comb_group_polygons.values()),
+        index=list(raw_comb_group_polygons.keys()),
+        columns=["geometry"],
+    ).set_crs(constants.NZTM2000_EPSG_STR)
+
+    # Convert dataset_df points to NZTM for spatial operations
+    to_nztm_transformer = Transformer.from_crs("EPSG:4326", "EPSG:2193", always_xy=True)
+    dataset_df["geometry"] = dataset_df.apply(
+        lambda row: shapely.Point(
+            to_nztm_transformer.transform(row["lon"], row["lat"])
+        ),
+        axis=1,
+    )
+
+    # Apply filtering
+    q1_points = dataset_df[dataset_df.quality_score == "Q1"]["geometry"].values
+    filtered_groups = {i:p for i, p in raw_comb_group_polygons.items() if p.contains(q1_points).sum() > q1_count_threshold}
+
+    filtered_groups_df = gpd.GeoDataFrame(filtered_groups.values(), index=filtered_groups.keys(), columns=["geometry"]).set_crs(constants.NZTM2000_EPSG_STR)
+    filtered_groups_df["group_id"] = filtered_groups_df.index
+
+    mapping_sites = list(GROUPING_SITE_MAPPING.keys())
+    for i in filtered_groups_df.index:
+        cur_site = filtered_groups_df.loc[i].geometry.contains(dataset_df.loc[mapping_sites, "geometry"]).idxmax()
+        filtered_groups_df.loc[i, "region"] = GROUPING_SITE_MAPPING.get(cur_site, "Unknown")
+    filtered_groups_df = filtered_groups_df.set_index("region", drop=True)
+
+    filtered_ind_group_polygons = {k: raw_ind_group_polygons[row.group_id] for k, row in filtered_groups_df.iterrows()}
+
+    return filtered_groups_df, filtered_ind_group_polygons, raw_comb_group_polygons_df
+

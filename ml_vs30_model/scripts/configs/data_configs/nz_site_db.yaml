@@ -5,6 +5,18 @@ drop_sites:
   # Loacted on Whakaari/White Island, most input variables are 
   # garbage for this site.
   - WSRZ 
+  # Duplicates
+  - 029A  # Same as HCDS
+  - 928B  # Same as HNPS
+  - 014A  # Same as NCDS
+  - 096A  # Same as 225B
+  - 709A  # Same as GWTS
+  - 017A  # Same as GISS
+  - 249A  # Same as 642H
+  - 642G  # Same as 642H
+  - 646A  # Same as 646C
+  - D10C  # Same as CCPS
+  - 044A  # Same as SKFS
 
 input_variables: 
   # - roughness
@@ -24,6 +36,7 @@ input_variables:
   - elevation
   - nz_lithology_category
   - nz_geological_unit
+  - nz_quaternary_region
   # - nz_geology_category
   - nz_distance_to_coast
   - nz_distance_to_river_st1

@@ -22,8 +22,8 @@ input_variables:
   - nzenvds_topo_position
   - nzenvds_topo_roughness
   - nz_distance_to_coast
+  - nz_quaternary_region
 
-ignore_quaternary_regions: null
 
 n_cv_folds: 50
 rel_results_dir: results/ind_results

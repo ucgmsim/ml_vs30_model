@@ -56,11 +56,55 @@ class SpatialPlot:
 
         if "region" not in fig_kwargs:
             fig_kwargs["region"] = constants.NZ_BOUNDING_BOX
+        self.region = fig_kwargs["region"]
 
         self.fig = plotting.gen_region_fig(
             **fig_kwargs,
             config_options=config_options,
             plot_kwargs=plot_kwargs,
+        )
+
+    def add_town_labels(self, **plot_kwargs):
+        """Adds town labels"""
+        plot_kwargs = {
+            "style": "c0.15c",
+            "pen": "0.5p,black",
+            "fill": None
+        }
+        for town_name, town_coords in constants.TOWN_COORDS.items():
+            self.fig.plot(x=town_coords[0], y=town_coords[1], **plot_kwargs)
+            self.fig.text(
+                x=town_coords[0],
+                y=town_coords[1],
+                text=town_name,
+                font=constants.GMT_FIG_MINOR_FONT_LABEL,
+                offset="0.0c/0.12c",
+                justify="CB"
+            )
+
+    def add_city_labels(self, **plot_kwargs):
+        """Adds city labels"""
+        plot_kwargs = {
+            "style": "c0.3c",
+            "pen": "0.75p,black",
+            "fill": None
+        }
+        for city_name, city_coords in constants.CITY_COORDS.items():
+            self.fig.plot(x=city_coords[0], y=city_coords[1], **plot_kwargs)
+            self.fig.text(
+                x=city_coords[0],
+                y=city_coords[1],
+                text=city_name,
+                font=constants.GMT_FIG_FONT_LABEL,
+                offset="0.0c/0.25c",
+                justify="CB"
+            )
+
+    def add_highways(self, pen_width: float = 0.3, pen_color: str = "orange"):
+        map_data = plotting.NZMapData.load(region=self.region, high_res_topo=False)
+        self.fig.plot(
+            data=map_data.highway_df,
+            pen=f"{pen_width}p,{pen_color}",
         )
 
     def plot_sites(self, site_df: pd.DataFrame, **plot_kwargs):
@@ -109,6 +153,47 @@ class SpatialPlot:
         plotting.plot_grid(self.fig, grid, **plot_grid_kwargs)
 
         return self
+    
+    def plot_input_variable_values(
+            self, 
+            input_variable_df: pd.DataFrame,
+            variable: constants.InputVariable,
+            transparency: float | None = None,
+            region: tuple[float, float, float, float] | None = None,
+            cmap_limits: tuple[float, float] | None = None,
+            grid_spacing: str = "250e/250e",
+    ):
+        """Adds a grid of input variable values to the existing figure."""
+        start = time.time()
+        grid = plotting.create_grid(
+            input_variable_df,
+            variable.value,
+            region=region,
+            grid_spacing=grid_spacing,
+            interp_method="nearest",
+        )
+        logger.info(f"Took: {time.time() - start} to create grid.")
+
+        cmap_limits = constants.INPUT_VARIABLE_CMAP_LIMITS[variable] if cmap_limits is None else cmap_limits
+
+        # Set the extreme colors
+        pygmt.config(COLOR_BACKGROUND="black", COLOR_FOREGROUND="yellow")
+
+        # Plot the grid
+        pygmt.makecpt(
+            cmap="viridis", series=[cmap_limits[0], cmap_limits[1]]
+        )
+        self.fig.grdimage(
+            grid,
+            cmap=True,
+            transparency=transparency,
+            interpolation="c",
+            nan_transparent=True,
+        )
+
+        self.fig.colorbar(position=self.CB_POSITION, frame=[f"x+l{constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING[variable]}"])
+
+        return self
 
     def plot_vs30_values(
         self,
@@ -117,6 +202,7 @@ class SpatialPlot:
         region: tuple[float, float, float, float] | None = None,
         vs_30_cmap_limits: tuple[float, float] = (0, 1000),
         grid_spacing: str = "250e/250e",
+        interp_method: str = "nearest",
     ):
         start = time.time()
         grid = plotting.create_grid(
@@ -124,7 +210,7 @@ class SpatialPlot:
             "vs30",
             region=region,
             grid_spacing=grid_spacing,
-            interp_method="nearest",
+            interp_method=interp_method,
         )
         logger.info(f"Took: {time.time() - start} to create grid.")
 
@@ -147,7 +233,7 @@ class SpatialPlot:
 
         return self
 
-    def save(self, output_ffp: Path, dpi: int = 900):
+    def save(self, output_ffp: Path, dpi: int = constants.FIG_DPI):
         self.fig.savefig(output_ffp, dpi=dpi, anti_alias=True)
 
 

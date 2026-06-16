@@ -1,0 +1,16 @@
+rel_vs30_values_ffp: cleaned_vs30_data/foster_2019.csv
+index_col: null
+
+drop_sites: null
+
+input_variables: 
+  - nz_geology_age_min
+  - nz_geology_age_max
+  - nzenvds_slope_deg
+derived_variables:
+  - nz_geology_age_mid
+  - nz_geology_age_ln_mid
+
+
+
+

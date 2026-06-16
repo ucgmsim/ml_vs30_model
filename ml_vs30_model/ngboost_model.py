@@ -43,6 +43,114 @@ def cv_train(
     )
 
 
+def full_train(run_config: RunConfig, out_dir: Path, run_post_processing: bool = True):
+    """Runs training on the full dataset and saves results."""
+    logger.info(f"Loading dataset from {run_config.dataset_ffp}")
+    dataset_df = pd.read_parquet(run_config.dataset_ffp)
+    logger.info(f"Dataset loaded with {len(dataset_df)} samples")
+
+    # Drop test sites 
+    dataset_df = dataset_df[~dataset_df.index.isin(run_config.test_sites)]
+    logger.info(f"Dataset size after dropping test sites: {len(dataset_df)} samples")
+
+    run_model_training(
+        dataset_df,
+        dataset_df.index.values,
+        None,
+        run_config,
+        out_dir,
+        save_train_results=True,
+    )
+
+    if run_post_processing:
+        logger.info("Running post-processing...")
+        train_results_df = pd.read_parquet(out_dir / "train_results.parquet")
+
+        # Quantities
+        train_results_df = post_processing.add_residuals(train_results_df)
+        train_results_df = post_processing.add_mae(train_results_df)
+        train_results_df = post_processing.add_lnVs30_mse(train_results_df)
+        train_results_df.to_parquet(out_dir / "train_results.parquet")
+        shap_values = post_processing.compute_shap_feature_importance(out_dir)
+
+        # Plots
+        post_processing.gen_model_perfomance_plots(out_dir, results_df=train_results_df)
+        post_processing.gen_spatial_plots(out_dir, results_df=train_results_df)
+        post_processing.gen_feature_importance_plots(
+            out_dir, results_df=train_results_df, shap_values=shap_values
+        )
+
+def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path) -> pd.DataFrame:
+    """Estimates Vs30 for New Zealand using the trained model."""
+    run_config = RunConfig.from_yaml(model_dir / "run_config.yaml")
+
+    with xr.open_dataset(input_dataset_ffp, mode="r", mask_and_scale=False) as ds:
+        logger.info("Loading input dataset for Vs30 estimation across New Zealand")
+        land_mask = ds["on_land"].values.astype(bool)
+        input_ds = ds[run_config.input_variables]
+
+        # NaN values in numerical variables
+        null_mask = np.any(
+            np.isnan(input_ds[run_config.numerical_variables].to_array().values),
+            axis=0,
+        )
+        # -9999 values in categorial variables
+        if len(run_config.categorial_variables) > 0:
+            null_mask |= np.any(
+                input_ds[run_config.categorial_variables].to_array().values == -9999,
+                axis=0,
+            )
+        logger.info(
+            f"Input dataset contains {null_mask.sum() - (~land_mask).sum()} NaN/-9999 values. Dropping these for prediction."
+        )
+
+        # Get predictions
+        logger.info("Running Vs30 estimation across New Zealand...")
+        input_df = input_ds.to_dataframe().loc[(~null_mask).ravel()].reset_index()
+        pre_input_df, _ = pre_processing.pre_process_features(input_df, run_config)
+        model = mlt.utils.load_pickle(model_dir / "model.pkl")
+        pred_dist = model.pred_dist(pre_input_df)
+        pred_lnVs30_mean, pred_lnVs30_std = pred_dist.params["loc"], pred_dist.params["scale"]
+
+        # Create data arrays
+        pred_lnVs30_mean_da = xr.DataArray(
+            data=np.full(land_mask.shape, np.nan), coords=[ds.y, ds.x], dims=["y", "x"]
+        )
+        pred_lnVs30_mean_da.values[~null_mask] = pred_lnVs30_mean
+        pred_lnVs30_std_da = xr.DataArray(
+            data=np.full(land_mask.shape, np.nan), coords=[ds.y, ds.x], dims=["y", "x"]
+        )
+        pred_lnVs30_std_da.values[~null_mask] = pred_lnVs30_std
+        pred_vs30 = np.exp(pred_lnVs30_mean_da)
+
+    # Save
+    out_ffp = model_dir / "nz_vs30_results.nc"
+    grid_dataset = xr.Dataset({"vs30": pred_vs30, "lnVs30_mean": pred_lnVs30_mean_da, "lnVs30_std": pred_lnVs30_std_da})
+    grid_dataset = grid_dataset.rio.write_crs(constants.NZTM2000_EPSG_STR)
+    grid_dataset.to_netcdf(out_ffp)
+    logger.info(f"Saved Vs30 estimates across New Zealand to {out_ffp}")
+
+    return out_ffp
+
+def estimate_vs30(model_dir: Path, input_df: pd.DataFrame):
+    run_config = RunConfig.from_yaml(model_dir / "run_config.yaml")
+    pre_input_df, _ = pre_processing.pre_process_features(input_df, run_config)
+
+    model = mlt.utils.load_pickle(model_dir / "model.pkl")
+    pred_dist = model.pred_dist(pre_input_df)
+    pred_lnVs30_mean, pred_lnVs30_std = pred_dist.params["loc"], pred_dist.params["scale"]
+
+    results_df = input_df[["lon", "lat"]].copy()
+    if "vs30" in input_df.columns:
+        results_df["vs30"] = input_df["vs30"]
+        results_df["quality_score"] = input_df["quality_score"]
+
+    results_df["pred_vs30"] = np.exp(pred_lnVs30_mean)
+    results_df["pred_vs30_std"] = pred_lnVs30_std
+
+    results_df = post_processing.add_residuals(results_df)
+    return results_df
+
 def run_model_training(
     dataset_df: pd.DataFrame,
     train_sites: np.ndarray,

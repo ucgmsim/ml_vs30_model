@@ -1,6 +1,8 @@
 rel_vs30_values_ffp: cleaned_vs30_data/nz_site_db_v1p5.csv
 index_col: "sta"
 
+drop_sites: []
+
 input_variables: 
   # - elevation
   # - nz_geology_age_min
@@ -11,7 +13,7 @@ input_variables:
   # - nz_geology_category
   # - nz_lithology_category
   # - nz_geological_unit
-  - absolute_depth_to_bedrock
+  # - absolute_depth_to_bedrock
   # - nzenvds_distance_rivers
   # - nz_distance_to_river_st1
   # - nz_distance_to_river_st2
@@ -22,7 +24,9 @@ input_variables:
   # - nz_distance_to_river_st7
   # - nz_distance_to_river_st8
   # - compound_topographic_index
-  
+  - nzenvds_slope_deg
+  # - nz_quaternary_region
+
   # - terrain_ruggedness_index
 
 derived_variables:
