@@ -1,6 +1,6 @@
 rel_base_out_dir: results/hp_opt
 
-n_iterations: 1000
+n_iterations: 200
 
 hp_params:
   learning_rate: 

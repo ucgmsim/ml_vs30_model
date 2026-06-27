@@ -66,8 +66,8 @@ class OpenTopographyS3Loader(BaseLoader):
                 cur_values[missing_mask] = data_loader_utils.find_nearest_valid_wgs84(
                     data_dir / filename,
                     cur_coords[missing_mask],
-                    lambda v: (v != -9999) & ~np.isnan(v),
-                    cur_values.dtype,
+                    lambda v: (v != constants.INTEGER_NO_DATA_VALUE) & ~np.isnan(v),
+                    cur_values[missing_mask],
                 )
 
             values[mask] = cur_values

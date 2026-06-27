@@ -85,8 +85,9 @@ class ShapeLoader(BaseLoader):
             nearest_df = gpd.sjoin_nearest(
                 point_df[missing_mask], shape_df, max_distance=250, distance_col="dist_to_shape")
             merged_df.loc[missing_mask, "value"] = nearest_df["value"].values
+            merged_df = merged_df.astype({"value": shape_df["value"].dtype})
         else:
             if variable == constants.InputVariable.NZGeologyCategory:
-                merged_df["value"] = merged_df["value"].fillna(-9999).astype(int)
+                merged_df["value"] = merged_df["value"].fillna(-9999).astype(np.int32)
 
         return merged_df["value"].to_numpy()

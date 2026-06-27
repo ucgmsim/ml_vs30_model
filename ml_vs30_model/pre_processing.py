@@ -28,8 +28,11 @@ def normalize(
 
 def min_max_scale(series: pd.Series, var: str | constants.InputVariable) -> pd.Series:
     """Scales the given series to the range [-1, 1] using min-max scaling."""
-    cur_min, cur_max = constants.MIN_MAX_SCALE_PARAMS[var]
-    return 2 * (series - cur_min) / (cur_max - cur_min) - 1
+    cur_min, cur_max, clip = constants.MIN_MAX_CLIP_SCALE_PARAMS[var]
+    scaled = 2 * (series - cur_min) / (cur_max - cur_min) - 1
+    if clip:
+        scaled = scaled.clip(-1, 1)
+    return scaled
 
 
 def pre_process_features(df: pd.DataFrame, run_config: RunConfig) -> pd.DataFrame:
@@ -94,10 +97,13 @@ def pre_process_features(df: pd.DataFrame, run_config: RunConfig) -> pd.DataFram
             ]
             scaled_input_df = scaled_input_df.drop(columns=cols_to_drop)
 
+    for var in run_config.ordinal_variables:
+        scaled_input_df[var] = df[var].astype(float)
+
     # Continuous features
     for var in run_config.input_variables:
-        # Ignore categorial variables
-        if var in run_config.categorial_variables:
+        # Ignore categorial and ordinal variables
+        if var in run_config.categorial_variables or var in run_config.ordinal_variables:
             continue
 
         if var in constants.LN_NORM_VARS:
@@ -108,7 +114,7 @@ def pre_process_features(df: pd.DataFrame, run_config: RunConfig) -> pd.DataFram
             scaled_input_df[var], scale_params[var] = normalize(
                 df[var], *run_config.get_scale_params(var)
             )
-        elif var in constants.MIN_MAX_SCALE_PARAMS:
+        elif var in constants.MIN_MAX_CLIP_SCALE_PARAMS:
             scaled_input_df[var] = min_max_scale(df[var], var)
         else:
             raise ValueError(f"Variable {var} is not categorized for pre-processing.")
@@ -121,39 +127,94 @@ def pre_process_vs30(values: np.ndarray | pd.Series):
     return np.log(values)
 
 
-def add_sample_weights(train_df: pd.DataFrame, run_config: RunConfig) -> pd.DataFrame:
-    """Computes sample weights based on the Vs30 values in the training DataFrame."""
-    train_df.loc[:, "sample_weight"] = 1.0
+def apply_vs30_bin_weights(
+    train_df: pd.DataFrame, run_config: RunConfig
+) -> pd.DataFrame:
+    """
+    Applies sample weights based on the Vs30 bins in the training DataFrame.
+    Note, this modifies the input dataframe directly.
+    """
+    assert (
+        "quality_score" in train_df.columns and "sample_weight" in train_df.columns
+    ), "quality_score and sample_weight columns must be present in the training DataFrame."
 
-    if run_config.apply_vs30_sample_weights:
-        vs30_bin_counts = train_df["vs30_bin"].value_counts().sort_index()
-        vs30_bin_weights = np.clip(
-            (vs30_bin_counts.max() / vs30_bin_counts) - 1,
-            0.0,
-            run_config.max_vs30_weight,
-        )
+    vs30_bin_counts = train_df["vs30_bin"].value_counts().sort_index()
+    vs30_bin_weights = (vs30_bin_counts.max() / vs30_bin_counts) - 1
 
-        train_df.loc[:, "vs30_weight"] = (
-            train_df["vs30_bin"].map(vs30_bin_weights).astype(float)
-        )
+    train_df.loc[:, "vs30_weight"] = (
+        train_df["vs30_bin"].map(vs30_bin_weights).astype(float)
+    )
 
-        train_df.loc[:, "sample_weight"] += train_df["vs30_weight"]
-
-    if run_config.apply_quality_sample_weights:
-        assert train_df.quality_score.isin(
-            ["Q1", "Q2", "Q3"]
-        ).all(), "Quality score must be one of Q1, Q2, or Q3"
-
-        quality_weight_map = {
-            "Q1": run_config.q1_weight_factor,
-            "Q2": run_config.q2_weight_factor,
-            "Q3": run_config.q3_weight_factor,
-        }
-        train_df.loc[:, "sample_weight"] = train_df["sample_weight"] * train_df[
-            "quality_score"
-        ].map(quality_weight_map)
+    train_df.loc[:, "sample_weight"] += train_df["vs30_weight"]
 
     return train_df
+
+
+def _get_q3_bin_weights(df: pd.DataFrame) -> pd.Series:
+    x1, x2 = 0.50, 1.0
+    y1, y2 = 0.25, 0.75
+
+    m = (y2 - y1) / (x2 - x1)
+    b = y1 - m * x1
+
+    def q3_weight_fn(x):
+        return np.clip(m * x + b, y1, y2)
+
+    return q3_weight_fn(
+        df.groupby("dense_vs30_bin", observed=True)["quality_score"]
+        .value_counts(normalize=True)
+        .loc[:, "Q3"]
+    )
+
+
+def apply_quality_score_weight_factor(
+    dataset_df: pd.DataFrame, df: pd.DataFrame, run_config: RunConfig
+) -> pd.DataFrame:
+    """
+    Applies a multiplicative weight factor to the sample weights based on the quality score.
+    Note, this modifies the input dataframe directly.
+    """
+    assert (
+        "quality_score" in df.columns and "sample_weight" in df.columns
+    ), "quality_score and sample_weight columns must be present in the training DataFrame."
+    assert df.quality_score.isin(
+        ["Q1", "Q2", "Q3"]
+    ).all(), "Quality score must be one of Q1, Q2, or Q3"
+
+    df.loc[
+        df.quality_score == "Q1", "sample_weight"
+    ] *= run_config.q1_weight_factor
+    df.loc[
+        df.quality_score == "Q2", "sample_weight"
+    ] *= run_config.q2_weight_factor
+    if run_config.q3_weight_factor == "dynamic":
+        q3_bin_weights = _get_q3_bin_weights(dataset_df)
+        df.loc[df.quality_score == "Q3", "sample_weight"] *= df.loc[
+            df.quality_score == "Q3", "dense_vs30_bin"
+        ].map(q3_bin_weights)
+    else:
+        df.loc[
+            df.quality_score == "Q3", "sample_weight"
+        ] *= run_config.q3_weight_factor
+
+    return df
+
+
+def add_sample_weights(dataset_df: pd.DataFrame, df: pd.DataFrame, run_config: RunConfig) -> pd.DataFrame:
+    """Computes sample weights based on the Vs30 values in the training DataFrame."""
+    df.loc[:, "sample_weight"] = 1.0
+
+    if run_config.apply_vs30_sample_weights:
+        df = apply_vs30_bin_weights(df, run_config)
+
+    if run_config.apply_quality_sample_weight_factor:
+        df = apply_quality_score_weight_factor(dataset_df, df, run_config)
+
+    df.loc[:, "sample_weight"] = np.clip(
+        df["sample_weight"], 1.0, run_config.max_vs30_weight
+    )
+
+    return df
 
 
 def get_pre_processed_train_val_df(
@@ -167,7 +228,7 @@ def get_pre_processed_train_val_df(
 
     train_missing_mask = (
         train_df[run_config.input_variables].isna()
-        | (train_df[run_config.input_variables] == -9999)
+        | (train_df[run_config.input_variables] == constants.INTEGER_NO_DATA_VALUE)
     ).any(axis=1)
     if train_missing_mask.any():
         logger.warning(
@@ -178,7 +239,7 @@ def get_pre_processed_train_val_df(
     if val_df is not None:
         val_missing_mask = (
             val_df[run_config.input_variables].isna()
-            | (val_df[run_config.input_variables] == -9999)
+            | (val_df[run_config.input_variables] == constants.INTEGER_NO_DATA_VALUE)
         ).any(axis=1)
         if val_missing_mask.any():
             logger.warning(
@@ -189,7 +250,8 @@ def get_pre_processed_train_val_df(
     train_df, val_df = train_df.copy(), val_df.copy() if val_df is not None else None
 
     # Compute sample weighting
-    train_df = add_sample_weights(train_df, run_config)
+    train_df = add_sample_weights(dataset_df, train_df, run_config)
+    val_df = add_sample_weights(dataset_df, val_df, run_config) if val_df is not None else None
 
     # Pre-process
     train_X, scale_params = pre_process_features(train_df, run_config)

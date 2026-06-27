@@ -2,6 +2,7 @@ rel_vs30_values_ffp: cleaned_vs30_data/foster_2019.csv
 index_col: null
 
 drop_sites: null
+drop_quality_score: null
 
 input_variables: 
   - nz_geology_age_min

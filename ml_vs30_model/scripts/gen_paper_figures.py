@@ -12,9 +12,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
+import matplotlib.ticker as mticker
 from matplotlib.legend_handler import HandlerTuple
 import matplotlib.pyplot as plt
-from scipy.stats import norm
+from scipy import stats
 import xarray as xr
 import typer
 import pygmt
@@ -147,6 +148,16 @@ def gen_site_map(dataset_ffp: Path, output_dir: Path):
                 cmap=True,
                 pen="0.4p,black",
             )
+
+            spatial_plot.fig.text(
+                x=vs30.constants.CANTERBURY_BOUNDING_BOX[1],
+                y=vs30.constants.CANTERBURY_BOUNDING_BOX[3],
+                text="Canterbury",
+                justify="TR",
+                offset="-0.05c/-0.075c",
+                font=vs30.constants.GMT_FIG_FONT_LABEL,
+            )
+
         except Exception as e:
             print(f"Inset error: {e}")
             raise
@@ -197,6 +208,16 @@ def gen_site_map(dataset_ffp: Path, output_dir: Path):
                 cmap=True,
                 pen="0.4p,black",
             )
+
+            spatial_plot.fig.text(
+                x=vs30.constants.WELLINGTON_BOUNDING_BOX[0],
+                y=vs30.constants.WELLINGTON_BOUNDING_BOX[3],
+                text="Wellington",
+                justify="TL",
+                offset="0.05c/-0.075c",
+                font=vs30.constants.GMT_FIG_FONT_LABEL,
+            )
+
         except Exception as e:
             print(f"Inset error: {e}")
             raise
@@ -216,20 +237,41 @@ def gen_site_map(dataset_ffp: Path, output_dir: Path):
 
 @app.command("gen-vs30-map")
 def gen_vs30_map(
-    dataset_ffp: Path,
+    full_model_dir: Path,
     output_dir: Path,
     region_key: str,
     grid_spacing: str = "250e/250e",
     show_highways: bool = False,
     show_cities: bool = True,
     show_towns: bool = False,
+    plot_foster: bool = False,
+    plot_kriged: bool = False,
+    plot_sites: bool = False,
 ):
     logger = mlt.utils.setup_logging()
     region = vs30.constants.REGION_MAPPING[region_key]
 
     # Load vs30 values
-    with xr.open_dataset(dataset_ffp) as ds:
-        vs30_da = ds["vs30"]
+    with xr.open_dataset(full_model_dir / "nz_vs30_results.nc") as ds:
+        if plot_foster:
+            vs30_da = ds["foster_original_vs30_mean"]
+            fn_prefix = "foster_vs30"
+        elif plot_kriged:
+            vs30_da = ds["kriged_vs30_mean"]
+            fn_prefix = "kriged_model_vs30"
+        else:
+            vs30_da = ds["vs30"]
+            fn_prefix = "model_vs30"
+
+    if plot_foster:
+        site_df = pd.read_parquet(
+            vs30.constants.BASE_DATA_DIR / "datasets/foster.parquet"
+        )
+        test_site_df = None
+    else:
+        site_df = pd.read_parquet(full_model_dir / "train_results.parquet")
+        if (test_site_ffp := full_model_dir / "test_results.parquet").exists():
+            test_site_df = pd.read_parquet(test_site_ffp)
 
     nan_mask = vs30_da.isnull().values
     mesh_x, mesh_y = np.meshgrid(vs30_da.coords["x"].values, vs30_da.coords["y"].values)
@@ -266,12 +308,35 @@ def gen_vs30_map(
 
     if show_highways:
         spatial_plot.add_highways()
+        
+    if plot_sites:
+        logger.info("Plotting site locations...")
+        site_style="d0.075c"
+        spatial_plot.plot_sites(
+            site_df,
+            cmap=True,
+            fill=site_df["vs30"].values,
+            style=site_style,
+            pen="0.1p,black",
+        )
+
+        if test_site_df is not None:
+            spatial_plot.plot_sites(
+                test_site_df,
+                cmap=True,
+                fill=test_site_df["vs30"].values,
+                style=site_style,
+                pen="0.1p,red",
+            )
+
     if show_cities:
         spatial_plot.add_city_labels()
     if show_towns:
         spatial_plot.add_town_labels()
 
-    spatial_plot.save(output_dir / f"vs30_{region_key}.{vs30.constants.FIG_FORMAT}")
+    spatial_plot.save(
+        output_dir / f"{fn_prefix}_{region_key}.{vs30.constants.FIG_FORMAT}"
+    )
 
 
 @app.command("gen-residual-map")
@@ -504,7 +569,7 @@ def foster_dataset_comparison(
     }
 
     ### Vs30
-    fig, ax = plt.subplots(
+    vs30_fig, vs30_ax = plt.subplots(
         figsize=(vs30.constants.FIG_SIZE[0] * 2, vs30.constants.FIG_SIZE[1])
     )
 
@@ -513,7 +578,7 @@ def foster_dataset_comparison(
         x="vs30",
         hue="source",
         fill=True,
-        ax=ax,
+        ax=vs30_ax,
         palette=color_map,
         hue_order=color_map.keys(),
         common_norm=False,
@@ -522,11 +587,11 @@ def foster_dataset_comparison(
         legend=False,
     )
 
-    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-    ax.set_xlabel("Vs30 (m/s)")
-    ax.set_ylabel("Density")
-    ax.set_xlim(0, 1600)
-    ax.yaxis.set_ticklabels([])
+    vs30_ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    vs30_ax.set_xlabel("Vs30 (m/s)")
+    vs30_ax.set_ylabel("Density")
+    vs30_ax.set_xlim(0, 1600)
+    vs30_ax.yaxis.set_ticklabels([])
 
     # Legend
     label_map = {
@@ -539,27 +604,27 @@ def foster_dataset_comparison(
         for k in ["nz_all", "nz_qual", "foster"]
     ]
 
-    ax.legend(
+    vs30_ax.legend(
         handles=handles,
         # title="Dataset",
     )
 
-    fig.tight_layout()
-    fig.savefig(
+    vs30_fig.tight_layout()
+    vs30_fig.savefig(
         output_dir / f"foster_comparison.{vs30.constants.FIG_FORMAT}",
         dpi=vs30.constants.FIG_DPI,
     )
-    plt.close(fig)
+    plt.close(vs30_fig)
 
     ### Slope
-    fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
+    slope_fig, slope_ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
 
     sns.kdeplot(
         comb_df,
         x="nzenvds_slope_deg",
         hue="source",
         fill=True,
-        ax=ax,
+        ax=slope_ax,
         palette=color_map,
         hue_order=color_map.keys(),
         common_norm=False,
@@ -567,28 +632,28 @@ def foster_dataset_comparison(
         bw_adjust=0.75,
         legend=False,
     )
-    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-    ax.set_xlabel("Slope (degrees)")
-    ax.set_ylabel("Density")
-    ax.set_xlim(0, comb_df["nzenvds_slope_deg"].max())
-    ax.yaxis.set_ticklabels([])
+    slope_ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    slope_ax.set_xlabel("Slope (degrees)")
+    slope_ax.set_ylabel("Density")
+    slope_ax.set_xlim(0, comb_df["nzenvds_slope_deg"].max())
+    slope_ax.yaxis.set_ticklabels([])
 
-    fig.tight_layout()
-    fig.savefig(
+    slope_fig.tight_layout()
+    slope_fig.savefig(
         output_dir / f"foster_comparison_slope.{vs30.constants.FIG_FORMAT}",
         dpi=vs30.constants.FIG_DPI,
     )
-    plt.close(fig)
+    plt.close(slope_fig)
 
     ### Geological Age
-    fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
+    age_fig, age_ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
 
     sns.kdeplot(
         comb_df,
         x="nz_geology_age_mid",
         hue="source",
         fill=True,
-        ax=ax,
+        ax=age_ax,
         palette=color_map,
         hue_order=color_map.keys(),
         common_norm=False,
@@ -597,18 +662,18 @@ def foster_dataset_comparison(
         legend=False,
         log_scale=(True, False),
     )
-    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-    ax.set_xlabel("Geological Age")
-    ax.set_ylabel("Density")
-    ax.set_xlim(0.1, comb_df["nz_geology_age_mid"].max())
-    ax.yaxis.set_ticklabels([])
+    age_ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    age_ax.set_xlabel("Geological Age")
+    age_ax.set_ylabel("Density")
+    age_ax.set_xlim(0.1, comb_df["nz_geology_age_mid"].max())
+    age_ax.yaxis.set_ticklabels([])
 
-    fig.tight_layout()
-    fig.savefig(
+    age_fig.tight_layout()
+    age_fig.savefig(
         output_dir / f"foster_comparison_geological_age.{vs30.constants.FIG_FORMAT}",
         dpi=vs30.constants.FIG_DPI,
     )
-    plt.close(fig)
+    plt.close(age_fig)
 
 
 @app.command("geyin-dataset-comparison")
@@ -751,12 +816,14 @@ def create_nz_vs30_histogram(
             "pred_vs30": vs30_da.values[~nan_mask],
         },
         geometry=gpd.points_from_xy(coords[:, 0], coords[:, 1]),
-        crs=vs30.constants.NZTM2000_EPSG
+        crs=vs30.constants.NZTM2000_EPSG,
     )
 
     logger.info("Extracting original Foster et al. estimates...")
     with rasterio.open(foster_tif) as ds:
-        assert ds.crs.to_epsg() == vs30.constants.NZTM2000_EPSG, "Dataset CRS is not NZTM"
+        assert (
+            ds.crs.to_epsg() == vs30.constants.NZTM2000_EPSG
+        ), "Dataset CRS is not NZTM"
         foster_original_data = ds.read(1, masked=True).filled(np.nan)
 
         rows, cols = transform.rowcol(ds.transform, coords[:, 0], coords[:, 1])
@@ -764,29 +831,39 @@ def create_nz_vs30_histogram(
         estimates_df["pred_vs30_foster"] = foster_original_data[rows, cols]
 
     # Drop missing values
-    assert estimates_df["pred_vs30"].isna().sum() == 0 
+    assert estimates_df["pred_vs30"].isna().sum() == 0
     nan_mask = estimates_df["pred_vs30_foster"].isna()
     if nan_mask.sum() > 0:
-        logger.warning(f"Dropping {nan_mask.sum()} points with missing Foster estimates")
+        logger.warning(
+            f"Dropping {nan_mask.sum()} points with missing Foster estimates"
+        )
         estimates_df = estimates_df.loc[~nan_mask]
 
     # Load population density data
     population_gdf = gpd.read_file(population_density_ffp)
-    assert population_gdf.area.unique().shape[0] == 1, "Population grid cells have varying areas, which is not supported"
+    assert (
+        population_gdf.area.unique().shape[0] == 1
+    ), "Population grid cells have varying areas, which is not supported"
     population_cell_area = population_gdf.area.unique()[0]
 
     # Compute intersection of population grid with vs30 estimate points
     intersection_df = estimates_df.copy()
     intersection_df.geometry = estimates_df.buffer(resolution / 2, cap_style="square")
-    intersection_df["vs30_point_index"] = intersection_df.index 
-    intersection_df = gpd.overlay(intersection_df, population_gdf, how="intersection")
-    
+    intersection_df["vs30_point_index"] = intersection_df.index
+    intersection_df = gpd.overlay(intersection_df, population_gdf, how="intersection", keep_geom_type=True)
+
     # Weight vs30 estimates by population proportion
-    intersection_df["population_proportion"] = intersection_df["PopEst2023"] * (intersection_df.geometry.area / population_cell_area)
-    estimates_df["population_count"] = intersection_df.groupby("vs30_point_index")["population_proportion"].sum()
-    estimates_df["population_weight"] = estimates_df["population_count"] / estimates_df["population_count"].sum()
+    intersection_df["population_proportion"] = intersection_df["PopEst2023"] * (
+        intersection_df.geometry.area / population_cell_area
+    )
+    estimates_df["population_count"] = intersection_df.groupby("vs30_point_index")[
+        "population_proportion"
+    ].sum()
+    estimates_df["population_weight"] = (
+        estimates_df["population_count"] / estimates_df["population_count"].sum()
+    )
     estimates_df["population_weight"] = estimates_df["population_weight"].fillna(0)
-    
+
     bins = list(np.linspace(100, 1500, 40))
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=vs30.constants.FIG_SIZE)
@@ -798,7 +875,7 @@ def create_nz_vs30_histogram(
         bins=bins,
         ax=ax1,
         color="tab:red",
-        label="Foster et al.",
+        label="Foster et al. (2019)",
         stat="density",
         edgecolor="black",
         alpha=0.5,
@@ -809,7 +886,7 @@ def create_nz_vs30_histogram(
         bins=bins,
         ax=ax1,
         color="tab:blue",
-        label="ML Model",
+        label="ML Model (This Study)",
         stat="density",
         edgecolor="black",
         alpha=0.5,
@@ -873,10 +950,13 @@ def gen_vs30_hist(dataset_ffp: Path, output_dir: Path):
 
     fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE, dpi=vs30.constants.FIG_DPI)
 
+    bins = np.arange(100, 1500 + 100, 100)
+
     sns.histplot(
         dataset_df,
         x="vs30",
-        bins=vs30.constants.DENSE_VS30_BINS[:-2],
+        # bins=vs30.constants.DENSE_VS30_BINS[:-2],
+        bins=bins,
         ax=ax,
         hue="quality_score",
         palette=vs30.constants.QUALITY_SCORE_COLORS,
@@ -887,7 +967,7 @@ def gen_vs30_hist(dataset_ffp: Path, output_dir: Path):
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_xlabel("Vs30 (m/s)")
     ax.set_ylabel("Count")
-    ax.set_xlim(0, 1600)
+    ax.set_xlim(bins.min(), bins.max())
     ax.get_legend().set_title("Quality Score")
 
     fig.tight_layout()
@@ -904,6 +984,17 @@ def _make_scatter_proxy(scatter):
         marker=scatter.get_paths()[0],
         linestyle="None",
         markersize=np.sqrt(scatter.get_sizes()[0]),
+    )
+
+
+def _make_line_proxy(line):
+    """Creates a proxy artist for a line plot to be used in legends."""
+    return mlines.Line2D(
+        [],
+        [],
+        color=line.get_color(),
+        linestyle=line.get_linestyle(),
+        linewidth=1.0,
     )
 
 
@@ -953,6 +1044,19 @@ def gen_residual_scatter_plot(
             )
             test_p_cols.append(cur_p_col)
 
+    vs30.plotting.model_perf_plots.plot_lowess_line(
+        results_df["vs30"].values,
+        results_df["ln_residual"].values,
+        ax,
+        "gray",
+        vs30.constants.FIG_LINEWIDTH,
+        frac=0.7,
+        alpha=0.75,
+        zorder=15,
+        label="LOESS Line",
+        quantiles=None,
+    )
+
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_xlabel(r"$Vs30$ (m/s)")
     ax.set_ylabel(r"Residual, $\ln(\text{True}) - \ln(\text{Predicted})$")
@@ -965,18 +1069,25 @@ def gen_residual_scatter_plot(
                     _make_scatter_proxy(test_p_cols[0]),
                     _make_scatter_proxy(test_p_cols[1]),
                     _make_scatter_proxy(test_p_cols[2]),
-                )
+                ),
             ],
-            labels=[
-                # f"Test Set (N={(test_results_df.quality_score == "Q1").sum()}/{(test_results_df.quality_score == "Q2").sum()}/{(test_results_df.quality_score == "Q3").sum()})"
-                "Test Set"
-            ],
+            labels=["Test Set"],
             handler_map={tuple: HandlerTuple(ndivide=None, pad=0.6)},
             handlelength=2.5,
         )
         ax.add_artist(test_legend)
 
-    ax.legend(title="Quality Score")
+    ax.text(
+        0.015,
+        0.975,
+        "Foster et al. (2019)" if is_foster else "ML Model (This Study)",
+        transform=ax.transAxes,
+        horizontalalignment="left",
+        verticalalignment="top",
+        fontweight="bold",
+    )
+
+    ax.legend(loc="lower right")
 
     fig.tight_layout()
     fig.savefig(
@@ -1089,17 +1200,42 @@ def gen_one_to_one_plot(
 
     test_p_cols = []
     for i, (k, color) in enumerate(vs30.constants.QUALITY_SCORE_COLORS.items()):
-        mask = results_df["quality_score"] == k
+        cur_results_df = results_df.loc[results_df["quality_score"] == k]
         ax.scatter(
-            results_df.loc[mask, "vs30"],
-            results_df.loc[mask, "pred_vs30"],
-            label=rf"{k} (N={mask.sum()})",
+            cur_results_df["vs30"],
+            cur_results_df["pred_vs30"],
+            label=rf"{k} (N={len(cur_results_df)})",
             # label=rf"{k}",
             color=color,
             zorder=10 - i,
             s=vs30.constants.QUALITY_SCORE_MARKER_SIZE[k] * 0.25,
             marker=vs30.constants.QUALITY_SCORE_MARKERS[k],
         )
+        if not is_foster:
+            ax.errorbar(
+                cur_results_df["vs30"],
+                cur_results_df["pred_vs30"],
+                yerr=np.stack(
+                    (
+                        cur_results_df["pred_vs30"]
+                        - np.exp(
+                            np.log(cur_results_df["pred_vs30"])
+                            - cur_results_df["pred_vs30_std"]
+                        ),
+                        np.exp(
+                            np.log(cur_results_df["pred_vs30"])
+                            + cur_results_df["pred_vs30_std"]
+                        )
+                        - cur_results_df["pred_vs30"],
+                    )
+                ),
+                elinewidth=0.5,
+                fmt="none",
+                ecolor=color,
+                alpha=0.25,
+                zorder=10 - 3.5 - i,
+            )
+
         if test_results_df is not None:
             test_mask = test_results_df["quality_score"] == k
             cur_p_col = ax.scatter(
@@ -1118,6 +1254,19 @@ def gen_one_to_one_plot(
         "k",
     )
 
+    vs30.plotting.model_perf_plots.plot_lowess_line(
+        results_df["vs30"].values,
+        results_df["pred_vs30"].values,
+        ax,
+        "gray",
+        vs30.constants.FIG_LINEWIDTH,
+        frac=0.7,
+        alpha=0.75,
+        zorder=15,
+        label="LOESS Line",
+        quantiles=None,
+    )
+
     ax.set_xlim(100, 1600)
     ax.set_ylim(100, 1600)
     ax.set_xlabel(r"$V_{S30}$ (m/s)", labelpad=-3)
@@ -1127,7 +1276,7 @@ def gen_one_to_one_plot(
     ax.text(
         0.025,
         0.98,
-        "Foster Model" if is_foster else "ML Model",
+        "Foster et al. (2019)" if is_foster else "ML Model (This Study)",
         transform=ax.transAxes,
         horizontalalignment="left",
         verticalalignment="top",
@@ -1176,59 +1325,147 @@ def gen_PIT_plot(results_ffp: Path, output_dir: Path):
 
     results_df = pd.read_parquet(results_ffp)
 
+    vs30.plotting.model_perf_plots.pit_plot(
+        results_df,
+        output_dir / f"pit_plot.{vs30.constants.FIG_FORMAT}",
+        write_yaml=False,
+    )
+
+
+@app.command("gen-std-res-cdf-plot")
+def gen_std_res_cdf_plot(results_ffp: Path, output_dir: Path):
+    logger = mlt.utils.setup_logging()
+    _fig_settings(logger)
+
+    results_df = pd.read_parquet(results_ffp)
+
     std_res = (
         np.log(results_df["pred_vs30"]) - np.log(results_df["vs30"])
     ) / results_df["pred_vs30_std"]
-    pit_values = norm.cdf(std_res)
+    assert std_res.notnull().all(), "Standardized residuals contain NaN values"
 
     fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
-    sns.histplot(
-        pit_values,
-        bins=15,
-        ax=ax,
-        color="tab:blue",
-        edgecolor="black",
-        stat="density",
-        label="PIT Values",
+
+    # Standard Normal CDF and KS Critical Values
+    x = np.linspace(std_res.min(), std_res.max(), 1000)
+    norm_cdf = stats.norm.cdf(x)
+    ks_critical = stats.ksone.ppf(1 - 0.05 / 2, std_res.shape[0])
+    ax.plot(x, norm_cdf + ks_critical, color="tab:red", linestyle="--", linewidth=vs30.constants.FIG_GROUP_LINEWIDTH, label="KS Critical Value")
+    ax.plot(x, norm_cdf - ks_critical, color="tab:red", linestyle="--", linewidth=vs30.constants.FIG_GROUP_LINEWIDTH)
+    ax.plot(x, norm_cdf, color="tab:red", label="Standard Normal", linestyle="-", linewidth=vs30.constants.FIG_LINEWIDTH)
+
+    # ECDF
+    sns.ecdfplot(std_res, ax=ax, color="tab:blue", label="ML Model", linewidth=vs30.constants.FIG_LINEWIDTH)
+
+    ks_stat = stats.kstest(std_res, "norm").statistic
+    ax.text(
+        0.025,
+        0.975,
+        f"KS statistic = {ks_stat:.3f}",
+        transform=ax.transAxes,
+        va="top",
+        ha="left",
+        fontweight="bold",
     )
+
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-    ax.axhline(1.0, color="red", linestyle="--", label="Uniform Distribution Density")
-    ax.set_xlabel("PIT Values")
-    ax.set_ylabel("Count")
-    ax.set_xlim(0, 1)
+    ax.set_xlabel("Standardized Residual")
+    ax.set_ylabel("Cumulative Probability")
+    ax.set_xlim(-2.5, 2.5)
+    ax.set_ylim(0, 1)
     ax.legend()
 
-    fig.tight_layout()
+    # fig.tight_layout()
+    fig.subplots_adjust(left=0.15, right=0.99, top=0.9825, bottom=0.15)
     fig.savefig(
-        output_dir / f"pit_plot.{vs30.constants.FIG_FORMAT}", dpi=vs30.constants.FIG_DPI
+        output_dir / f"std_res_cdf_plot.{vs30.constants.FIG_FORMAT}",
+        dpi=vs30.constants.FIG_DPI,
     )
     plt.close(fig)
 
 
-# @app.command("gen-global-feature-importance")
-# def gen_global_feature_importance(cv_model_results_dir: Path, output_dir: Path):
-#     # TODO: I don't using shap plotting funcationality will work here, if we decide to include, create manually.
-#     logger = mlt.utils.setup_logging()
-#     _fig_settings(logger)
+@app.command("gen-global-feature-importance")
+def gen_global_feature_importance(cv_model_results_dir: Path, output_dir: Path):
+    # TODO: I don't using shap plotting funcationality will work here, if we decide to include, create manually.
+    import shap
 
-#     shap_values = pd.read_pickle(cv_model_results_dir / "shap_values.pkl")
+    logger = mlt.utils.setup_logging()
+    _fig_settings(logger)
 
-#     shap_values.feature_names = [
-#         (
-#             feat
-#             if feat not in vs30.constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING
-#             else vs30.constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING[feat]
-#         )
-#         for feat in shap_values.feature_names
-#     ]
+    shap_values = pd.read_pickle(cv_model_results_dir / "shap_values.pkl")
 
-#     fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
-#     shap.plots.bar(shap_values, show=False, ax=ax)
+    shap_values.feature_names = [
+        (
+            feat
+            if feat not in vs30.constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING
+            else vs30.constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING[feat]
+        )
+        for feat in shap_values.feature_names
+    ]
 
-#     fig.tight_layout()
-#     fig.savefig(output_dir / f"global_feature_importance.{vs30.constants.FIG_FORMAT}", dpi=vs30.constants.FIG_DPI)
+    fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
+    shap.plots.bar(shap_values, show=False, ax=ax)
 
-#     plt.close(fig)
+    fig.tight_layout()
+    fig.savefig(
+        output_dir / f"global_feature_importance.{vs30.constants.FIG_FORMAT}",
+        dpi=vs30.constants.FIG_DPI,
+    )
+
+    plt.close(fig)
+
+
+@app.command("predicted-std-vs30")
+def predicted_std_vs30(cv_model_results_dir: Path, output_dir: Path):
+    logger = mlt.utils.setup_logging()
+    _fig_settings(logger)
+    
+    results_df = pd.read_parquet(cv_model_results_dir / "val_results.parquet")   
+
+    fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
+
+    vs30.plotting.model_perf_plots.plot_lowess_line(
+        results_df["pred_vs30"].values,
+        results_df["pred_vs30_std"].values,
+        ax,
+        "gray",
+        vs30.constants.FIG_LINEWIDTH,
+        zorder=15,
+        label="LOESS Line",
+        quantiles=None,
+        frac=0.7,
+        alpha=0.75,
+    )
+
+    for i, (k, color) in enumerate(vs30.constants.QUALITY_SCORE_COLORS.items()):
+        cur_results_df = results_df.loc[results_df["quality_score"] == k]
+        ax.scatter(
+            cur_results_df["pred_vs30"],
+            cur_results_df["pred_vs30_std"],
+            label=rf"{k} (N={len(cur_results_df)})",
+            # label=rf"{k}",
+            color=color,
+            zorder=10 - i,
+            s=vs30.constants.QUALITY_SCORE_MARKER_SIZE[k] * 0.25,
+            marker=vs30.constants.QUALITY_SCORE_MARKERS[k],
+        )
+
+    ax.grid(which="both", linewidth=0.5, alpha=0.5, linestyle="--")
+    ax.set_xlabel(r"Predicted $V_{S30}$ (m/s)", labelpad=-5)
+    ax.set_ylabel(r"Predicted $ln_{V_{S30}}$ Standard Deviation")
+    ax.set_xlim(results_df["pred_vs30"].values.min() - 10, results_df["pred_vs30"].values.max() + 10)
+    
+    ax.set_xscale("log")
+    ax.xaxis.set_minor_formatter(mticker.NullFormatter())
+    ax.set_ylim(0, 0.7)
+    ax.legend(loc="lower right")
+
+    fig.subplots_adjust(left=0.15, right=0.99, top=0.9825, bottom=0.12)
+    # fig.tight_layout()
+    fig.savefig(
+        output_dir / f"predicted_std_vs30.{vs30.constants.FIG_FORMAT}",
+        dpi=vs30.constants.FIG_DPI,
+    )
 
 
 if __name__ == "__main__":

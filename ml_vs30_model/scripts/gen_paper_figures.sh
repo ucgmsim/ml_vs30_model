@@ -10,25 +10,26 @@ geyin_dataset_ffp="${VS30_MODEL_BASE_DATA_DIR}/datasets/us_geyin_maurer.parquet"
 nz_input_dataset_ffp="${VS30_MODEL_BASE_DATA_DIR}/grids/nz_input_grid_250m/input_grid.nc"
 population_density_ffp="${VS30_MODEL_BASE_DATA_DIR}/other/nz_population/new-zealand-estimated-resident-population-grid-250-metre.shp"
 
+foster_nz_dataset="${VS30_MODEL_BASE_DATA_DIR}/datasets/foster.parquet"
 foster_nz_dataset_results="${VS30_MODEL_BASE_DATA_DIR}/results/foster/foster_results_nz_site_db.parquet"
 foster_tif="${VS30_MODEL_BASE_DATA_DIR}/nz_estimates/foster_original/foster_paper_original.tif"
 
-cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0614_153302_cv50_ngboostV2"
-full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0614_153218_full_ngboostV2"
+cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0624_182722_cv100_ngboostV4p14"
+full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0624_183433_full_ngboostV4p14"
 
 
 out_dir="/Users/claudy/dev/work/tmp/vs30_plots"
 
 default_fig_size="6.5, 4"
 default_font_size="8"
-default_gmt_fig_font_label="14p,Helvetica,black"
+default_gmt_fig_font_label="12p,Helvetica,black"
 default_gmt_fig_minor_font_label="10p,Helvetica,black"
 export fig_size=$default_fig_size
 export fig_format="png"
 export fig_dpi="500"
 export fig_font_size=$default_font_size
 export fig_linewidth="2.5"
-export fig_group_linewidth="2.0"
+export fig_group_linewidth="1.25"
 export gmt_fig_font_label=$default_gmt_fig_font_label
 export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 
@@ -39,7 +40,7 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # echo "Generating site map..."
 # python "${scripts_dir}/gen_paper_figures.py" gen-site-map "${dataset_ffp}" "${out_dir}"
 
-### Vs30 histogram
+# ## Site database Vs30 histogram
 # echo "Generating Vs30 histogram..."
 # export fig_size="6.5, 2.75"
 # python "${scripts_dir}/gen_paper_figures.py" gen-vs30-hist "${dataset_ffp}" "${out_dir}"
@@ -54,10 +55,16 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nz_geology_age_mid "${out_dir}"
 # export fig_size=$default_fig_size
 
-# ### Geyin comparison
+# ### Geyin dataset comparison
 # echo "Generating Geyin comparison plot..."
 # export fig_size="3.25, 2.5"
 # python "${scripts_dir}/gen_paper_figures.py" geyin-dataset-comparison "${dataset_ffp}" "${geyin_dataset_ffp}" "${out_dir}"
+# export fig_size=$default_fig_size
+
+### Foster dataset comparison
+# echo "Generating Foster comparison plots..."
+# export fig_size="3.25, 2.5"
+# python "${scripts_dir}/gen_paper_figures.py" foster-dataset-comparison "${dataset_ffp}" "${foster_nz_dataset}" "${out_dir}"
 # export fig_size=$default_fig_size
 
 # ### Residual scatter plot
@@ -67,48 +74,61 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # python "${scripts_dir}/gen_paper_figures.py" gen-residual-scatter-plot "${foster_nz_dataset_results}" "${out_dir}" --is-foster
 # export fig_size=$default_fig_size
 
-# ### Residual histogram
-# echo "Generating residual histogram..."
-# export fig_size="2.5, 2.75"
-# python "${scripts_dir}/gen_paper_figures.py" gen-residual-histogram "${cv_model_dir}/val_results.parquet" "${foster_nz_dataset_results}" "${out_dir}" --quality-score Q1 --hide-y-label --y-max-limit 2.25
-# python "${scripts_dir}/gen_paper_figures.py" gen-residual-histogram "${cv_model_dir}/val_results.parquet" "${foster_nz_dataset_results}" "${out_dir}" --quality-score Q2 --hide-y-label --no-show-legend --y-max-limit 2.25
-# python "${scripts_dir}/gen_paper_figures.py" gen-residual-histogram "${cv_model_dir}/val_results.parquet" "${foster_nz_dataset_results}" "${out_dir}" --quality-score Q3 --hide-y-label --no-show-legend --y-max-limit 2.25
-# export fig_size=$default_fig_size
-
-### One-to-one plot
+# ## One-to-one plot
 # export fig_size="3.5, 3.5"
 # python "${scripts_dir}/gen_paper_figures.py" gen-one-to-one-plot "${cv_model_dir}/val_results.parquet" "${out_dir}" --full-model-dir "${full_model_dir}"
 # python "${scripts_dir}/gen_paper_figures.py" gen-one-to-one-plot "${foster_nz_dataset_results}" "${out_dir}" --is-foster --no-show-legend
 # export fig_size=$default_fig_size
 
-# ### Global feature importance
+# ## Global feature importance
 # echo "Generating global feature importance plot..."
 # export fig_font_size="3"
 # python "${scripts_dir}/gen_paper_figures.py" gen-global-feature-importance "${cv_model_dir}" "${out_dir}"
 # export fig_font_size=$default_font_size
 
+# # ### Standardized residuals CDF
+# export fig_size="3.25, 2.5"
+# echo "Generating standardized residuals CDF plot..."
+# python "${scripts_dir}/gen_paper_figures.py" gen-std-res-cdf-plot "${cv_model_dir}/val_results.parquet" "${out_dir}" 
+# export fig_size=$default_fig_size
 
-# ### Vs30 map
+# ### Predicted standard deviation vs Vs30 plot
+# export fig_size="3.25, 2.5"
+# echo "Generating predicted standard deviation vs Vs30 plot..."
+# python "${scripts_dir}/gen_paper_figures.py" predicted-std-vs30 "${cv_model_dir}" "${out_dir}" 
+# export fig_size=$default_fig_size
+
+# ## Vs30 map
 # echo "Generating Vs30 map..."
-# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "ni"
-# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "si"
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "ni"
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "si"
 
-### Vs30 Subregion map
+# ### Vs30 Subregion map
 # echo "Generating Vs30 subregion map..."
 # export gmt_fig_font_label="10p,Helvetica-Bold,black"
 # export gmt_fig_minor_font_label="6p,Helvetica,black"
-# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "wellington" --grid-spacing "25e/25e" --show-towns --show-highways
-# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "canterbury_narrow" --grid-spacing "25e/25e" --show-towns --show-highways
-# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "cromwell_region" --grid-spacing "25e/25e" --show-towns --show-highways
-# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "auckland_hamilton_region" --grid-spacing "25e/25e" --show-towns --show-highways
-# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "taurange_rotorua_region" --grid-spacing "25e/25e" --show-towns --show-highways
-# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "wellington_moderate" --grid-spacing "25e/25e" --show-towns --show-highways
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "wellington" --grid-spacing "25e/25e" --show-towns --show-highways --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "wellington" --grid-spacing "25e/25e" --show-towns --show-highways --plot-kriged --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "wellington" --grid-spacing "25e/25e" --show-towns --show-highways --plot-foster --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "canterbury_narrow" --grid-spacing "25e/25e" --show-towns --show-highways --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "canterbury_narrow" --grid-spacing "25e/25e" --show-towns --show-highways --plot-kriged --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "canterbury_narrow" --grid-spacing "25e/25e" --show-towns --show-highways --plot-foster --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "cromwell_region" --grid-spacing "25e/25e" --show-towns --show-highways --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "cromwell_region" --grid-spacing "25e/25e" --show-towns --show-highways --plot-kriged --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "cromwell_region" --grid-spacing "25e/25e" --show-towns --show-highways --plot-foster --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "auckland_hamilton_region" --grid-spacing "25e/25e" --show-towns --show-highways --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "auckland_hamilton_region" --grid-spacing "25e/25e" --show-towns --show-highways --plot-kriged --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "auckland_hamilton_region" --grid-spacing "25e/25e" --show-towns --show-highways --plot-foster --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "taurange_rotorua_region" --grid-spacing "25e/25e" --show-towns --show-highways --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "taurange_rotorua_region" --grid-spacing "25e/25e" --show-towns --show-highways --plot-kriged --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "taurange_rotorua_region" --grid-spacing "25e/25e" --show-towns --show-highways --plot-foster --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "wellington_moderate" --grid-spacing "25e/25e" --show-towns --show-highways --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "wellington_moderate" --grid-spacing "25e/25e" --show-towns --show-highways --plot-kriged --plot-sites
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "wellington_moderate" --grid-spacing "25e/25e" --show-towns --show-highways --plot-foster --plot-sites
 # export gmt_fig_font_label=$default_gmt_fig_font_label
 # export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 
-# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "wellington_large" --grid-spacing "25e/25e"
-
-### Residual map
+# ## Residual map
 # echo "Generating residual map..."
 # python "${scripts_dir}/gen_paper_figures.py" gen-residual-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "ni"
 # python "${scripts_dir}/gen_paper_figures.py" gen-residual-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "si"
@@ -117,7 +137,7 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # echo "Generating residual subregion map..."
 # export gmt_fig_font_label="10p,Helvetica-Bold,black"
 # export gmt_fig_minor_font_label="6p,Helvetica,black"
-# python "${scripts_dir}/gen_paper_figures.py" gen-residual-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "wellington" --grid-spacing "25e/25e" --show-towns --show-highways
+# python "${scripts_dir}/gen_paper_figures.py" gen-residual-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "wellington" --grid-spacing "25e/25e" --show-towns --show-highways 
 # python "${scripts_dir}/gen_paper_figures.py" gen-residual-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "canterbury_narrow" --grid-spacing "25e/25e" --show-towns --show-highways
 # python "${scripts_dir}/gen_paper_figures.py" gen-residual-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "cromwell_region" --grid-spacing "25e/25e" --show-towns --show-highways
 # python "${scripts_dir}/gen_paper_figures.py" gen-residual-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "auckland_hamilton_region" --grid-spacing "25e/25e" --show-towns --show-highways
@@ -154,4 +174,16 @@ export fig_size=$default_fig_size
 #     # echo "Generating input variable map for ${var}..."
 #     # python "${scripts_dir}/gen_paper_figures.py" input-variable-map "${nz_input_dataset_ffp}" "${var}" nz_full "${out_dir}" 
 # done
+# export fig_size=$default_fig_size
+
+
+
+# ------------------------------------ Archive ------------------------------------
+
+# ### Residual histogram
+# echo "Generating residual histogram..."
+# export fig_size="2.5, 2.75"
+# python "${scripts_dir}/gen_paper_figures.py" gen-residual-histogram "${cv_model_dir}/val_results.parquet" "${foster_nz_dataset_results}" "${out_dir}" --quality-score Q1 --hide-y-label --y-max-limit 2.25
+# python "${scripts_dir}/gen_paper_figures.py" gen-residual-histogram "${cv_model_dir}/val_results.parquet" "${foster_nz_dataset_results}" "${out_dir}" --quality-score Q2 --hide-y-label --no-show-legend --y-max-limit 2.25
+# python "${scripts_dir}/gen_paper_figures.py" gen-residual-histogram "${cv_model_dir}/val_results.parquet" "${foster_nz_dataset_results}" "${out_dir}" --quality-score Q3 --hide-y-label --no-show-legend --y-max-limit 2.25
 # export fig_size=$default_fig_size

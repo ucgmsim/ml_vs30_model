@@ -34,6 +34,7 @@ class DataConfig:
     index_col: str | None
 
     drop_sites: list[str] | None
+    drop_quality_score: list[str] | None
 
     input_variables: list[constants.InputVariable]
     derived_variables: list[constants.InputVariable] | None
@@ -126,11 +127,32 @@ def gen_dataset(
         df["index"] = vs30_values_df[data_config.index_col]
         df = df.set_index("index")
 
+
+    if "std" in vs30_values_df.columns:
+        assert np.all(df.index.values == vs30_values_df.sta.values)
+        df["ln_vs30_std"] = vs30_values_df["std"].values
+
     # Include quality score if available
     if "quality_score" in vs30_values_df.columns:
         assert np.all(df.index.values == vs30_values_df.sta.values)
         df["quality_score"] = vs30_values_df["quality_score"].values
 
+        # Always use 0.3 as ln_vs30_std for Q3 sites
+        df["ln_vs30_std"] = np.where(df.quality_score == "Q3", 0.3, df.ln_vs30_std.values)
+
+        if data_config.drop_quality_score is not None:
+            drop_mask = df["quality_score"].isin(data_config.drop_quality_score)
+            if drop_mask.any():
+                df = df.loc[~drop_mask, :]
+                logger.info(
+                    f"Dropped {drop_mask.sum()} sites based on drop_quality_score list in config."
+                )
+            else:
+                logger.warning(
+                    "No sites were dropped based on drop_quality_score list in config. "
+                    "Check that quality score values in drop_quality_score match those in dataset."
+                )
+                
     # Add input variable values
     logger.info(f"Retrieving input variable values for {len(df)} sites.")
     for variable in data_config.input_variables:
@@ -259,6 +281,7 @@ def get_input_values(
         if variable in [
             constants.InputVariable.NZNLMGroundwaterDepth,
             constants.InputVariable.NZNWTGroundwaterDepth,
+            constants.InputVariable.AbsoluteDepthToBedrock,
         ]:
             logger.info(
                 f"Found missing values for variable {variable}. "
@@ -426,6 +449,9 @@ def create_nz_nztm_input_grid(
     on_land_da = xr.DataArray(
         land_mask.astype(np.int16), coords=[nztm_y, nztm_x], dims=["y", "x"]
     )
+
+
+
     # on_land_da.attrs["_FillValue"] = np.int16(-9999)
     grid_dataset = xr.Dataset({"on_land": on_land_da})
     grid_dataset = grid_dataset.rio.write_crs(constants.NZTM2000_EPSG_STR)
@@ -433,7 +459,15 @@ def create_nz_nztm_input_grid(
     # Create output directory if it doesn't exist
     output_dir.mkdir(parents=True, exist_ok=True)
     out_ffp = output_dir / "input_grid.nc"
-    grid_dataset.to_netcdf(out_ffp, encoding={"on_land": {"dtype": np.int16, "_FillValue": -9999}})
+
+    grid_dataset = grid_dataset.rio.set_spatial_dims(x_dim="x", y_dim="y")
+    grid_dataset = grid_dataset.rio.write_grid_mapping()
+    grid_dataset = grid_dataset.rio.write_crs("EPSG:2193")
+
+    enc = dict(grid_dataset["on_land"].encoding)
+    enc.update({"dtype": np.int16, "_FillValue": -9999})
+
+    grid_dataset.to_netcdf(out_ffp, encoding={"on_land": enc})
     del grid_dataset
 
     og_variables = [
@@ -484,11 +518,24 @@ def _write_variable_to_netcdf(variable_da: xr.DataArray, variable: constants.Inp
     """Writes a variable DataArray to a NetCDF file, preserving dtype."""
     variable_da.attrs.pop("_FillValue", None)
     ds = xr.Dataset({variable.value: variable_da})
+
+    ds = ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
+    ds = ds.rio.write_grid_mapping()
+    ds = ds.rio.write_crs("EPSG:2193")
+
+    enc = dict(ds[variable.value].encoding)
     if np.issubdtype(variable_da.dtype, np.integer):
-        encoding = {variable.value: {"dtype": variable_da.dtype, "_FillValue": -9999}}
+        enc.update({"dtype": variable_da.dtype, "_FillValue": -9999})
     else:
-        encoding = {variable.value: {"dtype": variable_da.dtype, "_FillValue": None}}
-    ds.to_netcdf(out_ffp, mode="a", encoding=encoding)
+        enc.update({"dtype": variable_da.dtype, "_FillValue": None})
+
+    # if np.issubdtype(variable_da.dtype, np.integer):
+    #     encoding = {variable.value: {"dtype": variable_da.dtype, "_FillValue": -9999}}
+    # else:
+    #     encoding = {variable.value: {"dtype": variable_da.dtype, "_FillValue": None}}
+
+    # ds.to_netcdf(out_ffp, mode="a", encoding=encoding)
+    ds.to_netcdf(out_ffp, mode="a", encoding={variable.value: enc})
 
 def select_test_sites(dataset_ffp: Path, output_dir: Path, seed: int):
     """

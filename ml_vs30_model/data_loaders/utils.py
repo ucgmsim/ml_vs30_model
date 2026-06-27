@@ -19,9 +19,9 @@ def convert_dtype_and_handle_nodata(values: np.ndarray, no_data_value: float | i
     """
     try:
         if np.issubdtype(values.dtype, np.integer):
-            if no_data_value is not None and no_data_value != constants.INTEGER_NO_DATA_VALUE:
+            if no_data_value is not None and int(no_data_value) != constants.INTEGER_NO_DATA_VALUE:
                 values[values == no_data_value] = constants.INTEGER_NO_DATA_VALUE
-            values = utils.safe_cast(values, np.int16)
+            values = utils.safe_cast(values, np.int32)
         elif np.issubdtype(values.dtype, np.floating):
             if no_data_value is not None and not np.isnan(no_data_value):
                 values[values == no_data_value] = np.nan
@@ -39,7 +39,7 @@ def find_nearest_valid_wgs84(
     tif_ffp: Path,
     invalid_coords: np.ndarray,
     valid_check: Callable[[np.ndarray], np.ndarray],
-    dtype: np.dtype,
+    values: np.ndarray
 ) -> np.ndarray:
     """
     Find nearest valid values for given coordinates in a TIFF file.
@@ -60,8 +60,10 @@ def find_nearest_valid_wgs84(
     np.ndarray
         Array of shape (N,) containing the nearest valid values for the given coordinates.
     """
+    assert values.shape[0] == invalid_coords.shape[0], "Values and coordinates must have the same length."
+
     geod = Geod(ellps="WGS84")
-    updated_values = np.empty(invalid_coords.shape[0], dtype=dtype)
+    updated_values = np.empty(invalid_coords.shape[0], dtype=values.dtype)
     for i in range(invalid_coords.shape[0]):
         # Create small meshgrid around the point
         lon, lat = invalid_coords[i]
@@ -91,5 +93,11 @@ def find_nearest_valid_wgs84(
                 f"at distance {meshgrid_dist[valid_mask][nearest_idx]:.2f} m."
             )
             updated_values[i] = meshgrid_values[valid_mask][nearest_idx]
+        else:
+            logger.warning(
+                f"No valid values found within search radius for coordinate {invalid_coords[i]}. "
+                f"Setting to no-data value."
+            )
+            updated_values[i] = values[i]
 
     return updated_values

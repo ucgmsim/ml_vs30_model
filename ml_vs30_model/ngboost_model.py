@@ -8,6 +8,7 @@ import optuna as opt
 import pandas as pd
 import numpy as np
 import xarray as xr
+from scipy import stats
 from ngboost import NGBRegressor
 from ngboost.distns import Normal
 from sklearn.tree import DecisionTreeRegressor
@@ -19,6 +20,9 @@ from . import pre_processing
 from . import training
 from . import post_processing
 from . import constants
+
+# Opt-in to the future pandas behavior to prevent downcasting warnings during .ffill
+pd.set_option("future.no_silent_downcasting", True)
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +53,7 @@ def full_train(run_config: RunConfig, out_dir: Path, run_post_processing: bool =
     dataset_df = pd.read_parquet(run_config.dataset_ffp)
     logger.info(f"Dataset loaded with {len(dataset_df)} samples")
 
-    # Drop test sites 
+    # Drop test sites
     dataset_df = dataset_df[~dataset_df.index.isin(run_config.test_sites)]
     logger.info(f"Dataset size after dropping test sites: {len(dataset_df)} samples")
 
@@ -71,7 +75,7 @@ def full_train(run_config: RunConfig, out_dir: Path, run_post_processing: bool =
         train_results_df = post_processing.add_mae(train_results_df)
         train_results_df = post_processing.add_lnVs30_mse(train_results_df)
         train_results_df.to_parquet(out_dir / "train_results.parquet")
-        shap_values = post_processing.compute_shap_feature_importance(out_dir)
+        shap_values = post_processing.compute_shap_values(out_dir)
 
         # Plots
         post_processing.gen_model_perfomance_plots(out_dir, results_df=train_results_df)
@@ -79,6 +83,7 @@ def full_train(run_config: RunConfig, out_dir: Path, run_post_processing: bool =
         post_processing.gen_feature_importance_plots(
             out_dir, results_df=train_results_df, shap_values=shap_values
         )
+
 
 def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path) -> pd.DataFrame:
     """Estimates Vs30 for New Zealand using the trained model."""
@@ -110,7 +115,10 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path) -> pd.DataFrame:
         pre_input_df, _ = pre_processing.pre_process_features(input_df, run_config)
         model = mlt.utils.load_pickle(model_dir / "model.pkl")
         pred_dist = model.pred_dist(pre_input_df)
-        pred_lnVs30_mean, pred_lnVs30_std = pred_dist.params["loc"], pred_dist.params["scale"]
+        pred_lnVs30_mean, pred_lnVs30_std = (
+            pred_dist.params["loc"],
+            pred_dist.params["scale"],
+        )
 
         # Create data arrays
         pred_lnVs30_mean_da = xr.DataArray(
@@ -125,12 +133,19 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path) -> pd.DataFrame:
 
     # Save
     out_ffp = model_dir / "nz_vs30_results.nc"
-    grid_dataset = xr.Dataset({"vs30": pred_vs30, "lnVs30_mean": pred_lnVs30_mean_da, "lnVs30_std": pred_lnVs30_std_da})
+    grid_dataset = xr.Dataset(
+        {
+            "vs30": pred_vs30,
+            "lnVs30_mean": pred_lnVs30_mean_da,
+            "lnVs30_std": pred_lnVs30_std_da,
+        }
+    )
     grid_dataset = grid_dataset.rio.write_crs(constants.NZTM2000_EPSG_STR)
     grid_dataset.to_netcdf(out_ffp)
     logger.info(f"Saved Vs30 estimates across New Zealand to {out_ffp}")
 
     return out_ffp
+
 
 def estimate_vs30(model_dir: Path, input_df: pd.DataFrame):
     run_config = RunConfig.from_yaml(model_dir / "run_config.yaml")
@@ -138,7 +153,10 @@ def estimate_vs30(model_dir: Path, input_df: pd.DataFrame):
 
     model = mlt.utils.load_pickle(model_dir / "model.pkl")
     pred_dist = model.pred_dist(pre_input_df)
-    pred_lnVs30_mean, pred_lnVs30_std = pred_dist.params["loc"], pred_dist.params["scale"]
+    pred_lnVs30_mean, pred_lnVs30_std = (
+        pred_dist.params["loc"],
+        pred_dist.params["scale"],
+    )
 
     results_df = input_df[["lon", "lat"]].copy()
     if "vs30" in input_df.columns:
@@ -150,6 +168,7 @@ def estimate_vs30(model_dir: Path, input_df: pd.DataFrame):
 
     results_df = post_processing.add_residuals(results_df)
     return results_df
+
 
 def run_model_training(
     dataset_df: pd.DataFrame,
@@ -176,6 +195,34 @@ def run_model_training(
             val_sites=val_sites,
         )
     )
+    sample_weights = train_df["sample_weight"].values
+
+    assert (
+        train_X.isna().any(axis=0).sum() == 0
+    ), f"Training features contain NaN values in columns: {train_X.columns[train_X.isna().any(axis=0)].tolist()}"
+    assert val_df is None or (
+        val_X.isna().any(axis=0).sum() == 0
+    ), f"Validation features contain NaN values in columns: {val_X.columns[val_X.isna().any(axis=0)].tolist()}"
+
+    # Label MC sampling
+    mc_train_X, mc_train_y, mc_sample_weights = None, None, None
+    if run_config.apply_mc_label_sampling:
+        logger.info(
+            f"Applying Monte Carlo sampling of the labels with {run_config.mc_label_sampling_n} samples per site."
+        )
+        sampled_labels = stats.norm.rvs(
+            loc=train_y.values[:, None],
+            scale=dataset_df.loc[train_y.index, "ln_vs30_std"].values[:, None],
+            size=(len(train_y), run_config.mc_label_sampling_n),
+        )
+
+        mc_train_X = np.repeat(
+            train_X.values[:, None, :], run_config.mc_label_sampling_n, axis=1
+        ).reshape(-1, train_X.shape[-1])
+        mc_train_y = sampled_labels.ravel()
+        mc_sample_weights = np.repeat(
+            sample_weights[:, None], run_config.mc_label_sampling_n, axis=1
+        ).ravel()
 
     logger.info("Running model training")
     ngb = NGBRegressor(
@@ -192,19 +239,29 @@ def run_model_training(
         verbose=verbose,
     )
     ngb.fit(
-        train_X,
-        train_y,
+        mc_train_X if mc_train_X is not None else train_X,
+        mc_train_y if mc_train_y is not None else train_y,
         X_val=val_X if val_X is not None else None,
         Y_val=val_y if val_y is not None else None,
-        sample_weight=train_df["sample_weight"].values,
+        sample_weight=(
+            mc_sample_weights if mc_sample_weights is not None else sample_weights
+        ),
+        val_sample_weight=(
+            val_df["sample_weight"].values if val_df is not None else None
+        ),
+        early_stopping_rounds=run_config.model_config.early_stopping_rounds,
     )
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Iteration metrics
-    pd.DataFrame(ngb.evals_result["train"]).to_parquet(
-        out_dir / "train_metrics.parquet"
+    tmp_metrics = pd.DataFrame(ngb.evals_result["train"])
+    train_metrics_df = pd.DataFrame(
+        index=np.arange(run_config.model_config.iterations), columns=tmp_metrics.columns
     )
+    train_metrics_df.loc[tmp_metrics.index, tmp_metrics.columns] = tmp_metrics.values
+    train_metrics_df = train_metrics_df.ffill().infer_objects(copy=False)
+    train_metrics_df.to_parquet(out_dir / "train_metrics.parquet")
 
     # Validation results
     val_results_df = None
@@ -223,17 +280,19 @@ def run_model_training(
         val_result_df["pred_vs30_std"] = val_pred["scale"]
         val_result_df.to_parquet(out_dir / "val_results.parquet")
 
-        pd.DataFrame(ngb.evals_result["val"]).to_parquet(
-            out_dir / "val_metrics.parquet"
+        tmp_metrics = pd.DataFrame(ngb.evals_result["val"])
+        val_metrics_df = pd.DataFrame(
+            index=np.arange(run_config.model_config.iterations),
+            columns=tmp_metrics.columns,
         )
+        val_metrics_df.loc[tmp_metrics.index, tmp_metrics.columns] = tmp_metrics.values
+        val_metrics_df = val_metrics_df.ffill().infer_objects(copy=False)
+        val_metrics_df.to_parquet(out_dir / "val_metrics.parquet")
 
     # Training results
-    train_result_df = pd.DataFrame(
-        index=train_y.index,
-        data=dataset_df.loc[
-            train_y.index, ["lon", "lat", "vs30", "vs30_bin", "dense_vs30_bin"]
-        ],
-    )
+    train_result_df = train_df[
+        ["lon", "lat", "vs30", "vs30_bin", "dense_vs30_bin"]
+    ].copy()
     if save_train_results:
         train_result_df["station"] = train_result_df.index.astype(str)
         train_result_df["cv_ix"] = cv_ix
@@ -247,7 +306,7 @@ def run_model_training(
 
     # Compute SHAP values
     if compute_shap:
-        post_processing.compute_shap_feature_importance(
+        post_processing.compute_shap_values(
             out_dir,
             run_config=run_config,
             train_results=train_result_df,
@@ -380,16 +439,19 @@ def _model_objective_fn(trial: opt.Trial, hp_config: NGBoostHPOptConfig, n_procs
     val_logscore = xr.open_dataarray(output_dir / "val_metrics.nc").sel(
         metric="LOGSCORE"
     )
-    best_iter = val_logscore.mean(dim="cv_fold").argmin(dim="iteration").item()
+    best_iters = val_logscore.argmin(dim="iteration")
+    best_iter_mean = best_iters.mean(dim="cv_fold").item()
+    best_iters_std = best_iters.std(dim="cv_fold").item()
 
-    best_logscore = val_logscore.sel(iteration=best_iter).mean().item()
-    best_logscore_std = val_logscore.sel(iteration=best_iter).std().item()
+    best_logscore_mean = val_logscore.sel(iteration=best_iters).mean().item()
+    best_logscore_std = val_logscore.sel(iteration=best_iters).std().item()
 
-    trial.set_user_attr("best_iteration", int(best_iter))
-    trial.set_user_attr("best_logscore", float(best_logscore))
+    trial.set_user_attr("best_iteration_mean", int(best_iter_mean))
+    trial.set_user_attr("best_iteration_std", float(best_iters_std))
+    trial.set_user_attr("best_logscore_mean", float(best_logscore_mean))
     trial.set_user_attr("best_logscore_std", float(best_logscore_std))
 
-    return best_logscore
+    return best_logscore_mean
 
 
 def _get_trial_run_config(trial: opt.Trial, hp_config: NGBoostHPOptConfig):

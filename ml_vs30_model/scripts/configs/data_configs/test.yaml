@@ -1,20 +1,44 @@
 rel_vs30_values_ffp: cleaned_vs30_data/nz_site_db_v1p5.csv
 index_col: "sta"
 
-drop_sites: []
+drop_sites: 
+  # Loacted on Whakaari/White Island, most input variables are 
+  # garbage for this site.
+  - WSRZ 
+  # Duplicates
+  - 029A  # Same as HCDS
+  - 928B  # Same as HNPS
+  - 014A  # Same as NCDS
+  - 096A  # Same as 225B
+  - 709A  # Same as GWTS
+  - 017A  # Same as GISS
+  - 249A  # Same as 642H
+  - 642G  # Same as 642H
+  - 646A  # Same as 646C
+  - D10C  # Same as CCPS
+  - 044A  # Same as SKFS
+
+drop_quality_score: null
 
 input_variables: 
-  # - elevation
-  # - nz_geology_age_min
-  # - nz_geology_age_max
-  # - nz_nlm_groundwater_depth
-  # - nz_nwt_groundwater_depth
+  # - compound_topographic_index
+  # - profile_curvature
+  # - tangential_curvature
+  # - terrain_ruggedness_index
+  # - topographic_position_index
+  # - vector_ruggedness_measure
+  # - landform_shannon_index
+  # - landform_entropy
+  # - landform_uniformity
+  # - absolute_depth_to_bedrock
   # - depth_to_groundwater
-  # - nz_geology_category
+  # - elevation
   # - nz_lithology_category
   # - nz_geological_unit
-  # - absolute_depth_to_bedrock
-  # - nzenvds_distance_rivers
+  # - nz_geology_category
+  - nz_distance_to_river_st1_greater
+  # - nz_quaternary_region
+  # - nz_distance_to_coast
   # - nz_distance_to_river_st1
   # - nz_distance_to_river_st2
   # - nz_distance_to_river_st3
@@ -23,16 +47,31 @@ input_variables:
   # - nz_distance_to_river_st6
   # - nz_distance_to_river_st7
   # - nz_distance_to_river_st8
-  # - compound_topographic_index
-  - nzenvds_slope_deg
-  # - nz_quaternary_region
-
-  # - terrain_ruggedness_index
-
+  # - nz_geology_age_min
+  # - nz_geology_age_max
+  # - nz_nlm_groundwater_depth
+  # - nz_nwt_groundwater_depth
+  # - nzenvds_distance_rivers
+  # - nzenvds_distance_rivers_vertical
+  # - nzenvds_precip_ann
+  # - nzenvds_slope_deg
+  # - nzenvds_soil_acid_p
+  # - nzenvds_soil_age
+  # - nzenvds_soil_drainage
+  # - nzenvds_soil_induration
+  # - nzenvds_soil_particle_size
+  # - nzenvds_topo_geomorphons
+  # - nzenvds_topo_normalised_height
+  # - nzenvds_topo_position
+  # - nzenvds_topo_roughness
+  # - nzenvds_topo_ruggedness
+  # - nzenvds_topo_valley_depth
+  # - nzenvds_topo_wetness
 derived_variables:
   # - nz_geology_age_mid
   # - nz_geology_age_ln_mid
   # - nz_combined_groundwater_depth
   # - nz_combined_groundwater_depth_ln
+
 
 

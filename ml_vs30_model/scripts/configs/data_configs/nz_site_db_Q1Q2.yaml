@@ -1,11 +1,31 @@
-rel_vs30_values_ffp: cleaned_vs30_data/nzgmdb_site_table_Q1Q2Q3.csv
+rel_vs30_values_ffp: cleaned_vs30_data/nz_site_db_v1p5.csv
 index_col: "sta"
 
+drop_sites: 
+  # Loacted on Whakaari/White Island, most input variables are 
+  # garbage for this site.
+  - WSRZ 
+  # Duplicates
+  - 029A  # Same as HCDS
+  - 928B  # Same as HNPS
+  - 014A  # Same as NCDS
+  - 096A  # Same as 225B
+  - 709A  # Same as GWTS
+  - 017A  # Same as GISS
+  - 249A  # Same as 642H
+  - 642G  # Same as 642H
+  - 646A  # Same as 646C
+  - D10C  # Same as CCPS
+  - 044A  # Same as SKFS
+
+drop_quality_score:
+  - Q3
+
 input_variables: 
-  - roughness
-  - topographic_slope
+  # - roughness
+  # - topographic_slope
   - compound_topographic_index
-  - geomorphon
+  # - geomorphon
   - profile_curvature
   - tangential_curvature
   - terrain_ruggedness_index
@@ -16,8 +36,20 @@ input_variables:
   - landform_uniformity
   - absolute_depth_to_bedrock
   - depth_to_groundwater
-  - nz_geology_category
+  - elevation
+  - nz_lithology_category
+  - nz_geological_unit
+  - nz_quaternary_region
+  # - nz_geology_category
   - nz_distance_to_coast
+  - nz_distance_to_river_st1
+  - nz_distance_to_river_st2
+  - nz_distance_to_river_st3
+  - nz_distance_to_river_st4
+  - nz_distance_to_river_st5
+  - nz_distance_to_river_st6
+  - nz_distance_to_river_st7
+  - nz_distance_to_river_st8
   - nz_geology_age_min
   - nz_geology_age_max
   - nz_nlm_groundwater_depth

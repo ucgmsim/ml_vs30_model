@@ -98,7 +98,7 @@ class TIFLoader(BaseLoader):
                 )
 
                 values[mask] = data_loader_utils.find_nearest_valid_wgs84(
-                    tif_ffp, coords[mask], lambda v: v >= 0, values.dtype
+                    tif_ffp, coords[mask], lambda v: v >= 0, values[mask]
                 )
 
         return values

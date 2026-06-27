@@ -60,7 +60,7 @@ def full_train(run_config: RunConfig, out_dir: Path, run_post_processing: bool =
         train_results_df = post_processing.add_mae(train_results_df)
         train_results_df = post_processing.add_lnVs30_mse(train_results_df)
         train_results_df.to_parquet(out_dir / "train_results.parquet")
-        shap_values = post_processing.compute_shap_feature_importance(out_dir)
+        shap_values = post_processing.compute_shap_values(out_dir)
 
         # Plots
         post_processing.gen_model_perfomance_plots(out_dir, results_df=train_results_df)
@@ -153,7 +153,7 @@ def run_model_training(
 
     # Compute SHAP values
     if compute_shap:
-        post_processing.compute_shap_feature_importance(
+        post_processing.compute_shap_values(
             out_dir,
             run_config=run_config,
             train_results=train_result_df,

@@ -13,7 +13,6 @@ from .configs import RunConfig, ModelType
 from . import utils
 from . import catboost_model
 from . import ngboost_model
-from . import constants
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,8 @@ def run_feature_selection(
         )
 
     # Run base
-    _run_helper(base_run_config, "base", base_out_dir, run_fn)
+    if len(base_run_config.input_variables) > 0:
+        _run_helper(base_run_config, "base", base_out_dir, run_fn)
 
     # Run variable variations
     if n_procs == 1:
@@ -52,14 +52,18 @@ def run_feature_selection(
                     for p_ix, variable in enumerate(variables)
                 ],
             )
-    
+
     # Summarise results
     logger.info("Summarising feature selection results")
     results = {}
-    run_dir_names = [cur_dir.name for cur_dir in base_out_dir.glob("*/") if cur_dir.is_dir()]
+    run_dir_names = [
+        cur_dir.name for cur_dir in base_out_dir.glob("*/") if cur_dir.is_dir()
+    ]
     for cur_dir_name in run_dir_names:
         variable = cur_dir_name.split("_var_")[-1]
-        results_df = pd.read_parquet(base_out_dir / cur_dir_name / "val_results.parquet")
+        results_df = pd.read_parquet(
+            base_out_dir / cur_dir_name / "val_results.parquet"
+        )
 
         bias = np.mean(results_df.ln_residual.values)
         res_std = np.std(results_df.ln_residual.values)
@@ -68,27 +72,54 @@ def run_feature_selection(
             "res_std": res_std,
         }
 
+        bin_bias_mean = results_df.groupby("dense_vs30_bin", observed=True)["ln_residual"].mean()
+        bin_bias_mean.index =  np.char.add("bias_mean_",bin_bias_mean.index.values.astype(str))
+        bin_bias_std = results_df.groupby("dense_vs30_bin", observed=True)["ln_residual"].std()
+        bin_bias_std.index =  np.char.add("bias_std_",bin_bias_std.index.values.astype(str))
+
+        cur_results |= bin_bias_mean.to_dict()
+        cur_results |= bin_bias_std.to_dict()
+
         metric_da = xr.load_dataarray(base_out_dir / cur_dir_name / "val_metrics.nc")
 
         if base_run_config.model_type == ModelType.CatBoost:
-            best_iter = metric_da.mean(dim="cv_fold").sel(metric="RMSE").argmin(dim="iteration").item()
+            best_iter = (
+                metric_da.mean(dim="cv_fold")
+                .sel(metric="RMSE")
+                .argmin(dim="iteration")
+                .item()
+            )
             cur_results |= {
                 "best_iter": best_iter,
-                "best_rmse": metric_da.sel(iteration=best_iter, metric="RMSE").mean().item(),
-                "best_rmse_std": metric_da.sel(iteration=best_iter, metric="RMSE").mean().item(),
+                "best_rmse": metric_da.sel(iteration=best_iter, metric="RMSE")
+                .mean()
+                .item(),
+                "best_rmse_std": metric_da.sel(iteration=best_iter, metric="RMSE")
+                .mean()
+                .item(),
             }
         elif base_run_config.model_type == ModelType.NGBoost:
-            best_iter = metric_da.mean(dim="cv_fold").sel(metric="LOGSCORE").argmin(dim="iteration").item()
+            best_iters = metric_da.argmin(dim="iteration").sel(metric="LOGSCORE")
+            best_logscores = metric_da.sel(iteration=best_iters, metric="LOGSCORE")
+
+            best_iter = (
+                metric_da.mean(dim="cv_fold")
+                .sel(metric="LOGSCORE")
+                .argmin(dim="iteration")
+                .item()
+            )
             cur_results |= {
-                "best_iter": best_iter,
-                "best_logscore": metric_da.sel(iteration=best_iter, metric="LOGSCORE").mean().item(),
-                "best_logscore_std": metric_da.sel(iteration=best_iter, metric="LOGSCORE").std().item(),
+                "best_iter_mean": best_iters.mean().item(),
+                "best_iter_std": best_iters.std().item(),
+                "best_logscore_mean": best_logscores.mean().item(),
+                "best_logscore_std": best_logscores.std().item(),
             }
 
         results[variable] = cur_results
 
     results_df = pd.DataFrame(results).T
     results_df.to_parquet(base_out_dir / "feature_selection_results.parquet")
+
 
 def _run_helper(
     base_run_config: RunConfig,
@@ -99,7 +130,9 @@ def _run_helper(
 ):
     """Helper function to run a single feature selection run for a given variable."""
     if variable in base_run_config.input_variables:
-        logger.warning(f"Variable {variable} is already in the base run configuration. Skipping run for this variable.")
+        logger.warning(
+            f"Variable {variable} is already in the base run configuration. Skipping run for this variable."
+        )
         return
 
     run_id = f"{mlt.utils.create_run_id(True)}_var_{variable}"
@@ -113,7 +146,9 @@ def _run_helper(
         file_handler.setLevel(logging.DEBUG)
         root_logger.addHandler(file_handler)
         run_logger = logging.getLogger(__name__)
-        run_logger.info(f"Running feature selection for variable {variable}, run ID: {run_id}")
+        run_logger.info(
+            f"Running feature selection for variable {variable}, run ID: {run_id}"
+        )
     else:
         run_logger = mlt.utils.setup_logging(log_ffp, enable_console=False)
         run_logger.info(

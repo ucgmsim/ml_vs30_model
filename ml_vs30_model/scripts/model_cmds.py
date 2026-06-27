@@ -301,6 +301,17 @@ def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
     mlt.utils.setup_logging()
     vs30.post_processing.add_ml_model_residuals(dataset_ffp, other_dataset_ffp)
 
+@app.command("add-krigged-vs30")
+def add_krigged_vs30(full_model_dir: Path):
+    """
+    Adds krigged Vs30 estimates to the dataset used for the full model.
+    """
+    mlt.utils.setup_logging()
+    vs30.post_processing.add_krigged_vs30(full_model_dir)
+
+
+    print("wtf")
+
 
 @app.command("run-feature-selection")
 def run_feature_selection(

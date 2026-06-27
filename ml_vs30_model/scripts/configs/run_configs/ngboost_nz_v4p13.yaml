@@ -3,15 +3,15 @@ model_type: ngboost
 pre_process_categorial: true
 
 apply_vs30_sample_weights: true
-max_vs30_weight: 1.5
+max_vs30_weight: 2.5
 
 apply_quality_sample_weight_factor: true
-q1_weight_factor: 1.25
-q2_weight_factor: 1.0
-q3_weight_factor: 0.75
+q1_weight_factor: 1.5
+q2_weight_factor: 1.25
+q3_weight_factor: dynamic
 
 apply_mc_label_sampling: true
-mc_label_sampling_n: 100
+mc_label_sampling_n: 50
 
 rel_dataset_ffp: datasets/nz_site_db_dataset.parquet
 rel_test_sites_ffp: datasets/nz_site_db_test_sites/test_sites.npy
@@ -32,10 +32,10 @@ n_cv_folds: 50
 rel_results_dir: results/ind_results
 
 model_config:
-  iterations: 80
-  learning_rate: 0.035
-  minibatch_frac: 0.5
-  col_sample: 0.7
-  base_max_depth: 7
-  base_min_samples_leaf: 10
+  iterations: 40
+  learning_rate: 0.07
+  minibatch_frac: 0.55
+  col_sample: 0.725
+  base_max_depth: 5
+  base_min_samples_leaf: 3
   early_stopping_rounds: 5

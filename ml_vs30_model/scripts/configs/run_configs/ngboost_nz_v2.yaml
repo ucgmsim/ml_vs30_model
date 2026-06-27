@@ -5,10 +5,13 @@ pre_process_categorial: true
 apply_vs30_sample_weights: true
 max_vs30_weight: 1.5
 
-apply_quality_sample_weights: true
+apply_quality_sample_weight_factor: true
 q1_weight_factor: 1.25
 q2_weight_factor: 1.0
 q3_weight_factor: 0.75
+
+apply_mc_label_sampling: false
+mc_label_sampling_n: 100
 
 rel_dataset_ffp: datasets/nz_site_db_dataset.parquet
 rel_test_sites_ffp: datasets/nz_site_db_test_sites/test_sites.npy

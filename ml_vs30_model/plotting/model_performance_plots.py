@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy import stats
 
 import ml_tools as mlt
 
@@ -383,6 +384,39 @@ def residuals_histogram(results_df: pd.DataFrame, output_ffp: Path):
     )
 
 
+def plot_lowess_line(
+    x: np.ndarray,
+    y: np.ndarray,
+    ax: plt.Axes,
+    color: str,
+    linewidth: float,
+    frac: float = 0.4,
+    label: str | None = None,
+    quantiles: tuple[float, float] | None = (0.36, 0.64),
+    **plt_kwargs,
+):
+    x_values, y_values = mlt.utils.compute_lowess_bootstrap(
+        x, y, frac=frac, n_bootstrap_runs=100
+    )
+    ax.plot(
+        x_values,
+        np.median(y_values, axis=1),
+        color=color,
+        linewidth=linewidth,
+        label=label,
+        **plt_kwargs,
+    )
+    if quantiles is not None:
+        ax.fill_between(
+            x_values,
+            np.quantile(y_values, quantiles[1], axis=1),
+            np.quantile(y_values, quantiles[0], axis=1),
+            color=color,
+            alpha=0.2,
+            **plt_kwargs,
+        )
+
+
 def metric_scatter_plot(
     results_df: pd.DataFrame,
     output_ffp: Path,
@@ -391,6 +425,7 @@ def metric_scatter_plot(
     x_limits: tuple[float, float] | None = None,
     show_geyin_maurer_model: bool = False,
     show_trend_line: bool = True,
+    show_quality_trend_lines: bool = False,
 ):
     """
     Generates a scatter plot of the specified metric (e.g., MAE) vs true vs30 values,
@@ -412,33 +447,32 @@ def metric_scatter_plot(
             color=color,
             zorder=10 - i,
             s=constants.QUALITY_SCORE_MARKER_SIZE[k],
+            marker=constants.QUALITY_SCORE_MARKERS[k],
         )
-
-    bin_centers, bin_means, bin_stds = mlt.utils.compute_count_binned_trend(
-        results_df["vs30"].values,
-        results_df[metric_name].values,
-        n_points_per_bin=100,
-        n_bins=None,
-    )
 
     if show_trend_line:
-        ax.plot(
-            bin_centers,
-            bin_means,
+        plot_lowess_line(
+            results_df["vs30"].values,
+            results_df[metric_name].values,
+            ax,
+            label="All - LOWESS Trend Line",
             color="red",
-            linewidth=2,
-            label="Trend Line",
-            zorder=15,
+            linewidth=constants.FIG_LINEWIDTH,
         )
-        ax.fill_between(
-            bin_centers,
-            bin_means - bin_stds,
-            bin_means + bin_stds,
-            color="red",
-            alpha=0.2,
-            label="Trend ± 1 Std Dev",
-            zorder=14,
-        )
+
+    if show_quality_trend_lines:
+        for k, color in constants.QUALITY_SCORE_COLORS.items():
+            mask = results_df["quality_score"] == k
+            if k in ["Q1", "Q2"]:
+                mask &= results_df["vs30"] <= 600
+            plot_lowess_line(
+                results_df.loc[mask, "vs30"].values,
+                results_df.loc[mask, metric_name].values,
+                ax,
+                label=f"{k} - LOWESS Trend",
+                color=color,
+                linewidth=constants.FIG_GROUP_LINEWIDTH,
+            )
 
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_xlabel("True vs30")
@@ -529,9 +563,9 @@ def cv_iteration_metric_plot(
             linewidth=3,
         )
 
-        best_iter = val_metrics_df.mean(axis=1).idxmin()
+        best_iters = val_metrics_df.idxmin(axis=0)
         ax.axvline(
-            best_iter,
+            best_iters.mean(),
             color="black",
             linestyle="--",
             linewidth=1,
@@ -540,8 +574,8 @@ def cv_iteration_metric_plot(
         ax.text(
             0.02,
             0.98,
-            f"Metric: {metric} (Validation) - Best average: {val_metrics_df.loc[best_iter].mean():.4f}"
-            rf" ($\sigma$ = {val_metrics_df.loc[best_iter].std():.4f}), Best iteration: {best_iter}",
+            f"Metric: {metric} (Validation) - Best average: {val_metrics_df.min(axis=0).mean():.4f}"
+            rf" ($\sigma$ = {val_metrics_df.min(axis=0).std():.4f}), Best iteration: {best_iters.mean()} +/- {best_iters.std():.1f}",
             transform=ax.transAxes,
             horizontalalignment="left",
             verticalalignment="top",
@@ -585,7 +619,9 @@ def quaternary_region_residual(
         x=constants.InputVariable.NZQuaternaryRegion,
         y="ln_residual",
         ax=ax,
-        order=results_df[constants.InputVariable.NZQuaternaryRegion].value_counts().index,  
+        order=results_df[constants.InputVariable.NZQuaternaryRegion]
+        .value_counts()
+        .index,
     )
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_ylim(-1.5, 1.5)
@@ -621,3 +657,46 @@ def quaternary_region_residual(
     fig.tight_layout()
     fig.savefig(output_ffp)
     plt.close(fig)
+
+    mlt.utils.write_to_yaml(
+        dict(type="quaternary-region-residual"),
+        output_ffp.with_name(output_ffp.stem + ".yaml"),
+        clobber=True,
+    )
+
+
+def pit_plot(results_df: pd.DataFrame, output_dir: Path, write_yaml: bool = True):
+    """Generates a PIT plot of the predicted vs30 distributions."""
+    std_res = (
+        np.log(results_df["pred_vs30"]) - np.log(results_df["vs30"])
+    ) / results_df["pred_vs30_std"]
+    pit_values = stats.norm.cdf(std_res)
+
+    fig, ax = plt.subplots(figsize=constants.FIG_SIZE)
+    sns.histplot(
+        pit_values,
+        bins=15,
+        ax=ax,
+        color="tab:blue",
+        edgecolor="black",
+        stat="density",
+        label="PIT Values",
+    )
+    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    ax.axhline(1.0, color="red", linestyle="--", label="Uniform Distribution Density")
+    ax.set_xlabel("PIT Values")
+    ax.set_ylabel("Count")
+    ax.set_xlim(0, 1)
+    ax.legend()
+
+    fig.tight_layout()
+    output_ffp = output_dir / f"pit_plot.{constants.FIG_FORMAT}"
+    fig.savefig(output_ffp, dpi=constants.FIG_DPI)
+    plt.close(fig)
+
+    if write_yaml:
+        mlt.utils.write_to_yaml(
+            dict(type="pit-plot"),
+            output_ffp.with_name(output_ffp.stem + ".yaml"),
+            clobber=True,
+        )

@@ -38,6 +38,7 @@ class NGBoostModelConfig:
     col_sample: float
     base_max_depth: int
     base_min_samples_leaf: int
+    early_stopping_rounds: int | None = None
 
     @classmethod
     def from_dict(cls, config_dict: dict) -> "NGBoostModelConfig":
@@ -51,6 +52,7 @@ class NGBoostModelConfig:
             "col_sample": float(self.col_sample),
             "base_max_depth": int(self.base_max_depth),
             "base_min_samples_leaf": int(self.base_min_samples_leaf),
+            "early_stopping_rounds": self.early_stopping_rounds,
         }
 
 
@@ -69,7 +71,14 @@ class RunConfig:
     apply_vs30_sample_weights: bool
     max_vs30_weight: float
 
-    apply_quality_sample_weights: bool
+    apply_mc_label_sampling: bool
+    mc_label_sampling_n: int
+    """
+    Whether to use Monte Carlo sampling of the labels, 
+    and if so how many samples to draw per site.
+    """
+
+    apply_quality_sample_weight_factor: bool
     """
     Sample weighting based on quality score, applied
     after all other sample weighting adjustments, as 
@@ -77,7 +86,7 @@ class RunConfig:
     """
     q1_weight_factor: float
     q2_weight_factor: float
-    q3_weight_factor: float
+    q3_weight_factor: float | str
 
     n_cv_folds: int
     """Number of CV folds to use. Only applicable when using CV."""
@@ -115,6 +124,12 @@ class RunConfig:
     def categorial_variables(self) -> list[constants.InputVariable]:
         return [
             var for var in self.input_variables if var in constants.CATEGORIAL_VARIABLES
+        ]
+    
+    @property
+    def ordinal_variables(self) -> list[constants.InputVariable]:
+        return [
+            var for var in self.input_variables if var in constants.ORDINAL_VARIABLES
         ]
 
     @property
@@ -214,12 +229,20 @@ class RunConfig:
             "n_cv_folds": int(self.n_cv_folds),
             "rel_results_dir": str(self.rel_results_dir),
             "model_config": self.model_config.to_dict(),
+            "apply_mc_label_sampling": bool(self.apply_mc_label_sampling),
+            "mc_label_sampling_n": int(self.mc_label_sampling_n),
             "apply_vs30_sample_weights": bool(self.apply_vs30_sample_weights),
             "max_vs30_weight": float(self.max_vs30_weight),
-            "apply_quality_sample_weights": bool(self.apply_quality_sample_weights),
+            "apply_quality_sample_weight_factor": bool(
+                self.apply_quality_sample_weight_factor
+            ),
             "q1_weight_factor": float(self.q1_weight_factor),
             "q2_weight_factor": float(self.q2_weight_factor),
-            "q3_weight_factor": float(self.q3_weight_factor),
+            "q3_weight_factor": (
+                float(self.q3_weight_factor)
+                if isinstance(self.q3_weight_factor, float)
+                else str(self.q3_weight_factor)
+            ),
             "pre_process_categorial": bool(self.pre_process_categorial),
         }
 

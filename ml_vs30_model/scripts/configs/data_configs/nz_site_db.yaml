@@ -18,6 +18,8 @@ drop_sites:
   - D10C  # Same as CCPS
   - 044A  # Same as SKFS
 
+drop_quality_score: null
+
 input_variables: 
   # - roughness
   # - topographic_slope
@@ -37,7 +39,7 @@ input_variables:
   - nz_lithology_category
   - nz_geological_unit
   - nz_quaternary_region
-  # - nz_geology_category
+  - nz_geology_category
   - nz_distance_to_coast
   - nz_distance_to_river_st1
   - nz_distance_to_river_st2
@@ -47,6 +49,13 @@ input_variables:
   - nz_distance_to_river_st6
   - nz_distance_to_river_st7
   - nz_distance_to_river_st8
+  - nz_distance_to_river_st1_greater
+  - nz_distance_to_river_st2_greater
+  - nz_distance_to_river_st3_greater
+  - nz_distance_to_river_st4_greater
+  - nz_distance_to_river_st5_greater
+  - nz_distance_to_river_st6_greater
+  - nz_distance_to_river_st7_greater
   - nz_geology_age_min
   - nz_geology_age_max
   - nz_nlm_groundwater_depth

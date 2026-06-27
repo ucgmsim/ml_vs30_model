@@ -57,6 +57,13 @@ class InputVariable(StrEnum):
     NZDistanceToRiver_ST6 = "nz_distance_to_river_st6"  # Manually computed distance to river (Strahler 6th order)
     NZDistanceToRiver_ST7 = "nz_distance_to_river_st7"  # Manually computed distance to river (Strahler 7th order)
     NZDistanceToRiver_ST8 = "nz_distance_to_river_st8"  # Manually computed distance to river (Strahler 8th order)
+    NZDistanceToRiver_ST1_Greater = "nz_distance_to_river_st1_greater"  # Strahler 1st and greater order rivers
+    NZDistanceToRiver_ST2_Greater = "nz_distance_to_river_st2_greater"  # Strahler 2nd and greater order rivers
+    NZDistanceToRiver_ST3_Greater = "nz_distance_to_river_st3_greater"  # Strahler 3rd and greater order rivers
+    NZDistanceToRiver_ST4_Greater = "nz_distance_to_river_st4_greater"  # Strahler 4th and greater order rivers
+    NZDistanceToRiver_ST5_Greater = "nz_distance_to_river_st5_greater"  # Strahler 5th and greater order rivers
+    NZDistanceToRiver_ST6_Greater = "nz_distance_to_river_st6_greater"  # Strahler 6th and greater order rivers
+    NZDistanceToRiver_ST7_Greater = "nz_distance_to_river_st7_greater"  # Strahler 7th and greater order rivers
     NZGeologyAgeMin = "nz_geology_age_min"  # GNS Geology Units
     NZGeologyAgeMax = "nz_geology_age_max"  # GNS Geology Units
     NZGeologyAgeMid = "nz_geology_age_mid"
@@ -115,6 +122,13 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.NZDistanceToRiver_ST6: DataSource.NZDistanceToRiver,
     InputVariable.NZDistanceToRiver_ST7: DataSource.NZDistanceToRiver,
     InputVariable.NZDistanceToRiver_ST8: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST1_Greater: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST2_Greater: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST3_Greater: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST4_Greater: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST5_Greater: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST6_Greater: DataSource.NZDistanceToRiver,
+    InputVariable.NZDistanceToRiver_ST7_Greater: DataSource.NZDistanceToRiver,
     InputVariable.NZGeologyAgeMin: DataSource.ShapeLoader,
     InputVariable.NZGeologyAgeMax: DataSource.ShapeLoader,
     InputVariable.NZLithologyCategory: DataSource.ShapeLoader,
@@ -190,17 +204,21 @@ REVERSE_NICE_NAME_TO_INPUT_VARIABLE_MAPPING = {
 
 CATEGORIAL_VARIABLES = [
     InputVariable.Geomorphon,
-    InputVariable.NZGeologyCategory,
     InputVariable.NZEnvDSTopoGeomorphons,
-    InputVariable.NZEnvDSSoilParticleSize,
-    InputVariable.NZEnvDSSoilInduration,
-    InputVariable.NZEnvDSSoilDrainage,
-    InputVariable.NZEnvDSSoilAge,
-    InputVariable.NZEnvDSSoilAcidP,
     InputVariable.NZGeologicalUnit,
     InputVariable.NZLithologyCategory,
     InputVariable.NZQuaternaryRegion,
 ]
+
+ORDINAL_VARIABLES = [
+    InputVariable.NZGeologyCategory,
+    InputVariable.NZEnvDSSoilAcidP,
+    InputVariable.NZEnvDSSoilAge,
+    InputVariable.NZEnvDSSoilDrainage,
+    InputVariable.NZEnvDSSoilInduration,
+    InputVariable.NZEnvDSSoilParticleSize,
+]
+
 
 GLOBAL_INPUT_VARS = np.array(
     [
@@ -300,14 +318,17 @@ INPUT_VAR_TO_FFP_MAP = {
 }
 
 
-
 WGS84_EPSG_STR = "EPSG:4326"
 WGS84_EPSG = 4326
 NZTM2000_EPSG_STR = "EPSG:2193"
 NZTM2000_EPSG = 2193
 
-NZTM_TO_WGS84_TRANSFORMER = Transformer.from_crs(NZTM2000_EPSG, WGS84_EPSG, always_xy=True)
-WGS84_TO_NZTM_TRANSFORMER = Transformer.from_crs(WGS84_EPSG, NZTM2000_EPSG, always_xy=True)
+NZTM_TO_WGS84_TRANSFORMER = Transformer.from_crs(
+    NZTM2000_EPSG, WGS84_EPSG, always_xy=True
+)
+WGS84_TO_NZTM_TRANSFORMER = Transformer.from_crs(
+    WGS84_EPSG, NZTM2000_EPSG, always_xy=True
+)
 
 
 LN_NORM_VARS = [
@@ -316,10 +337,6 @@ LN_NORM_VARS = [
     InputVariable.Roughness,
     InputVariable.VectorRuggednessMeasure,
     InputVariable.TerrainRuggednessIndex,
-    InputVariable.NZDistanceToRiver_ST3,
-    InputVariable.NZDistanceToRiver_ST4,
-    InputVariable.NZDistanceToRiver_ST5,
-    InputVariable.NZDistanceToRiver_ST6,
     InputVariable.NZEnvDSSlopeDeg,
     InputVariable.NZEnvDSTopoRoughness,
     InputVariable.NZEnvDSTopoRuggedness,
@@ -334,25 +351,39 @@ NORM_VARS = [
     InputVariable.TangentialCurvature,
 ]
 
-MIN_MAX_SCALE_PARAMS = {
-    InputVariable.Elevation: (0, 1500),
+MIN_MAX_CLIP_SCALE_PARAMS = {
+    InputVariable.Elevation: (0, 1500, True),
     InputVariable.NZCombinedGroundwaterDepthLn: (
         -2,
         3.2188758249,
+        True,
     ),  # (0.002478752177, 25) (m)
-    InputVariable.CompoundTopgraphicIndex: (-4.0, 10.0),
-    InputVariable.LandformEntropy: (0, 3.0),
-    InputVariable.LandformUniformity: (0, 1.0),
-    InputVariable.LandformShannonIndex: (0, 3.0),
-    InputVariable.NZDistanceToCoast: (0, 100_000),
-    InputVariable.NZEnvDSTopoNormalisedHeight: (0, 1),
-    InputVariable.NZEnvDSTopoPosition: (-20, 20),
-    InputVariable.NZGeologyAgeLnMid: (-6, 6),
-    InputVariable.NZDistanceToRiver_ST1: (0, 1_000),
-    InputVariable.NZDistanceToRiver_ST2: (0, 1_000),
-    InputVariable.NZDistanceToRiver_ST7: (0, 25_000),
-    InputVariable.NZDistanceToRiver_ST8: (0, 30_000),
-    InputVariable.NZEnvDSDistanceRiversVertical: (0, 200),
+    # InputVariable.NZCombinedGroundwaterDepth: (0, 25, True),
+    InputVariable.NZCombinedGroundwaterDepth: (0, 10, True),
+    InputVariable.CompoundTopgraphicIndex: (-4.0, 10.0, False),
+    InputVariable.LandformEntropy: (0, 3.0, False),
+    InputVariable.LandformUniformity: (0, 1.0, False),
+    InputVariable.LandformShannonIndex: (0, 3.0, False),
+    InputVariable.NZDistanceToCoast: (0, 100_000, True),
+    InputVariable.NZEnvDSTopoNormalisedHeight: (0, 1, False),
+    InputVariable.NZEnvDSTopoPosition: (-20, 20, True),
+    InputVariable.NZGeologyAgeLnMid: (-6, 6, False),
+    InputVariable.NZDistanceToRiver_ST1: (0, 1_000, True),
+    InputVariable.NZDistanceToRiver_ST2: (0, 1_000, True),
+    InputVariable.NZDistanceToRiver_ST3: (0, 5_000, True),
+    InputVariable.NZDistanceToRiver_ST4: (0, 5_000, True),
+    InputVariable.NZDistanceToRiver_ST5: (0, 10_000, True),
+    InputVariable.NZDistanceToRiver_ST6: (0, 10_000, True),
+    InputVariable.NZDistanceToRiver_ST7: (0, 15_000, True),
+    InputVariable.NZDistanceToRiver_ST8: (0, 30_000, True),
+    InputVariable.NZDistanceToRiver_ST1_Greater: (0, 30_000, True),
+    InputVariable.NZDistanceToRiver_ST2_Greater: (0, 30_000, True),
+    InputVariable.NZDistanceToRiver_ST3_Greater: (0, 30_000, True),
+    InputVariable.NZDistanceToRiver_ST4_Greater: (0, 30_000, True),
+    InputVariable.NZDistanceToRiver_ST5_Greater: (0, 30_000, True),
+    InputVariable.NZDistanceToRiver_ST6_Greater: (0, 30_000, True),
+    InputVariable.NZDistanceToRiver_ST7_Greater: (0, 30_000, True),
+    InputVariable.NZEnvDSDistanceRiversVertical: (0, 300, True),
 }
 
 INPUT_VARIABLE_CMAP_LIMITS = {
@@ -409,7 +440,9 @@ QUATERNARY_REGION_TO_ID_MAPPING = pd.Series(
         "wellington_hutt": 8,
     }
 )
-QUATERNARY_ID_TO_REGION_MAPPING = pd.Series({v: k for k, v in QUATERNARY_REGION_TO_ID_MAPPING.items()})
+QUATERNARY_ID_TO_REGION_MAPPING = pd.Series(
+    {v: k for k, v in QUATERNARY_REGION_TO_ID_MAPPING.items()}
+)
 
 VS30_WEIGHTING_BINS = np.asarray([0, 180, 360, 760, 10_000])
 VS30_WEIGHTING_BIN_NAMES = [
@@ -474,11 +507,11 @@ CITY_COORDS = {
     "Christchurch": (172.63669300877544, -43.531923487539935),
     "Wellington": (174.77791888634852, -41.28387793785542),
     "Auckland": (174.76555503318232, -36.850282550438685),
-    "Tauranga": (176.165822426251, -37.68682531361862),
-    "Hamilton": (175.25243436298052, -37.782667727885766),
 }
 
 TOWN_COORDS = {
+    "Tauranga": (176.165822426251, -37.68682531361862),
+    "Hamilton": (175.25243436298052, -37.782667727885766),
     "Rangiora": (172.59675756330435, -43.30336314429278),
     "Kaiapoi": (172.66230663063166, -43.3787869396717),
     "Amberley": (172.7304373827998, -43.15761096839294),
@@ -533,11 +566,11 @@ FIG_FONT_SIZE = None
 if (env_fig_font_size := os.environ.get("fig_font_size")) is not None:
     FIG_FONT_SIZE = int(env_fig_font_size)
 
-FIG_LINEWIDTH = None
+FIG_LINEWIDTH = 2.0
 if (env_fig_linewidth := os.environ.get("fig_linewidth")) is not None:
     FIG_LINEWIDTH = float(env_fig_linewidth)
 
-FIG_GROUP_LINEWIDTH = None
+FIG_GROUP_LINEWIDTH = 1.5
 if (env_fig_group_linewidth := os.environ.get("fig_group_linewidth")) is not None:
     FIG_GROUP_LINEWIDTH = float(env_fig_group_linewidth)
 
@@ -546,7 +579,9 @@ if (env_gmt_fig_font_label := os.environ.get("gmt_fig_font_label")) is not None:
     GMT_FIG_FONT_LABEL = env_gmt_fig_font_label
 
 GMT_FIG_MINOR_FONT_LABEL = "10p,Helvetica,black"
-if (env_gmt_fig_minor_font_label := os.environ.get("gmt_fig_minor_font_label")) is not None:
+if (
+    env_gmt_fig_minor_font_label := os.environ.get("gmt_fig_minor_font_label")
+) is not None:
     GMT_FIG_MINOR_FONT_LABEL = env_gmt_fig_minor_font_label
 
 GMT_FIG_BOLD_FONT_LABEL = "14p,Helvetica-Bold,black"

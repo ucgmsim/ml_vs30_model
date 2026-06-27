@@ -49,7 +49,7 @@ def add_lnVs30_mse(results_df: pd.DataFrame) -> pd.DataFrame:
     return results_df
 
 
-def compute_shap_feature_importance(
+def compute_shap_values(
     model_dir: Path,
     run_config: RunConfig | None = None,
     train_results: pd.DataFrame | None = None,
@@ -57,10 +57,10 @@ def compute_shap_feature_importance(
     model: CatBoostRegressor | NGBRegressor | None = None,
 ) -> None:
     """
-    Computes SHAP feature importance
+    Computes SHAP values
     for the model in the provided directory.
     """
-    logger.info("Computing SHAP feature importance...")
+    logger.info("Computing SHAP values...")
     run_config = (
         RunConfig.from_yaml(model_dir / "run_config.yaml")
         if run_config is None
@@ -71,7 +71,7 @@ def compute_shap_feature_importance(
     if run_config.model_type not in [ModelType.CatBoost, ModelType.NGBoost]:
         utils.raise_log(
             NotImplementedError,
-            f"SHAP feature importance computation not implemented for model type {run_config.model_type}",
+            f"SHAP values computation not implemented for model type {run_config.model_type}",
             logger,
         )
 
@@ -113,7 +113,9 @@ def compute_shap_feature_importance(
         train_X,
         model_output="raw" if run_config.model_type == ModelType.CatBoost else 0,
     )
-    explainer_values = explainer(train_X if val_results is None else val_X)
+    explainer_values = explainer(
+        train_X if val_results is None else val_X, check_additivity=False
+    )
     mlt.utils.write_pickle(explainer_values, model_dir / "shap_values.pkl")
 
     return explainer_values
@@ -152,13 +154,13 @@ def gen_model_perfomance_plots(
     # model_perf_plots.one_to_one_plot(
     #     results_df, outdir / "one_to_one_plot_Q3.png", quality_score="Q3"
     # )
-    model_perf_plots.pred_vs30_variable_scatter_plot(
-        results_df,
-        dataset_df,
-        "elevation",
-        outdir / "pred_vs30_elevation_scatter.png",
-        x_limits=(0, None),
-    )
+    # model_perf_plots.pred_vs30_variable_scatter_plot(
+    #     results_df,
+    #     dataset_df,
+    #     "elevation",
+    #     outdir / "pred_vs30_elevation_scatter.png",
+    #     x_limits=(0, None),
+    # )
     model_perf_plots.residuals_histogram(results_df, outdir / "residuals_histogram.png")
     model_perf_plots.residual_kde(results_df, outdir / "residuals_kde.png")
     model_perf_plots.quaternary_region_residual(
@@ -183,9 +185,12 @@ def gen_model_perfomance_plots(
         results_df,
         outdir / "ln_residual_scatter_plot.png",
         metric_name="ln_residual",
-        x_limits=(0, 1550),
+        x_limits=(100, 1550),
         y_limits=(-1.5, 1.5),
+        show_quality_trend_lines=True,
     )
+
+    model_perf_plots.pit_plot(results_df, outdir)
 
 
 def gen_cv_iteration_metric_plots(
@@ -297,9 +302,7 @@ def gen_feature_importance_plots(
     (outdir := results_dir / "plots").mkdir(exist_ok=True, parents=False)
     feature_importance_plots.shap_global(shap_values, results_df, outdir)
     feature_importance_plots.shap_beeswarm(shap_values, results_df, outdir)
-    feature_importance_plots.shap_feature_trends(
-        shap_values, shap_features, outdir / "feature_trends"
-    )
+    feature_importance_plots.shap_feature_trends(shap_values, shap_features, outdir)
     if gen_waterfall_plots:
         feature_importance_plots.shap_waterfall(
             shap_values, results_df, outdir / "waterfall_plots"
@@ -515,3 +518,123 @@ def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
     # Save
     ds.to_netcdf(dataset_ffp, mode="a")
 
+
+def add_krigged_vs30(full_model_dir: Path):
+    """
+    Post-proccessing step for the final model!
+    Updates the Vs30 estimates with krigged estimates
+    based on the residuals at measured sites.
+    """
+    from VarioCorreKrigE.variofit import variofit
+    from VarioCorreKrigE.okrig import ordinary_kriging
+
+    assert (
+        full_model_dir / "test_results.parquet"
+    ).exists(), "Test results not found. Please run test_predictions command first."
+
+    # Load residuals (including test, since we want to use all sites for kriging)
+    logger.info("Loading data for kriging...")
+    test_results_df = pd.read_parquet(full_model_dir / "test_results.parquet")
+    train_results_df = pd.read_parquet(full_model_dir / "train_results.parquet")
+    results_df = pd.concat([train_results_df, test_results_df])
+
+    results_df["nztm_x"], results_df["nztm_y"] = (
+        constants.WGS84_TO_NZTM_TRANSFORMER.transform(
+            results_df["lon"].values, results_df["lat"].values
+        )
+    )
+
+    target_locs, nan_mask, nz_vs30_da = _get_dataset_values(full_model_dir / "nz_vs30_results.nc")
+
+    # with xr.open_dataset(full_model_dir / "nz_vs30_results.nc") as nz_ds:
+        # nz_vs30_da = nz_ds.vs30
+
+    # grid_x, grid_y = np.meshgrid(nz_vs30_da.x.values, nz_vs30_da.y.values)
+    # nan_mask = nz_vs30_da.isnull().values
+    # target_locs = np.column_stack((grid_x[~nan_mask], grid_y[~nan_mask]))
+
+    # target_locs = coords[~nan_mask]
+
+    # Compute standardized residuals
+    ln_residual_mean = results_df["ln_residual"].mean()
+    ln_residual_std = results_df["ln_residual"].std()
+    results_df["ln_residual_z"] = (
+        results_df["ln_residual"] - ln_residual_mean
+    ) / ln_residual_std
+    
+
+    # Fit the variogram model to the standardized residuals
+    logger.info("Fitting variogram model to standardized residuals...")
+    model_type = "powered_exponential"
+    distance_type = "cartesian"
+    h_lag, n_obs, gamma, params_nug, r2_wls, r2_ols = variofit(
+        values=results_df["ln_residual_z"],
+        coordinates=results_df[["nztm_x", "nztm_y"]] / 1000,
+        distance_type=distance_type,
+        max_distance=10,
+        bin_size=1.5,
+        estimator_type="Matheron",
+        model_type=model_type,
+        weight_fn=None,
+        weight_params=None,
+        xmax_factor=100,
+        fix_sill=True,
+        fix_nugget=True,
+        plot=True,
+        plot_path=full_model_dir / "kriging_variogram.png",
+        transform="correlation",
+    )
+    logger.info("Variogram model fitted with parameters: " + ", ".join([f"{k}={v:.4f}" for k, v in params_nug.items()]))
+
+    # Ordinary Kriging
+    logger.info("Performing ordinary kriging to estimate residuals at target locations...")
+    est, std = ordinary_kriging(
+        values=results_df['ln_residual_z'].values,
+        coords=results_df[['nztm_x', 'nztm_y']] / 1000,
+        targets=target_locs / 1000,
+        model_family='correlation',
+        model_type=model_type,
+        params=params_nug,
+        distance_type=distance_type,
+        jitter=1e-10,
+        return_weights=False,
+        max_neighbors=10
+    )
+    
+    est = est * ln_residual_std + ln_residual_mean
+    std = np.sqrt(std) * ln_residual_std
+
+    kriging_df = pd.DataFrame(
+        {
+            "nztm_x": target_locs[:, 0],
+            "nztm_y": target_locs[:, 1],
+            "ln_residual_est": est,
+            "ln_residual_std": std,
+        }
+    )
+    kriging_df.to_parquet(full_model_dir / "kriging_estimates.parquet", index=False)
+
+    kriged_vs30 = np.exp(np.log(nz_vs30_da.values[~nan_mask]) + est)
+
+    kriged_vs30_da = xr.DataArray(
+        data=np.full(nz_vs30_da.shape, np.nan), coords=[nz_vs30_da.y.values, nz_vs30_da.x.values], dims=["y", "x"]
+    )
+    kriged_vs30_da.values[~nan_mask] = kriged_vs30
+
+    kriged_vs30_std_da = xr.DataArray(
+        data=np.full(nz_vs30_da.shape, np.nan), coords=[nz_vs30_da.y.values, nz_vs30_da.x.values], dims=["y", "x"]
+    )
+    kriged_vs30_std_da.values[~nan_mask] = std
+
+    ds = _create_dataset_from_estimates(
+        nz_vs30_da,
+        nan_mask,
+        kriged_vs30,
+        "kriged",
+        std_estimate=std
+    )
+
+    # ds = xr.Dataset({"kriged_vs30": kriged_vs30_da})
+    ds.to_netcdf(full_model_dir / "nz_vs30_results.nc", mode="a")
+
+    print("wtf")

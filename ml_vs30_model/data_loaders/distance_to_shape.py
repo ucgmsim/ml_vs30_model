@@ -56,6 +56,13 @@ class NZDistanceToRiver(BaseLoader):
         constants.InputVariable.NZDistanceToRiver_ST6,
         constants.InputVariable.NZDistanceToRiver_ST7,
         constants.InputVariable.NZDistanceToRiver_ST8,
+        constants.InputVariable.NZDistanceToRiver_ST1_Greater,
+        constants.InputVariable.NZDistanceToRiver_ST2_Greater,
+        constants.InputVariable.NZDistanceToRiver_ST3_Greater,
+        constants.InputVariable.NZDistanceToRiver_ST4_Greater,
+        constants.InputVariable.NZDistanceToRiver_ST5_Greater,
+        constants.InputVariable.NZDistanceToRiver_ST6_Greater,
+        constants.InputVariable.NZDistanceToRiver_ST7_Greater,
     ]
 
     def __init__(
@@ -70,10 +77,13 @@ class NZDistanceToRiver(BaseLoader):
         if variable not in self.SUPPORTED_VARIABLES:
             raise ValueError(f"Variable {variable} is not supported by NZDistanceToRiver.")
         
-        # Get the Strahler order from the variable name
-        strahler_order = int(variable.value.split("_st")[-1])
-        # Filter river segments by Strahler order
-        df = self.river_df[self.river_df.HIERARCHY == strahler_order]
+        # Get the Strahler order & filter river segments
+        if variable.value.endswith("_greater"):
+            strahler_order = int(variable.value.split("_st")[-1].split("_greater")[0])
+            df = self.river_df[self.river_df.HIERARCHY >= strahler_order]
+        else:
+            strahler_order = int(variable.value.split("_st")[-1])
+            df = self.river_df[self.river_df.HIERARCHY == strahler_order]
 
         # Build SRT tree
         tree = shapely.STRtree(shapely.points(shapely.get_coordinates(df.geometry.values)))

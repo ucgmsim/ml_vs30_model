@@ -51,13 +51,19 @@ def cv_train(
     dataset_df = dataset_df[~dataset_df.index.isin(run_config.test_sites)]
     logger.info(f"Dataset size after dropping test sites: {len(dataset_df)} samples")
 
-    kf = ms.KFold(
+    # kf = ms.KFold(
+        # n_splits=run_config.n_cv_folds, shuffle=True, random_state=run_config.seed
+    # )
+
+    skf = ms.StratifiedKFold(
         n_splits=run_config.n_cv_folds, shuffle=True, random_state=run_config.seed
     )
+
     logger.info(f"Starting {run_config.n_cv_folds}-fold cross-validation")
 
     if n_procs == 1:
-        for i, (train_ind, val_ind) in enumerate(kf.split(dataset_df)):
+        # for i, (train_ind, val_ind) in enumerate(kf.split(dataset_df)):
+        for i, (train_ind, val_ind) in enumerate(skf.split(dataset_df, dataset_df["dense_vs30_bin"])):
             _run_helper(
                 (train_ind, val_ind),
                 i,
@@ -89,7 +95,8 @@ def cv_train(
                         p_ix,
                     )
                     for i, ((train_ind, val_ind), p_ix) in enumerate(
-                        zip(kf.split(dataset_df), range(run_config.n_cv_folds))
+                        # zip(kf.split(dataset_df), range(run_config.n_cv_folds))
+                        zip(skf.split(dataset_df, dataset_df["dense_vs30_bin"]), range(run_config.n_cv_folds))
                     )
                 ],
             )
