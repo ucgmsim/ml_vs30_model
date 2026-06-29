@@ -309,13 +309,16 @@ def gen_feature_importance_plots(
         )
 
 
-def _get_dataset_values(dataset_ffp: Path):
+def _get_dataset_values(dataset_ffp: Path, extract_kriged: bool = False):
     """
     Helper function to get the
     coordinates, nan mask, and vs30 data array.
     """
     with xr.open_dataset(dataset_ffp, mode="r") as ds:
-        vs30_da = ds["vs30"]
+        if extract_kriged:
+            vs30_da = ds["kriged_vs30_mean"]
+        else:
+            vs30_da = ds["vs30"]
         y, x = vs30_da.y.values, vs30_da.x.values
         nan_mask = vs30_da.isnull().values
 
@@ -331,6 +334,7 @@ def _create_dataset_from_estimates(
     mean_estimate: np.ndarray,
     prefix: str,
     std_estimate: np.ndarray | None = None,
+    res_only: bool = False
 ) -> xr.Dataset:
     y, x = ml_vs30_da.y.values, ml_vs30_da.x.values
 
@@ -360,15 +364,18 @@ def _create_dataset_from_estimates(
     )
     ln_res_da.values[~nan_mask] = ln_res
 
-    ds = xr.Dataset(
-        {
-            f"{prefix}_vs30_mean": vs30_mean_da,
+    ds_dict = {
             f"{prefix}_vs30_res": res_da,
             f"{prefix}_vs30_ln_res": ln_res_da,
-        }
-    )
-    if std_estimate is not None:
-        ds[f"{prefix}_vs30_std"] = vs30_std_da
+    }
+    if not res_only:
+        ds_dict[f"{prefix}_vs30_mean"] = vs30_mean_da
+        if std_estimate is not None:
+            ds_dict[f"{prefix}_vs30_std"] = vs30_std_da
+
+    ds = xr.Dataset(ds_dict)
+    # if std_estimate is not None:
+        # ds[f"{prefix}_vs30_std"] = vs30_std_da
 
     return ds
 
@@ -447,9 +454,9 @@ def add_jaehwi_nz_estimates(
     ds.to_netcdf(dataset_ffp, mode="a")
 
 
-def add_foster_original_nz_estimates(dataset_ffp: Path, foster_original_ffp: Path):
+def add_foster_original_nz_estimates(dataset_ffp: Path, foster_original_ffp: Path, use_kriged: bool = False):
     logger.info(f"Adding original Foster et al. result to database {dataset_ffp}...")
-    coords, nan_mask, vs30_da = _get_dataset_values(dataset_ffp)
+    coords, nan_mask, vs30_da = _get_dataset_values(dataset_ffp, extract_kriged=use_kriged)
 
     logger.info("Extracting original Foster et al. estimates...")
     with rasterio.open(foster_original_ffp) as ds:
@@ -469,7 +476,8 @@ def add_foster_original_nz_estimates(dataset_ffp: Path, foster_original_ffp: Pat
         vs30_da,
         nan_mask,
         foster_original_vs30_mean,
-        "foster_original",
+        "kriged_vs30_foster_original" if use_kriged else "foster_original",
+        res_only=use_kriged
     )
 
     # Save
@@ -634,7 +642,6 @@ def add_krigged_vs30(full_model_dir: Path):
         std_estimate=std
     )
 
-    # ds = xr.Dataset({"kriged_vs30": kriged_vs30_da})
     ds.to_netcdf(full_model_dir / "nz_vs30_results.nc", mode="a")
 
-    print("wtf")
+    

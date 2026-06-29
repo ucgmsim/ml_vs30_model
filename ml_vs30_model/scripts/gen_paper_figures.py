@@ -234,6 +234,63 @@ def gen_site_map(dataset_ffp: Path, output_dir: Path):
     )
     spatial_plot.save(output_dir / f"site_map.{vs30.constants.FIG_FORMAT}")
 
+@app.command("gen-pred-std-map")
+def gen_pred_std_map(
+    full_model_dir: Path,
+    output_dir: Path,
+    region_key: str,
+    grid_spacing: str = "250e/250e",
+    label: str = None,
+):
+    logger = mlt.utils.setup_logging()
+    region_coords = vs30.constants.REGION_MAPPING[region_key]
+
+    # Load vs30 values
+    with xr.open_dataset(full_model_dir / "nz_vs30_results.nc") as ds:
+        pred_std_da = ds["lnVs30_std"]
+
+    nan_mask = pred_std_da.isnull().values
+    mesh_x, mesh_y = np.meshgrid(pred_std_da.coords["x"].values, pred_std_da.coords["y"].values)
+    pred_std_df = pd.DataFrame(
+        {
+            "nztm_x": mesh_x[~nan_mask],
+            "nztm_y": mesh_y[~nan_mask],
+            "pred_std_vs30": pred_std_da.values[~nan_mask],
+        }
+    )
+
+    latlon_coords = coordinates.nztm_to_wgs_depth(pred_std_df[["nztm_y", "nztm_x"]].values)
+    pred_std_df["lat"], pred_std_df["lon"] = latlon_coords[:, 0], latlon_coords[:, 1]
+
+    if region_key != "nz":
+        pred_std_df = pred_std_df.loc[
+            (pred_std_df["lon"] >= region_coords[0])
+            & (pred_std_df["lon"] <= region_coords[1])
+            & (pred_std_df["lat"] >= region_coords[2])
+            & (pred_std_df["lat"] <= region_coords[3])
+        ]
+
+    spatial_plot = vs30.plotting.spatial.SpatialPlot(
+        plot_topo=False,
+        plot_highways=False,
+        region=region_coords,
+        projection="M8.5c",
+    )
+
+    logger.info("Plotting Pred Std values...")
+    start = time.time()
+    spatial_plot.plot_pred_std_vs30(
+        pred_std_df,
+        region=region_coords,
+        grid_spacing=grid_spacing,
+        std_limits=(0.0, 0.5)
+    )
+    logger.info(f"Took: {time.time() - start} to plot Pred Std values")
+
+    spatial_plot.save(
+        output_dir / f"pred_std_{region_key}.{vs30.constants.FIG_FORMAT}"
+    )
+
 
 @app.command("gen-vs30-map")
 def gen_vs30_map(
@@ -243,13 +300,17 @@ def gen_vs30_map(
     grid_spacing: str = "250e/250e",
     show_highways: bool = False,
     show_cities: bool = True,
-    show_towns: bool = False,
     plot_foster: bool = False,
     plot_kriged: bool = False,
     plot_sites: bool = False,
+    town: list[str] = None,
+    show_towns: bool = False,
+    region: list[str] = None,
+    show_colorbar: bool = True,
+    label: str = None,
 ):
     logger = mlt.utils.setup_logging()
-    region = vs30.constants.REGION_MAPPING[region_key]
+    region_coords = vs30.constants.REGION_MAPPING[region_key]
 
     # Load vs30 values
     with xr.open_dataset(full_model_dir / "nz_vs30_results.nc") as ds:
@@ -288,30 +349,36 @@ def gen_vs30_map(
 
     if region_key != "nz":
         vs30_df = vs30_df.loc[
-            (vs30_df["lon"] >= region[0])
-            & (vs30_df["lon"] <= region[1])
-            & (vs30_df["lat"] >= region[2])
-            & (vs30_df["lat"] <= region[3])
+            (vs30_df["lon"] >= region_coords[0])
+            & (vs30_df["lon"] <= region_coords[1])
+            & (vs30_df["lat"] >= region_coords[2])
+            & (vs30_df["lat"] <= region_coords[3])
         ]
 
     spatial_plot = vs30.plotting.spatial.SpatialPlot(
         plot_topo=False,
         plot_highways=False,
-        region=region,
+        region=region_coords,
         projection="M8.5c",
     )
 
     logger.info("Plotting Vs30 values...")
     start = time.time()
-    spatial_plot.plot_vs30_values(vs30_df, region=region, grid_spacing=grid_spacing)
+    spatial_plot.plot_vs30_values(
+        vs30_df,
+        region=region_coords,
+        grid_spacing=grid_spacing,
+        show_colorbar=show_colorbar,
+        show_colorbar_label=False,
+    )
     logger.info(f"Took: {time.time() - start} to plot Vs30 values")
 
     if show_highways:
         spatial_plot.add_highways()
-        
+
     if plot_sites:
         logger.info("Plotting site locations...")
-        site_style="d0.075c"
+        site_style = "d0.075c"
         spatial_plot.plot_sites(
             site_df,
             cmap=True,
@@ -331,8 +398,22 @@ def gen_vs30_map(
 
     if show_cities:
         spatial_plot.add_city_labels()
-    if show_towns:
-        spatial_plot.add_town_labels()
+
+    if town is not None or show_towns:
+        spatial_plot.add_town_labels(towns=town if town is not None else None)
+
+    if region is not None:
+        spatial_plot.add_region_labels(regions=region)
+
+    if label is not None:
+        spatial_plot.fig.text(
+            x=region_coords[0],
+            y=region_coords[3],
+            text=label,
+            justify="TL",
+            offset="0.05c/-0.1c",
+            font=vs30.constants.GMT_FIG_FONT_LABEL.replace("Helvetica", "Helvetica-Bold")
+        )
 
     spatial_plot.save(
         output_dir / f"{fn_prefix}_{region_key}.{vs30.constants.FIG_FORMAT}"
@@ -348,12 +429,19 @@ def gen_residual_map(
     show_highways: bool = False,
     show_cities: bool = True,
     show_towns: bool = False,
+    use_kriged: bool = False,
+    show_colorbar: bool = True,
+    label: str = None,
 ):
     logger = mlt.utils.setup_logging()
     region = vs30.constants.REGION_MAPPING[region_key]
 
     # Configure residual key and colorbar label
-    residual_key = "foster_original_vs30_ln_res"
+    residual_key = (
+        "kriged_vs30_foster_original_vs30_ln_res"
+        if use_kriged
+        else "foster_original_vs30_ln_res"
+    )
     cb_label = "ln(Foster) - ln(ML)"
 
     # Load residual values
@@ -400,6 +488,7 @@ def gen_residual_map(
         region=region,
         cb_label=cb_label,
         grid_spacing=grid_spacing,
+        show_colorbar=show_colorbar,
     )
     logger.info(f"Took: {time.time() - start} to plot residual values")
 
@@ -409,6 +498,16 @@ def gen_residual_map(
         spatial_plot.add_city_labels()
     if show_towns:
         spatial_plot.add_town_labels()
+
+    if label is not None:
+        spatial_plot.fig.text(
+            x=region[0],
+            y=region[3],
+            text=label,
+            justify="TL",
+            offset="0.05c/-0.1c",
+            font=vs30.constants.GMT_FIG_FONT_LABEL.replace("Helvetica", "Helvetica-Bold")
+        )
 
     spatial_plot.save(
         output_dir / f"{residual_key}_{region_key}.{vs30.constants.FIG_FORMAT}"
@@ -499,17 +598,19 @@ def input_variable_kde_distribution(
 
     sns.kdeplot(
         np.clip(dataset_df[variable].values, min_val, max_val),
-        fill=True,
+        fill=False,
         ax=ax,
         color="tab:blue",
         label="NZ Site Database",
+        linewidth=vs30.constants.FIG_LINEWIDTH,
     )
     sns.kdeplot(
         np.clip(variable_da.values.flatten(), min_val, max_val),
-        fill=True,
+        fill=False,
         ax=ax,
         color="tab:red",
         label="NZ Input Grid",
+        linewidth=vs30.constants.FIG_LINEWIDTH,
     )
     if show_rug:
         sns.rugplot(
@@ -674,6 +775,187 @@ def foster_dataset_comparison(
         dpi=vs30.constants.FIG_DPI,
     )
     plt.close(age_fig)
+
+
+@app.command("combined-dataset-comparison")
+def combined_dataset_comparison(
+    dataset_ffp: Path,
+    foster_dataset_ffp: Path,
+    geyin_dataset_ffp: Path,
+    output_dir: Path,
+):
+    logger = mlt.utils.setup_logging()
+    _fig_settings(logger)
+
+    dataset_df = pd.read_parquet(dataset_ffp)
+    dataset_df["source"] = "nz_all"
+
+    qual_df = dataset_df[dataset_df["quality_score"] != "Q3"].copy()
+    qual_df["source"] = "nz_qual"
+
+    foster_df = pd.read_parquet(foster_dataset_ffp)
+    foster_df["source"] = "foster"
+
+    geyin_dataset_df = pd.read_parquet(geyin_dataset_ffp)
+    geyin_dataset_df["source"] = "geyin"
+    geyin_dataset_df["slope"] = geyin_dataset_df["topographic_slope"]
+    geyin_dataset_df["nz_geology_age_mid"] = np.nan
+
+    comb_df = pd.concat(
+        [
+            dataset_df[["vs30", "nzenvds_slope_deg", "nz_geology_age_mid", "source"]],
+            foster_df[["vs30", "nzenvds_slope_deg", "nz_geology_age_mid", "source"]],
+            qual_df[["vs30", "nzenvds_slope_deg", "nz_geology_age_mid", "source"]],
+        ],
+        ignore_index=True,
+    )
+    comb_df = comb_df.rename(columns={"nzenvds_slope_deg": "slope"})
+    comb_df = pd.concat(
+        [
+            comb_df,
+            geyin_dataset_df[["vs30", "slope", "nz_geology_age_mid", "source"]],
+        ],
+        ignore_index=True,
+    )
+
+    comb_df["vs30"] = comb_df["vs30"].clip(0, 1600)
+    comb_df["slope"] = comb_df["slope"].clip(0, 20)
+    comb_df["nz_geology_age_mid"] = comb_df["nz_geology_age_mid"].clip(0.1, None)
+
+    fig = plt.figure(figsize=vs30.constants.FIG_SIZE, layout="constrained")
+    axd = fig.subplot_mosaic([["A", "A"], ["B", "C"]])
+
+    color_map = {
+        "nz_all": "tab:red",
+        "nz_qual": "tab:orange",
+        "geyin": "magenta",
+        "foster": "tab:blue",
+    }
+
+    ax_vs30, ax_slope, ax_age = axd["A"], axd["B"], axd["C"]
+
+    fill, cut = False, 1
+    linewidth = vs30.constants.FIG_LINEWIDTH
+
+    ### Vs30
+    sns.kdeplot(
+        comb_df,
+        x="vs30",
+        hue="source",
+        fill=fill,
+        ax=ax_vs30,
+        palette=color_map,
+        hue_order=color_map.keys(),
+        common_norm=False,
+        cut=cut,
+        bw_adjust=0.75,
+        legend=False,
+        linewidth=linewidth,
+        log_scale=(False, False),
+    )
+
+    ax_vs30.text(
+        -0.02,
+        0.99,
+        "a)",
+        transform=ax_vs30.transAxes,
+        horizontalalignment="right",
+        verticalalignment="top",
+        fontweight="bold",
+    )
+
+    ax_vs30.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    ax_vs30.set_xlabel("Vs30 (m/s)")
+    ax_vs30.set_ylabel("Density")
+    ax_vs30.set_xlim(0, 1600)
+    ax_vs30.yaxis.set_ticklabels([])
+
+    # Legend
+    label_map = {
+        "nz_all": f"NZ - All (N = {len(dataset_df)})",
+        "nz_qual": f"NZ Q1 & Q2 (N = {len(qual_df)})",
+        "foster": f"Foster et al. (N = {len(foster_df)})",
+        "geyin": f"Geyin et al. (N = {len(geyin_dataset_df)})",
+    }
+    handles = [
+        mpatches.Patch(color=color_map[k], label=label_map[k])
+        for k in ["nz_all", "nz_qual", "foster", "geyin"]
+    ]
+
+    ax_vs30.legend(
+        handles=handles,
+    )
+
+    ### Slope
+    sns.kdeplot(
+        comb_df,
+        x="slope",
+        hue="source",
+        fill=fill,
+        ax=ax_slope,
+        palette=color_map,
+        hue_order=color_map.keys(),
+        common_norm=False,
+        cut=cut,
+        bw_adjust=0.75,
+        legend=False,
+        linewidth=linewidth,
+    )
+
+    ax_slope.text(
+        -0.04,
+        0.99,
+        "b)",
+        transform=ax_slope.transAxes,
+        horizontalalignment="right",
+        verticalalignment="top",
+        fontweight="bold",
+    )
+
+    ax_slope.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    ax_slope.set_xlabel("Slope (degrees)")
+    ax_slope.set_ylabel("Density")
+    ax_slope.set_xlim(0, comb_df["slope"].max())
+    ax_slope.yaxis.set_ticklabels([])
+
+    ### Geological Age
+    sns.kdeplot(
+        comb_df,
+        x="nz_geology_age_mid",
+        hue="source",
+        fill=fill,
+        ax=ax_age,
+        palette=color_map,
+        hue_order=color_map.keys(),
+        common_norm=False,
+        cut=cut,
+        bw_adjust=0.75,
+        legend=False,
+        log_scale=(True, False),
+        linewidth=linewidth,
+    )
+
+    ax_age.text(
+        -0.04,
+        0.99,
+        "c)",
+        transform=ax_age.transAxes,
+        horizontalalignment="right",
+        verticalalignment="top",
+        fontweight="bold",
+    )
+
+    ax_age.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    ax_age.set_xlabel("Geological Age")
+    ax_age.set_ylabel("Density")
+    ax_age.set_xlim(0.1, comb_df["nz_geology_age_mid"].max())
+    ax_age.yaxis.set_ticklabels([])
+
+    fig.savefig(
+        output_dir / f"combined_dataset_comparison.{vs30.constants.FIG_FORMAT}",
+        dpi=vs30.constants.FIG_DPI,
+    )
+    plt.close(fig)
 
 
 @app.command("geyin-dataset-comparison")
@@ -850,7 +1132,9 @@ def create_nz_vs30_histogram(
     intersection_df = estimates_df.copy()
     intersection_df.geometry = estimates_df.buffer(resolution / 2, cap_style="square")
     intersection_df["vs30_point_index"] = intersection_df.index
-    intersection_df = gpd.overlay(intersection_df, population_gdf, how="intersection", keep_geom_type=True)
+    intersection_df = gpd.overlay(
+        intersection_df, population_gdf, how="intersection", keep_geom_type=True
+    )
 
     # Weight vs30 estimates by population proportion
     intersection_df["population_proportion"] = intersection_df["PopEst2023"] * (
@@ -892,9 +1176,19 @@ def create_nz_vs30_histogram(
         alpha=0.5,
     )
 
+    ax1.text(
+        -0.05,
+        1.0,
+        "a)",
+        transform=ax1.transAxes,
+        horizontalalignment="right",
+        verticalalignment="top",
+        fontweight="bold",
+    )
+
     ax1.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax1.set_xlabel("Vs30 (m/s)")
-    ax1.set_ylabel("Density")
+    ax1.set_ylabel("Spatial Density")
     ax1.set_xlim(min(bins), max(bins))
     ax1.yaxis.set_ticklabels([])
     ax1.legend()
@@ -924,6 +1218,17 @@ def create_nz_vs30_histogram(
         edgecolor="black",
         alpha=0.5,
     )
+
+    ax2.text(
+        -0.05,
+        1.0,
+        "b)",
+        transform=ax2.transAxes,
+        horizontalalignment="right",
+        verticalalignment="top",
+        fontweight="bold",
+    )
+
     ax2.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax2.set_xlabel("Vs30 (m/s)")
     ax2.set_ylabel("Population-Weighted Density")
@@ -1004,6 +1309,7 @@ def gen_residual_scatter_plot(
     output_dir: Path,
     is_foster: bool = False,
     full_model_dir: Path = None,
+    hide_x_label: bool = False,
 ):
     logger = mlt.utils.setup_logging()
     _fig_settings(logger)
@@ -1059,8 +1365,13 @@ def gen_residual_scatter_plot(
 
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_xlabel(r"$Vs30$ (m/s)")
-    ax.set_ylabel(r"Residual, $\ln(\text{True}) - \ln(\text{Predicted})$")
+    if hide_x_label:
+        ax.set_xlabel("")
+        ax.set_xticklabels([])
+    # ax.set_ylabel(r"Residual, $\ln(\text{True}) - \ln(\text{Predicted})$")
+    ax.set_ylabel(r"Residual, $r_i$")
     ax.set_ylim(-1.75, 1.75)
+    ax.set_xlim(0, 1550)
 
     if test_results_df is not None:
         test_legend = ax.legend(
@@ -1252,6 +1563,8 @@ def gen_one_to_one_plot(
         [100, 1600],
         [100, 1600],
         "k",
+        linewidth=0.75,
+        linestyle="--",
     )
 
     vs30.plotting.model_perf_plots.plot_lowess_line(
@@ -1350,12 +1663,38 @@ def gen_std_res_cdf_plot(results_ffp: Path, output_dir: Path):
     x = np.linspace(std_res.min(), std_res.max(), 1000)
     norm_cdf = stats.norm.cdf(x)
     ks_critical = stats.ksone.ppf(1 - 0.05 / 2, std_res.shape[0])
-    ax.plot(x, norm_cdf + ks_critical, color="tab:red", linestyle="--", linewidth=vs30.constants.FIG_GROUP_LINEWIDTH, label="KS Critical Value")
-    ax.plot(x, norm_cdf - ks_critical, color="tab:red", linestyle="--", linewidth=vs30.constants.FIG_GROUP_LINEWIDTH)
-    ax.plot(x, norm_cdf, color="tab:red", label="Standard Normal", linestyle="-", linewidth=vs30.constants.FIG_LINEWIDTH)
+    ax.plot(
+        x,
+        norm_cdf + ks_critical,
+        color="tab:red",
+        linestyle="--",
+        linewidth=vs30.constants.FIG_GROUP_LINEWIDTH,
+        label="KS Critical Value",
+    )
+    ax.plot(
+        x,
+        norm_cdf - ks_critical,
+        color="tab:red",
+        linestyle="--",
+        linewidth=vs30.constants.FIG_GROUP_LINEWIDTH,
+    )
+    ax.plot(
+        x,
+        norm_cdf,
+        color="tab:red",
+        label="Standard Normal",
+        linestyle="-",
+        linewidth=vs30.constants.FIG_LINEWIDTH,
+    )
 
     # ECDF
-    sns.ecdfplot(std_res, ax=ax, color="tab:blue", label="ML Model", linewidth=vs30.constants.FIG_LINEWIDTH)
+    sns.ecdfplot(
+        std_res,
+        ax=ax,
+        color="tab:blue",
+        label="ML Model",
+        linewidth=vs30.constants.FIG_LINEWIDTH,
+    )
 
     ks_stat = stats.kstest(std_res, "norm").statistic
     ax.text(
@@ -1365,6 +1704,16 @@ def gen_std_res_cdf_plot(results_ffp: Path, output_dir: Path):
         transform=ax.transAxes,
         va="top",
         ha="left",
+        fontweight="bold",
+    )
+
+    ax.text(
+        -0.125,
+        1.018,
+        "a)",
+        transform=ax.transAxes,
+        horizontalalignment="right",
+        verticalalignment="top",
         fontweight="bold",
     )
 
@@ -1386,41 +1735,132 @@ def gen_std_res_cdf_plot(results_ffp: Path, output_dir: Path):
 
 @app.command("gen-global-feature-importance")
 def gen_global_feature_importance(cv_model_results_dir: Path, output_dir: Path):
-    # TODO: I don't using shap plotting funcationality will work here, if we decide to include, create manually.
-    import shap
-
     logger = mlt.utils.setup_logging()
     _fig_settings(logger)
 
     shap_values = pd.read_pickle(cv_model_results_dir / "shap_values.pkl")
 
-    shap_values.feature_names = [
-        (
-            feat
-            if feat not in vs30.constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING
-            else vs30.constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING[feat]
-        )
+    feature_names = [
+        vs30.constants.INPUT_VAR_TO_PAPER_NICE_NAME_MAPPING[feat]
         for feat in shap_values.feature_names
     ]
 
+    global_shap_values = np.abs(shap_values.values).mean(axis=0)
+    
+    sort_ind = np.argsort(global_shap_values)
+    feature_names = np.array(feature_names)[sort_ind]
+    global_shap_values = global_shap_values[sort_ind]
+
     fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
-    shap.plots.bar(shap_values, show=False, ax=ax)
+
+    ax.barh(
+        feature_names,
+        global_shap_values,
+        color="tab:blue",
+        edgecolor="black",
+    )
+
+    ax.set_xlabel("Mean Absolute SHAP Value")
+    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
 
     fig.tight_layout()
     fig.savefig(
         output_dir / f"global_feature_importance.{vs30.constants.FIG_FORMAT}",
         dpi=vs30.constants.FIG_DPI,
     )
-
     plt.close(fig)
+
+@app.command("gen-feature-trend-plots")
+def gen_feature_trend_plots(cv_model_results_dir: Path, output_dir: Path, features: list[str]):
+    logger = mlt.utils.setup_logging()
+    _fig_settings(logger)
+    assert len(features) == 4
+
+    shap_values = pd.read_pickle(cv_model_results_dir / "shap_values.pkl")
+    results_df = pd.read_parquet(cv_model_results_dir / "val_results.parquet")
+    
+    run_config = vs30.RunConfig.from_yaml(cv_model_results_dir / "run_config.yaml")
+    dataset_df = pd.read_parquet(run_config.dataset_ffp)
+
+    results_df = results_df.join(dataset_df, how="left", validate="1:1", rsuffix="_dataset")
+
+    # feature_names = [
+    #     vs30.constants.INPUT_VAR_TO_PAPER_NICE_NAME_MAPPING[feat]
+    #     for feat in shap_values.feature_names
+    # ]
+
+    x_lim_dict = {
+        "nzenvds_topo_roughness": (-5, 150),
+        "nz_combined_groundwater_depth": (-0.25, 10.25),
+        "nzenvds_topo_normalised_height": (0, 1),
+        "nz_geology_age_ln_mid": (0.005, None),
+    }
+
+    fig, axs = mlt.plotting.get_fig_axes(4, 2, 2, ind_figsize=vs30.constants.FIG_SIZE)
+    labels = ["a)", "b)", "c)", "d)"]
+
+    for i, feat in enumerate(features):
+        cur_ax = axs[i]
+        shap_ix = shap_values.feature_names.index(feat)
+
+        x_values = results_df[feat].values
+
+        nice_feature_name = vs30.constants.INPUT_VAR_TO_PAPER_NICE_NAME_MAPPING[feat]
+        if feat == "nz_geology_age_ln_mid":
+            x_values = np.exp(x_values)
+            cur_ax.set_xscale("log")
+        if feat == "nz_combined_groundwater_depth":
+            x_values = np.clip(x_values, 0, 10)
+
+        cur_ax.scatter(
+            x_values,
+            shap_values.values[:, shap_ix],
+            color="tab:blue",
+            s=1.0
+        )
+
+        if feat in x_lim_dict:
+            cur_ax.set_xlim(x_lim_dict[feat])
+
+
+        cur_ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+        cur_ax.set_xlabel(nice_feature_name)
+        cur_ax.set_ylabel("SHAP Value")
+
+        cur_ax.text(
+            0.025,
+            0.975,
+            labels[i],
+            transform=cur_ax.transAxes,
+            horizontalalignment="left",
+            verticalalignment="top",
+            fontweight="bold",
+        )   
+
+        if i % 2 == 1:
+            cur_ax.set_ylabel("")
+            cur_ax.set_yticklabels([])
+
+    y_min = min(ax.get_ylim()[0] for ax in axs)
+    y_max = max(ax.get_ylim()[1] for ax in axs)
+    for ax in axs:
+        ax.set_ylim(y_min, y_max)
+
+    fig.subplots_adjust(left=0.09, right=0.98, top=0.99, bottom=0.08, hspace=0.2, wspace=0.05)
+
+    fig.savefig(
+        output_dir / f"feature_trend_plots.{vs30.constants.FIG_FORMAT}",
+        dpi=vs30.constants.FIG_DPI,
+    )
+    plt.close()
 
 
 @app.command("predicted-std-vs30")
 def predicted_std_vs30(cv_model_results_dir: Path, output_dir: Path):
     logger = mlt.utils.setup_logging()
     _fig_settings(logger)
-    
-    results_df = pd.read_parquet(cv_model_results_dir / "val_results.parquet")   
+
+    results_df = pd.read_parquet(cv_model_results_dir / "val_results.parquet")
 
     fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
 
@@ -1450,11 +1890,24 @@ def predicted_std_vs30(cv_model_results_dir: Path, output_dir: Path):
             marker=vs30.constants.QUALITY_SCORE_MARKERS[k],
         )
 
+    ax.text(
+        -0.125,
+        1.018,
+        "b)",
+        transform=ax.transAxes,
+        horizontalalignment="right",
+        verticalalignment="top",
+        fontweight="bold",
+    )
+
     ax.grid(which="both", linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_xlabel(r"Predicted $V_{S30}$ (m/s)", labelpad=-5)
     ax.set_ylabel(r"Predicted $ln_{V_{S30}}$ Standard Deviation")
-    ax.set_xlim(results_df["pred_vs30"].values.min() - 10, results_df["pred_vs30"].values.max() + 10)
-    
+    ax.set_xlim(
+        results_df["pred_vs30"].values.min() - 10,
+        results_df["pred_vs30"].values.max() + 10,
+    )
+
     ax.set_xscale("log")
     ax.xaxis.set_minor_formatter(mticker.NullFormatter())
     ax.set_ylim(0, 0.7)

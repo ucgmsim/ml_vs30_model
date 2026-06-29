@@ -310,7 +310,20 @@ def add_krigged_vs30(full_model_dir: Path):
     vs30.post_processing.add_krigged_vs30(full_model_dir)
 
 
-    print("wtf")
+@app.command("add-kriged-vs30-foster-original-residuals")
+def add_kriged_vs30_foster_original_residuals(full_model_dir: Path):
+    """
+    Adds residuals between kriged Vs30 and Foster original Vs30 estimates.
+    """
+    mlt.utils.setup_logging()
+
+    foster_original_ffp = (
+        vs30.constants.BASE_DATA_DIR
+        / "nz_estimates/foster_original/foster_paper_original.tif"
+    )
+    vs30.post_processing.add_foster_original_nz_estimates(
+        full_model_dir / "nz_vs30_results.nc", foster_original_ffp, use_kriged=True
+    )
 
 
 @app.command("run-feature-selection")

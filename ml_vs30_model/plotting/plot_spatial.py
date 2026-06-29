@@ -64,23 +64,50 @@ class SpatialPlot:
             plot_kwargs=plot_kwargs,
         )
 
-    def add_town_labels(self, **plot_kwargs):
+    def add_town_labels(self, towns: list[str] = None, **plot_kwargs):
         """Adds town labels"""
         plot_kwargs = {
             "style": "c0.15c",
             "pen": "0.5p,black",
             "fill": None
         }
-        for town_name, town_coords in constants.TOWN_COORDS.items():
+
+        towns = towns or constants.TOWN_COORDS.keys()
+
+        # for town_name, town_coords in constants.TOWN_COORDS.items():
+        for town in towns:
+            town_coords = constants.TOWN_COORDS[town]
             self.fig.plot(x=town_coords[0], y=town_coords[1], **plot_kwargs)
+
+            offset = "0.0c/0.12c"
+            if town == "Blenheim":
+                offset = "-0.45c/-0.3c"
+                
             self.fig.text(
                 x=town_coords[0],
                 y=town_coords[1],
-                text=town_name,
+                text=town,
                 font=constants.GMT_FIG_MINOR_FONT_LABEL,
-                offset="0.0c/0.12c",
+                offset=offset,
                 justify="CB"
             )
+
+    def add_region_labels(self, regions: list[str] = None):
+        """Adds region labels"""
+        regions = regions or constants.REGION_COORDS.keys()
+
+        for region in regions:
+            region_coords = constants.REGION_COORDS[region]
+            # self.fig.plot(x=region_coords[0], y=region_coords[1], **plot_kwargs)
+            self.fig.text(
+                x=region_coords[0],
+                y=region_coords[1],
+                text=region,
+                font=constants.GMT_FIG_MINOR_FONT_LABEL,
+                # offset="0.0c/0.12c",
+                justify="CB"
+            )
+
 
     def add_city_labels(self, **plot_kwargs):
         """Adds city labels"""
@@ -127,11 +154,12 @@ class SpatialPlot:
         grid_spacing: str = "250e/250e",
         region: tuple[float, float, float, float] | None = None,
         cmap_limits: tuple[float, float, float] = None,
+        show_colorbar: bool = True,
         **plot_grid_kwargs,
     ):
         """Adds a ratio grid to the existing figure."""
         plot_grid_kwargs = {
-            "cb_label": cb_label or data_key,
+            # "cb_label": cb_label or data_key,
             "plot_contours": False,
             "reverse_cmap": True,
             "cmap": "polar",
@@ -150,7 +178,7 @@ class SpatialPlot:
             interp_method="nearest",
         )
 
-        plotting.plot_grid(self.fig, grid, **plot_grid_kwargs)
+        plotting.plot_grid(self.fig, grid, show_cb=show_colorbar, **plot_grid_kwargs)
 
         return self
     
@@ -195,6 +223,44 @@ class SpatialPlot:
 
         return self
 
+    def plot_pred_std_vs30(
+        self,
+        pred_std_df: pd.DataFrame,
+        transparency: float | None = None,
+        region: tuple[float, float, float, float] | None = None,
+        std_limits: tuple[float, float] = (0, 1),
+        grid_spacing: str = "250e/250e",
+        interp_method: str = "nearest",
+    ):
+        start = time.time()
+        grid = plotting.create_grid(
+            pred_std_df,
+            "pred_std_vs30",
+            region=region,
+            grid_spacing=grid_spacing,
+            interp_method=interp_method,
+        )
+        logger.info(f"Took: {time.time() - start} to create grid.")
+
+        # Set the extreme colors
+        pygmt.config(COLOR_BACKGROUND="white", COLOR_FOREGROUND="black")
+
+        # Plot the grid
+        pygmt.makecpt(
+            cmap="hot", series=[std_limits[0], std_limits[1]], reverse=True
+        )
+        self.fig.grdimage(
+            grid,
+            cmap=True,
+            transparency=transparency,
+            interpolation="c",
+            nan_transparent=True,
+        )
+
+        self.fig.colorbar(position=self.CB_POSITION, frame=["x+lPredicted Standard Deviation"])
+
+        return self
+
     def plot_vs30_values(
         self,
         vs30_df: pd.DataFrame,
@@ -203,6 +269,8 @@ class SpatialPlot:
         vs_30_cmap_limits: tuple[float, float] = (0, 1000),
         grid_spacing: str = "250e/250e",
         interp_method: str = "nearest",
+        show_colorbar: bool = True,
+        show_colorbar_label: bool = True
     ):
         start = time.time()
         grid = plotting.create_grid(
@@ -229,7 +297,11 @@ class SpatialPlot:
             nan_transparent=True,
         )
 
-        self.fig.colorbar(position=self.CB_POSITION, frame=["x+lVs30", "y+lm/s"])
+        if show_colorbar:
+            cb_frame = ["x+lVs30 (m/s)", "y+lm/s"]
+            if not show_colorbar_label:
+                cb_frame[0] = "x"
+            self.fig.colorbar(position=self.CB_POSITION, frame=cb_frame)
 
         return self
 

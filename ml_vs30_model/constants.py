@@ -198,6 +198,14 @@ INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
     InputVariable.NZEnvDSTopoWetness: "NZEnvDS Topo Wetness",
 }
 
+INPUT_VAR_TO_PAPER_NICE_NAME_MAPPING = {
+    InputVariable.NZEnvDSTopoRoughness: "Topographic Roughness (dimensionless)",
+    InputVariable.NZGeologyAgeLnMid: "Geological Age (MA)",
+    InputVariable.NZCombinedGroundwaterDepth: "Groundwater Depth (m)",
+    InputVariable.NZEnvDSTopoNormalisedHeight: "Topographic Normalised Height (dimensionless)",
+    InputVariable.NZEnvDSDistanceRiversVertical: "Distance to Rivers (Vertical) (m)",
+}
+
 REVERSE_NICE_NAME_TO_INPUT_VARIABLE_MAPPING = {
     nice_name: var for var, nice_name in INPUT_VARIABLE_TO_NICE_NAME_MAPPING.items()
 }
@@ -531,8 +539,21 @@ TOWN_COORDS = {
     "Huntly": (175.15937169874206, -37.55706591572003),
     # "Manakau": (174.8740306499414, -36.99174153203661),
     # "Glenfield": (174.7211172686564, -36.78178846008382)
+    "Taupo": (176.07099197440127, -38.684391122710124),
+    "Palmerston North": (175.60998552418505, -40.354237801149175),
+    "Napier": (176.91908274377244, -39.489327066422106),
+    "Nelson": (173.246953726745, -41.29896111466095),
+    "Blenheim": (173.96041433170313, -41.51421741822313),
+    "Greymouth": (171.19716741172354, -42.461954708045816),
+    "Haast": (169.0434759605885, -43.87930449185373)
 }
 
+REGION_COORDS = {
+    "Taranaki": (174.07362998031326, -39.29826300458175),
+    "Tasman Range": (172.47053573567698, -41.284313712045034),
+    "Raukumara Range": (177.81863814835225, -37.917050464248874),
+    "East Cape": (178.0272757557843, -37.88741822489124),
+}
 
 NZTM_BOUNDING_BOX = [1079100.000, 2100800.000, 4736600.000, 6229700.000]
 
