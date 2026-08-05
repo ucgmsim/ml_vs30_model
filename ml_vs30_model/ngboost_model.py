@@ -122,11 +122,16 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path) -> pd.DataFrame:
 
         # Create data arrays
         pred_lnVs30_mean_da = xr.DataArray(
-            data=np.full(land_mask.shape, np.nan), coords=[ds.y, ds.x], dims=["y", "x"]
+            data=np.full(land_mask.shape, np.nan),
+            coords={"y": ds.y, "x": ds.x},
+            dims=["y", "x"],
         )
         pred_lnVs30_mean_da.values[~null_mask] = pred_lnVs30_mean
+
         pred_lnVs30_std_da = xr.DataArray(
-            data=np.full(land_mask.shape, np.nan), coords=[ds.y, ds.x], dims=["y", "x"]
+            data=np.full(land_mask.shape, np.nan),
+            coords={"y": ds.y, "x": ds.x},
+            dims=["y", "x"],
         )
         pred_lnVs30_std_da.values[~null_mask] = pred_lnVs30_std
         pred_vs30 = np.exp(pred_lnVs30_mean_da)
@@ -138,8 +143,11 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path) -> pd.DataFrame:
             "vs30": pred_vs30,
             "lnVs30_mean": pred_lnVs30_mean_da,
             "lnVs30_std": pred_lnVs30_std_da,
-        }
+        },
+        attrs=ds.attrs,
     )
+
+    grid_dataset = grid_dataset.rio.set_spatial_dims(x_dim="x", y_dim="y")
     grid_dataset = grid_dataset.rio.write_crs(constants.NZTM2000_EPSG_STR)
     grid_dataset.to_netcdf(out_ffp)
     logger.info(f"Saved Vs30 estimates across New Zealand to {out_ffp}")
