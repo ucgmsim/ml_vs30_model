@@ -426,8 +426,10 @@ def create_nz_nztm_input_grid(
         Number of processes to use for parallel processing.
     """
     min_x, max_x, min_y, max_y = constants.NZTM_BOUNDING_BOX
-    nztm_x = np.arange(min_x, max_x + dx, dx)
-    nztm_y = np.arange(min_y, max_y + dy, dy)
+    # Coordinates are pixel centers, and y is descending (north-up), matching
+    # standard GDAL/rasterio raster conventions.
+    nztm_x = np.arange(min_x + dx / 2, max_x, dx)
+    nztm_y = np.arange(max_y - dy / 2, min_y, -dy)
 
     grid_x, grid_y = np.meshgrid(nztm_x, nztm_y)
     grid_points = np.column_stack([grid_x.ravel(), grid_y.ravel()])
