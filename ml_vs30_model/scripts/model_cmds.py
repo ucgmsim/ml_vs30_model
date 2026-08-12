@@ -7,7 +7,6 @@ import numpy as np
 import ml_tools as mlt
 import ml_vs30_model as vs30
 
-
 app = typer.Typer(
     pretty_exceptions_short=True,
     pretty_exceptions_show_locals=False,
@@ -258,14 +257,41 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path):
     vs30.plotting.other.plot_nz_vs30_hist(
         vs30_values, model_dir / "nz_vs30_histogram.png"
     )
-    
+
+
+@app.command("vs30-nz-geotiff")
+def vs30_nz_geotiff(model_dir: Path):
+    """
+    Saves the kriged Vs30 and its standard deviation across New Zealand as a
+    2-band GeoTIFF. Only supported for NGBoost models, and requires kriged
+    Vs30 estimates to already exist in nz_vs30_results.nc.
+    """
+    logger = mlt.utils.setup_logging()
+
+    run_config = vs30.RunConfig.from_yaml(model_dir / "run_config.yaml")
+
+    if run_config.model_type != vs30.configs.ModelType.NGBoost:
+        vs30.utils.raise_log(
+            NotImplementedError,
+            f"Model type {run_config.model_type} not supported for GeoTIFF export "
+            "(only NGBoost provides a native standard deviation).",
+            logger,
+        )
+
+    vs30.ngboost_model.vs30_nz_geotiff(model_dir)
+
+
 @app.command("test-predictions")
 def test_predictions(dataset_ffp: Path, full_model_dir: Path, test_sites_ffp: Path):
+    """Run predictions on the test sites and save the results to a parquet file."""
     test_sites = np.load(test_sites_ffp)
     dataset_df = pd.read_parquet(dataset_ffp)
 
-    results_df = vs30.ngboost_model.estimate_vs30(full_model_dir, dataset_df.loc[test_sites])
+    results_df = vs30.ngboost_model.estimate_vs30(
+        full_model_dir, dataset_df.loc[test_sites]
+    )
     results_df.to_parquet(full_model_dir / "test_results.parquet")
+
 
 @app.command("add-other-nz-estimates")
 def add_other_nz_estimates(dataset_ffp: Path):
@@ -300,6 +326,7 @@ def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
     """
     mlt.utils.setup_logging()
     vs30.post_processing.add_ml_model_residuals(dataset_ffp, other_dataset_ffp)
+
 
 @app.command("add-krigged-vs30")
 def add_krigged_vs30(full_model_dir: Path):
@@ -350,6 +377,19 @@ def run_feature_selection(
     vs30.feature_selection.run_feature_selection(
         base_run_config, variables, base_out_dir, n_procs=n_procs
     )
+
+
+@app.command("print-vs30-bin-metrics")
+def print_vs30_bin_metrics(cv_model_dir: Path):
+    """
+    For the given CV model results, print the model performance metrics for each Vs30 bin.
+    """
+    mlt.utils.setup_logging()
+    val_results = pd.read_parquet(cv_model_dir / "val_results.parquet")
+    vs30.post_processing.print_vs30_bin_metrics(val_results)
+
+
+
 
 
 if __name__ == "__main__":

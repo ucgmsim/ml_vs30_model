@@ -199,10 +199,10 @@ INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
 }
 
 INPUT_VAR_TO_PAPER_NICE_NAME_MAPPING = {
-    InputVariable.NZEnvDSTopoRoughness: "Topographic Roughness (dimensionless)",
-    InputVariable.NZGeologyAgeLnMid: "Geological Age (MA)",
+    InputVariable.NZEnvDSTopoRoughness: "Topographic Roughness (index)",
+    InputVariable.NZGeologyAgeLnMid: "Geological Age (Ma)",
     InputVariable.NZCombinedGroundwaterDepth: "Groundwater Depth (m)",
-    InputVariable.NZEnvDSTopoNormalisedHeight: "Topographic Normalised Height (dimensionless)",
+    InputVariable.NZEnvDSTopoNormalisedHeight: "Topographic Normalised Height (index)",
     InputVariable.NZEnvDSDistanceRiversVertical: "Distance to Rivers (Vertical) (m)",
 }
 
@@ -463,6 +463,12 @@ DENSE_VS30_BINS = np.asarray([0, 180, 260, 360, 540, 760, 1000, 1600, 3000, 10_0
 DENSE_VS30_BIN_NAMES = [
     f"{DENSE_VS30_BINS[i]}-{DENSE_VS30_BINS[i + 1]}"
     for i in range(len(DENSE_VS30_BINS) - 1)
+]
+
+GEYIN_VS30_BINS = np.asarray([0, 180, 259,360, 537, 760, 1150, 2000])
+GEYIN_VS30_BIN_NAMES = [
+    f"{GEYIN_VS30_BINS[i]}-{GEYIN_VS30_BINS[i + 1]}"
+    for i in range(len(GEYIN_VS30_BINS) - 1)
 ]
 
 QUALITY_SCORE_COLORS = {

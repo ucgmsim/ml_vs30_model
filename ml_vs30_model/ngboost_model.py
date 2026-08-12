@@ -8,6 +8,7 @@ import optuna as opt
 import pandas as pd
 import numpy as np
 import xarray as xr
+import rasterio
 from scipy import stats
 from ngboost import NGBRegressor
 from ngboost.distns import Normal
@@ -20,6 +21,7 @@ from . import pre_processing
 from . import training
 from . import post_processing
 from . import constants
+from . import utils
 
 # Opt-in to the future pandas behavior to prevent downcasting warnings during .ffill
 pd.set_option("future.no_silent_downcasting", True)
@@ -152,6 +154,47 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path) -> pd.DataFrame:
     grid_dataset.to_netcdf(out_ffp)
     logger.info(f"Saved Vs30 estimates across New Zealand to {out_ffp}")
 
+    return out_ffp
+
+
+def vs30_nz_geotiff(model_dir: Path) -> Path:
+    """
+    Saves the kriged Vs30 (mean) + ln(Vs30) std across NZ as a 2-band GeoTIFF.
+    Requires nz_vs30_results.nc (from estimate_vs30_nz) to already contain
+    kriged Vs30 estimates (from post_processing.add_krigged_vs30).
+    """
+    nc_ffp = model_dir / "nz_vs30_results.nc"
+    if not nc_ffp.exists():
+        utils.raise_log(
+            FileNotFoundError,
+            f"{nc_ffp} not found. Run estimate_vs30_nz first.",
+            logger,
+        )
+
+    with xr.open_dataset(nc_ffp) as ds:
+        if "kriged_vs30_mean" not in ds.variables or "lnVs30_std" not in ds.variables:
+            utils.raise_log(
+                ValueError,
+                f"{nc_ffp} is missing required variables.",
+                logger,
+            )
+
+        kriged_vs30_da = ds["kriged_vs30_mean"].drop_encoding()
+        lnvs30_std_da = ds["lnVs30_std"].drop_encoding()
+        stacked = xr.concat([kriged_vs30_da, lnvs30_std_da], dim="band").assign_coords(
+            band=[1, 2]
+        )
+        stacked = stacked.rio.write_crs(constants.NZTM2000_EPSG_STR)
+        stacked = stacked.rio.write_nodata(np.nan)
+
+        out_ffp = model_dir / "nz_vs30_results.tif"
+        stacked.rio.to_raster(out_ffp)
+
+    with rasterio.open(out_ffp, "r+") as dst:
+        dst.set_band_description(1, "kriged_vs30")
+        dst.set_band_description(2, "lnVs30_std")
+
+    logger.info(f"Saved kriged Vs30 + std GeoTIFF across New Zealand to {out_ffp}")
     return out_ffp
 
 

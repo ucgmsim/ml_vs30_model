@@ -645,3 +645,29 @@ def add_krigged_vs30(full_model_dir: Path):
     ds.to_netcdf(full_model_dir / "nz_vs30_results.nc", mode="a")
 
     
+def print_vs30_bin_metrics(results_df: pd.DataFrame, metrics : list[str] = ["mae"]):
+    bin_sets = [
+            (constants.DENSE_VS30_BINS, constants.DENSE_VS30_BIN_NAMES),
+            (constants.GEYIN_VS30_BINS, constants.GEYIN_VS30_BIN_NAMES),
+        ]
+
+    for bins, bin_names in bin_sets:
+        print("------------------------------------------")
+        print(f"Metrics for Vs30 bins: {bin_names}")
+
+        cur_df = results_df.copy()
+        cur_df["cur_vs30_bin"] = pd.cut(cur_df["vs30"], bins=bins, labels=bin_names)
+
+        grouped = cur_df.groupby("cur_vs30_bin", observed=True)[metrics].agg(["mean", "std"])
+        counts = cur_df.groupby("cur_vs30_bin", observed=True)[metrics[0]].count()
+
+        display_df = pd.DataFrame(index=grouped.index)
+        display_df["n"] = counts
+        for metric in metrics:
+            display_df[metric] = (
+                grouped[(metric, "mean")]
+                .map("{:.3f}".format)
+                .str.cat(grouped[(metric, "std")].map(" \u00b1 {:.3f}".format))
+            )
+
+        print(display_df.to_string())

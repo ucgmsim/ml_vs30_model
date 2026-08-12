@@ -308,6 +308,7 @@ def gen_vs30_map(
     region: list[str] = None,
     show_colorbar: bool = True,
     label: str = None,
+    projection="M8.5c",
 ):
     logger = mlt.utils.setup_logging()
     region_coords = vs30.constants.REGION_MAPPING[region_key]
@@ -359,7 +360,7 @@ def gen_vs30_map(
         plot_topo=False,
         plot_highways=False,
         region=region_coords,
-        projection="M8.5c",
+        projection=projection,
     )
 
     logger.info("Plotting Vs30 values...")
@@ -442,7 +443,7 @@ def gen_residual_map(
         if use_kriged
         else "foster_original_vs30_ln_res"
     )
-    cb_label = "ln(Foster) - ln(ML)"
+    cb_label = "ln(F19) - ln(ML)"
 
     # Load residual values
     with xr.open_dataset(dataset_ffp) as ds:
@@ -582,6 +583,7 @@ def input_variable_kde_distribution(
     output_dir: Path,
     show_legend: bool = True,
     show_rug: bool = False,
+    x_label: str = None,
 ):
     logger = mlt.utils.setup_logging()
 
@@ -600,7 +602,7 @@ def input_variable_kde_distribution(
         np.clip(dataset_df[variable].values, min_val, max_val),
         fill=False,
         ax=ax,
-        color="tab:blue",
+        color="blue",
         label="NZ Site Database",
         linewidth=vs30.constants.FIG_LINEWIDTH,
     )
@@ -621,7 +623,7 @@ def input_variable_kde_distribution(
         )
 
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-    ax.set_xlabel(vs30.constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING[variable])
+    ax.set_xlabel(x_label or vs30.constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING[variable])
     ax.set_ylabel("Density")
     ax.set_xlim(min_val, max_val)
     ax.yaxis.set_ticklabels([])
@@ -798,41 +800,41 @@ def combined_dataset_comparison(
 
     geyin_dataset_df = pd.read_parquet(geyin_dataset_ffp)
     geyin_dataset_df["source"] = "geyin"
-    geyin_dataset_df["slope"] = geyin_dataset_df["topographic_slope"]
+    # geyin_dataset_df["slope"] = geyin_dataset_df["topographic_slope"]
     geyin_dataset_df["nz_geology_age_mid"] = np.nan
 
     comb_df = pd.concat(
         [
-            dataset_df[["vs30", "nzenvds_slope_deg", "nz_geology_age_mid", "source"]],
-            foster_df[["vs30", "nzenvds_slope_deg", "nz_geology_age_mid", "source"]],
-            qual_df[["vs30", "nzenvds_slope_deg", "nz_geology_age_mid", "source"]],
+            dataset_df[["vs30", "nzenvds_topo_roughness", "nz_geology_age_mid", "source"]],
+            foster_df[["vs30", "nzenvds_topo_roughness", "nz_geology_age_mid", "source"]],
+            qual_df[["vs30", "nzenvds_topo_roughness", "nz_geology_age_mid", "source"]],
         ],
         ignore_index=True,
     )
-    comb_df = comb_df.rename(columns={"nzenvds_slope_deg": "slope"})
+    comb_df = comb_df.rename(columns={"nzenvds_topo_roughness": "roughness"})
     comb_df = pd.concat(
         [
             comb_df,
-            geyin_dataset_df[["vs30", "slope", "nz_geology_age_mid", "source"]],
+            geyin_dataset_df[["vs30", "roughness", "nz_geology_age_mid", "source"]],
         ],
         ignore_index=True,
     )
 
     comb_df["vs30"] = comb_df["vs30"].clip(0, 1600)
-    comb_df["slope"] = comb_df["slope"].clip(0, 20)
+    # comb_df["slope"] = comb_df["slope"].clip(0, 20)
     comb_df["nz_geology_age_mid"] = comb_df["nz_geology_age_mid"].clip(0.1, None)
 
     fig = plt.figure(figsize=vs30.constants.FIG_SIZE, layout="constrained")
     axd = fig.subplot_mosaic([["A", "A"], ["B", "C"]])
 
     color_map = {
-        "nz_all": "tab:red",
-        "nz_qual": "tab:orange",
-        "geyin": "magenta",
-        "foster": "tab:blue",
+        "nz_all": "blue",
+        "nz_qual": "purple",
+        "geyin": "green",
+        "foster": "tab:red",
     }
 
-    ax_vs30, ax_slope, ax_age = axd["A"], axd["B"], axd["C"]
+    ax_vs30, ax_roughness, ax_age = axd["A"], axd["B"], axd["C"]
 
     fill, cut = False, 1
     linewidth = vs30.constants.FIG_LINEWIDTH
@@ -889,10 +891,10 @@ def combined_dataset_comparison(
     ### Slope
     sns.kdeplot(
         comb_df,
-        x="slope",
+        x="roughness",
         hue="source",
         fill=fill,
-        ax=ax_slope,
+        ax=ax_roughness,
         palette=color_map,
         hue_order=color_map.keys(),
         common_norm=False,
@@ -902,21 +904,22 @@ def combined_dataset_comparison(
         linewidth=linewidth,
     )
 
-    ax_slope.text(
+    ax_roughness.text(
         -0.04,
         0.99,
         "b)",
-        transform=ax_slope.transAxes,
+        transform=ax_roughness.transAxes,
         horizontalalignment="right",
         verticalalignment="top",
         fontweight="bold",
     )
 
-    ax_slope.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-    ax_slope.set_xlabel("Slope (degrees)")
-    ax_slope.set_ylabel("Density")
-    ax_slope.set_xlim(0, comb_df["slope"].max())
-    ax_slope.yaxis.set_ticklabels([])
+    ax_roughness.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    # ax_roughness.set_xlabel("Slope (degrees)")
+    ax_roughness.set_xlabel("Topographic Roughness")
+    ax_roughness.set_ylabel("Density")
+    ax_roughness.set_xlim(0, comb_df["roughness"].max())
+    ax_roughness.yaxis.set_ticklabels([])
 
     ### Geological Age
     sns.kdeplot(
@@ -946,7 +949,7 @@ def combined_dataset_comparison(
     )
 
     ax_age.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-    ax_age.set_xlabel("Geological Age")
+    ax_age.set_xlabel("Geological Age (Ma)")
     ax_age.set_ylabel("Density")
     ax_age.set_xlim(0.1, comb_df["nz_geology_age_mid"].max())
     ax_age.yaxis.set_ticklabels([])
@@ -1323,6 +1326,8 @@ def gen_residual_scatter_plot(
 
     fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
 
+    ax.axhline(0, color="black", linewidth=0.75, zorder=5)
+
     test_p_cols = []
     for i, (k, color) in enumerate(vs30.constants.QUALITY_SCORE_COLORS.items()):
         mask = results_df["quality_score"] == k
@@ -1363,7 +1368,7 @@ def gen_residual_scatter_plot(
         quantiles=None,
     )
 
-    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--", zorder=0)
     ax.set_xlabel(r"$Vs30$ (m/s)")
     if hide_x_label:
         ax.set_xlabel("")
@@ -1388,14 +1393,41 @@ def gen_residual_scatter_plot(
         )
         ax.add_artist(test_legend)
 
+    # ax.text(
+    #     0.015,
+    #     0.975,
+    #     "Foster et al. (2019)" if is_foster else "ML Model (This Study)",
+    #     transform=ax.transAxes,
+    #     horizontalalignment="left",
+    #     verticalalignment="top",
+    #     fontweight="bold",
+    # )
+
     ax.text(
-        0.015,
+        0.5,
         0.975,
         "Foster et al. (2019)" if is_foster else "ML Model (This Study)",
         transform=ax.transAxes,
-        horizontalalignment="left",
+        horizontalalignment="center",
         verticalalignment="top",
         fontweight="bold",
+    )
+
+    ax.text(
+        0.015,
+        0.925,
+        "Overprediction",
+        transform=ax.transAxes,
+        horizontalalignment="left",
+        verticalalignment="top",
+    )
+    ax.text(
+        0.015,
+        0.075,
+        "Underprediction",
+        transform=ax.transAxes,
+        horizontalalignment="left",
+        verticalalignment="bottom",
     )
 
     ax.legend(loc="lower right")
@@ -1799,8 +1831,10 @@ def gen_feature_trend_plots(cv_model_results_dir: Path, output_dir: Path, featur
     fig, axs = mlt.plotting.get_fig_axes(4, 2, 2, ind_figsize=vs30.constants.FIG_SIZE)
     labels = ["a)", "b)", "c)", "d)"]
 
+
     for i, feat in enumerate(features):
         cur_ax = axs[i]
+        cur_ax.axhline(0, color="black", linewidth=0.75, zorder=5)
         shap_ix = shap_values.feature_names.index(feat)
 
         x_values = results_df[feat].values
@@ -1812,18 +1846,22 @@ def gen_feature_trend_plots(cv_model_results_dir: Path, output_dir: Path, featur
         if feat == "nz_combined_groundwater_depth":
             x_values = np.clip(x_values, 0, 10)
 
-        cur_ax.scatter(
+        scatter = cur_ax.scatter(
             x_values,
             shap_values.values[:, shap_ix],
-            color="tab:blue",
-            s=1.0
+            c=results_df["vs30"].values,
+            cmap="viridis",
+            vmin=0,
+            vmax=1000,
+            s=1.0,
+            zorder=10,
         )
 
         if feat in x_lim_dict:
             cur_ax.set_xlim(x_lim_dict[feat])
 
 
-        cur_ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+        cur_ax.grid(linewidth=0.5, alpha=0.5, linestyle="--", zorder=0)
         cur_ax.set_xlabel(nice_feature_name)
         cur_ax.set_ylabel("SHAP Value")
 
@@ -1841,12 +1879,21 @@ def gen_feature_trend_plots(cv_model_results_dir: Path, output_dir: Path, featur
             cur_ax.set_ylabel("")
             cur_ax.set_yticklabels([])
 
-    y_min = min(ax.get_ylim()[0] for ax in axs)
-    y_max = max(ax.get_ylim()[1] for ax in axs)
+    y_limits = max(abs(min(ax.get_ylim()[0] for ax in axs)), abs(max(ax.get_ylim()[1] for ax in axs)))
     for ax in axs:
-        ax.set_ylim(y_min, y_max)
+        ax.set_ylim(-y_limits, y_limits)
 
-    fig.subplots_adjust(left=0.09, right=0.98, top=0.99, bottom=0.08, hspace=0.2, wspace=0.05)
+    # Leave space on the right for the shared colorbar
+    fig.subplots_adjust(left=0.09, right=0.88, top=0.99, bottom=0.08, hspace=0.2, wspace=0.05)
+
+    cbar = fig.colorbar(
+        scatter,
+        ax=axs,
+        location="right",
+        fraction=0.03,
+        pad=0.02,
+    )
+    cbar.set_label("Vs30 (m/s)")
 
     fig.savefig(
         output_dir / f"feature_trend_plots.{vs30.constants.FIG_FORMAT}",
