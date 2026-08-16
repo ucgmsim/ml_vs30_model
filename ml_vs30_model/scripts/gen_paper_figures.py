@@ -58,8 +58,9 @@ def gen_site_map(dataset_ffp: Path, output_dir: Path):
     spatial_plot = vs30.plotting.spatial.SpatialPlot(
         plot_topo=True,
         plot_highways=True,
-        region=vs30.constants.NZ_BOUNDING_BOX,
-        projection=main_projection,
+        region=plotting.ProjectedRegion.from_box(
+            *vs30.constants.NZ_BOUNDING_BOX, main_projection
+        ),
     )
 
     # Set the extreme colors
@@ -118,8 +119,9 @@ def gen_site_map(dataset_ffp: Path, output_dir: Path):
     ):
         try:
             plotting.gen_region_fig(
-                projection=inset_projection,
-                region=vs30.constants.CANTERBURY_BOUNDING_BOX,
+                region=plotting.ProjectedRegion.from_box(
+                    *vs30.constants.CANTERBURY_BOUNDING_BOX, inset_projection
+                ),
                 plot_kwargs=vs30.plotting.spatial.SpatialPlot.DEFAULT_PLT_KWARGS
                 | {"highway_pen_width": 1.0},
                 config_options=vs30.plotting.spatial.SpatialPlot.DEFAULT_CONFIG_OPTIONS,
@@ -178,8 +180,9 @@ def gen_site_map(dataset_ffp: Path, output_dir: Path):
     ):
         try:
             plotting.gen_region_fig(
-                projection=inset_projection,
-                region=vs30.constants.WELLINGTON_BOUNDING_BOX,
+                region=plotting.ProjectedRegion.from_box(
+                    *vs30.constants.WELLINGTON_BOUNDING_BOX, inset_projection
+                ),
                 plot_kwargs=vs30.plotting.spatial.SpatialPlot.DEFAULT_PLT_KWARGS
                 | {"highway_pen_width": 1.0},
                 config_options=vs30.plotting.spatial.SpatialPlot.DEFAULT_CONFIG_OPTIONS,
@@ -270,18 +273,18 @@ def gen_pred_std_map(
             & (pred_std_df["lat"] <= region_coords[3])
         ]
 
+    plot_region = plotting.ProjectedRegion.from_box(*region_coords, "M8.5c")
     spatial_plot = vs30.plotting.spatial.SpatialPlot(
         plot_topo=False,
         plot_highways=False,
-        region=region_coords,
-        projection="M8.5c",
+        region=plot_region,
     )
 
     logger.info("Plotting Pred Std values...")
     start = time.time()
     spatial_plot.plot_pred_std_vs30(
         pred_std_df,
-        region=region_coords,
+        region=plot_region,
         grid_spacing=grid_spacing,
         std_limits=(0.0, 0.5)
     )
@@ -308,10 +311,26 @@ def gen_vs30_map(
     region: list[str] = None,
     show_colorbar: bool = True,
     label: str = None,
-    projection="M8.5c",
+    projection: str = "M8.5c",
+    azimuth: float = None,
+    width: str = "18c",
+    vertical: bool = False,
 ):
     logger = mlt.utils.setup_logging()
     region_coords = vs30.constants.REGION_MAPPING[region_key]
+    # With --azimuth, the map is rotated by that angle (degrees clockwise from
+    # north) so a long, tilted region like NZ fits one page. `region_coords`'s
+    # SW/NE corners then span the tilted rectangle to plot, and the oblique
+    # projection is built around its centre; --projection is unused in that
+    # case. --vertical lays it up the page instead of across (and so wants a
+    # much smaller --width). Otherwise it is a plain north-up box.
+    plot_region = (
+        plotting.ProjectedRegion.from_rotated_corners(
+            *region_coords, azimuth=azimuth, width=width, vertical=vertical
+        )
+        if azimuth is not None
+        else plotting.ProjectedRegion.from_box(*region_coords, projection)
+    )
 
     # Load vs30 values
     with xr.open_dataset(full_model_dir / "nz_vs30_results.nc") as ds:
@@ -348,7 +367,8 @@ def gen_vs30_map(
     latlon_coords = coordinates.nztm_to_wgs_depth(vs30_df[["nztm_y", "nztm_x"]].values)
     vs30_df["lat"], vs30_df["lon"] = latlon_coords[:, 0], latlon_coords[:, 1]
 
-    if region_key != "nz":
+    # Only apply the region filter if the map is not rotated
+    if region_key != "nz" and azimuth is None:
         vs30_df = vs30_df.loc[
             (vs30_df["lon"] >= region_coords[0])
             & (vs30_df["lon"] <= region_coords[1])
@@ -359,15 +379,14 @@ def gen_vs30_map(
     spatial_plot = vs30.plotting.spatial.SpatialPlot(
         plot_topo=False,
         plot_highways=False,
-        region=region_coords,
-        projection=projection,
+        region=plot_region,
     )
 
     logger.info("Plotting Vs30 values...")
     start = time.time()
     spatial_plot.plot_vs30_values(
         vs30_df,
-        region=region_coords,
+        region=plot_region,
         grid_spacing=grid_spacing,
         show_colorbar=show_colorbar,
         show_colorbar_label=False,
@@ -474,11 +493,11 @@ def gen_residual_map(
             & (residual_df["lat"] <= region[3])
         ]
 
+    plot_region = plotting.ProjectedRegion.from_box(*region, "M8.5c")
     spatial_plot = vs30.plotting.spatial.SpatialPlot(
         plot_topo=False,
         plot_highways=False,
-        region=region,
-        projection="M8.5c",
+        region=plot_region,
     )
 
     logger.info("Plotting residual values...")
@@ -486,7 +505,7 @@ def gen_residual_map(
     spatial_plot.plot_ratio(
         residual_df,
         cmap_limits=(-1.0, 1.0, 2.0 / 16),
-        region=region,
+        region=plot_region,
         cb_label=cb_label,
         grid_spacing=grid_spacing,
         show_colorbar=show_colorbar,
@@ -558,16 +577,18 @@ def input_variable_map(
             & (variable_df["lat"] <= region[3])
         ]
 
+    plot_region = plotting.ProjectedRegion.from_box(*region, "M8.5c")
     spatial_plot = vs30.plotting.spatial.SpatialPlot(
         plot_topo=False,
         plot_highways=False,
-        region=region,
-        projection="M8.5c",
+        region=plot_region,
     )
 
     logger.info(f"Plotting {variable} values...")
     start = time.time()
-    spatial_plot.plot_input_variable_values(variable_df, variable, region=region)
+    spatial_plot.plot_input_variable_values(
+        variable_df, variable, region=plot_region
+    )
     logger.info(f"Took: {time.time() - start} to plot {variable} values")
 
     spatial_plot.save(

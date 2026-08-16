@@ -55,7 +55,9 @@ class SpatialPlot:
         )
 
         if "region" not in fig_kwargs:
-            fig_kwargs["region"] = constants.NZ_BOUNDING_BOX
+            fig_kwargs["region"] = plotting.ProjectedRegion.from_box(
+                *constants.NZ_BOUNDING_BOX
+            )
         self.region = fig_kwargs["region"]
 
         self.fig = plotting.gen_region_fig(
@@ -128,7 +130,9 @@ class SpatialPlot:
             )
 
     def add_highways(self, pen_width: float = 0.3, pen_color: str = "orange"):
-        map_data = plotting.NZMapData.load(region=self.region, high_res_topo=False)
+        map_data = plotting.NZMapData.load(
+            region=self.region.bounding_box, high_res_topo=False
+        )
         self.fig.plot(
             data=map_data.highway_df,
             pen=f"{pen_width}p,{pen_color}",
@@ -152,7 +156,7 @@ class SpatialPlot:
         cb_label: str | None = None,
         data_key: str = "ln_residual",
         grid_spacing: str = "250e/250e",
-        region: tuple[float, float, float, float] | None = None,
+        region: plotting.ProjectedRegion | None = None,
         cmap_limits: tuple[float, float, float] = None,
         show_colorbar: bool = True,
         **plot_grid_kwargs,
@@ -174,7 +178,7 @@ class SpatialPlot:
             ratio_df,
             data_key,
             grid_spacing=grid_spacing,
-            region=region,
+            bounds=region.bounding_box if region else None,
             interp_method="nearest",
         )
 
@@ -187,7 +191,7 @@ class SpatialPlot:
             input_variable_df: pd.DataFrame,
             variable: constants.InputVariable,
             transparency: float | None = None,
-            region: tuple[float, float, float, float] | None = None,
+            region: plotting.ProjectedRegion | None = None,
             cmap_limits: tuple[float, float] | None = None,
             grid_spacing: str = "250e/250e",
     ):
@@ -196,7 +200,7 @@ class SpatialPlot:
         grid = plotting.create_grid(
             input_variable_df,
             variable.value,
-            region=region,
+            bounds=region.bounding_box if region else None,
             grid_spacing=grid_spacing,
             interp_method="nearest",
         )
@@ -227,7 +231,7 @@ class SpatialPlot:
         self,
         pred_std_df: pd.DataFrame,
         transparency: float | None = None,
-        region: tuple[float, float, float, float] | None = None,
+        region: plotting.ProjectedRegion | None = None,
         std_limits: tuple[float, float] = (0, 1),
         grid_spacing: str = "250e/250e",
         interp_method: str = "nearest",
@@ -236,7 +240,7 @@ class SpatialPlot:
         grid = plotting.create_grid(
             pred_std_df,
             "pred_std_vs30",
-            region=region,
+            bounds=region.bounding_box if region else None,
             grid_spacing=grid_spacing,
             interp_method=interp_method,
         )
@@ -265,7 +269,7 @@ class SpatialPlot:
         self,
         vs30_df: pd.DataFrame,
         transparency: float | None = None,
-        region: tuple[float, float, float, float] | None = None,
+        region: plotting.ProjectedRegion | None = None,
         vs_30_cmap_limits: tuple[float, float] = (0, 1000),
         grid_spacing: str = "250e/250e",
         interp_method: str = "nearest",
@@ -276,7 +280,7 @@ class SpatialPlot:
         grid = plotting.create_grid(
             vs30_df,
             "vs30",
-            region=region,
+            bounds=region.bounding_box if region else None,
             grid_spacing=grid_spacing,
             interp_method=interp_method,
         )

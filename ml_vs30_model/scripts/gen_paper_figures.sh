@@ -7,15 +7,15 @@ scripts_dir="/Users/claudy/dev/work/code/ml_vs30_model/ml_vs30_model/scripts"
 dataset_ffp="${VS30_MODEL_BASE_DATA_DIR}/datasets/nz_site_db_dataset.parquet"
 
 geyin_dataset_ffp="${VS30_MODEL_BASE_DATA_DIR}/datasets/us_geyin_maurer.parquet"
-nz_input_dataset_ffp="${VS30_MODEL_BASE_DATA_DIR}/grids/nz_input_grid_250m/input_grid.nc"
+nz_input_dataset_ffp="${VS30_MODEL_BASE_DATA_DIR}/grids/nz_input_grid_100m/input_grid.nc"
 population_density_ffp="${VS30_MODEL_BASE_DATA_DIR}/other/nz_population/new-zealand-estimated-resident-population-grid-250-metre.shp"
 
 foster_nz_dataset="${VS30_MODEL_BASE_DATA_DIR}/datasets/foster.parquet"
 foster_nz_dataset_results="${VS30_MODEL_BASE_DATA_DIR}/results/foster/foster_results_nz_site_db.parquet"
 foster_tif="${VS30_MODEL_BASE_DATA_DIR}/nz_estimates/foster_original/foster_paper_original.tif"
 
-cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0624_182722_cv100_ngboostV4p14"
-full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0624_183433_full_ngboostV4p14"
+cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0805_113906_cv100_ngboostV4p14_nzCombined"
+full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0806_112209_full_ngboostV4p14_nzCombined"
 
 
 out_dir="/Users/claudy/dev/work/tmp/vs30_plots"
@@ -46,13 +46,13 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # python "${scripts_dir}/gen_paper_figures.py" gen-vs30-hist "${dataset_ffp}" "${out_dir}"
 # export fig_size=$default_fig_size
 
-### Input histograms
+# ## Input histograms
 # echo "Generating input variable histograms..."
 # export fig_size="3.25, 2.5"
-# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" compound_topographic_index "${out_dir}" --no-show-legend
-# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nzenvds_slope_deg "${out_dir}" --no-show-legend
-# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nz_combined_groundwater_depth "${out_dir}" --no-show-legend
-# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nz_geology_age_mid "${out_dir}"
+# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nzenvds_topo_normalised_height "${out_dir}" --no-show-legend --x-label "Topographic Normalised Height"
+# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nzenvds_topo_roughness "${out_dir}" --no-show-legend --x-label "Topographic Roughness"
+# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nz_combined_groundwater_depth "${out_dir}" --no-show-legend --x-label "Groundwater Depth (m)"
+# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nz_geology_age_mid "${out_dir}" --x-label "Geological Age (Ma)"
 # export fig_size=$default_fig_size
 
 # ### Combined dataset comparison
@@ -99,14 +99,15 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # python "${scripts_dir}/gen_paper_figures.py" gen-global-feature-importance "${cv_model_dir}" "${out_dir}"
 # export fig_size=$default_fig_size
 
-## Feature trend plots
-echo "Generating feature trend plots..."
-export fig_size="3.25, 2.75"
-python "${scripts_dir}/gen_paper_figures.py" gen-feature-trend-plots "${cv_model_dir}" "${out_dir}" nzenvds_topo_roughness nz_geology_age_ln_mid nz_combined_groundwater_depth nzenvds_topo_normalised_height
-export fig_size=$default_fig_size
+# ## Feature trend plots
+# echo "Generating feature trend plots..."
+# export fig_size="3.25, 2.75"
+# python "${scripts_dir}/gen_paper_figures.py" gen-feature-trend-plots "${cv_model_dir}" "${out_dir}" nzenvds_topo_roughness nz_geology_age_ln_mid nz_combined_groundwater_depth nzenvds_topo_normalised_height
+# export fig_size=$default_fig_size
 
 # ## Vs30 map
 # echo "Generating Vs30 map..."
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "nz_rotated" --grid-spacing "500e/500e" --azimuth 34 --width "8.5c" --vertical
 # python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "ni" --town Taupo --town "Palmerston North" --town Napier --region Taranaki --region "East Cape" --label "a) North Island: ML Model (This Study)" --no-show-colorbar
 # python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "si" --town Greymouth --town Haast --town Nelson --town Blenheim --label "c) South Island: ML Model (This Study)"
 
