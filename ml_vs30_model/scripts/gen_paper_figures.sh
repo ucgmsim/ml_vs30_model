@@ -11,11 +11,11 @@ nz_input_dataset_ffp="${VS30_MODEL_BASE_DATA_DIR}/grids/nz_input_grid_100m/input
 population_density_ffp="${VS30_MODEL_BASE_DATA_DIR}/other/nz_population/new-zealand-estimated-resident-population-grid-250-metre.shp"
 
 foster_nz_dataset="${VS30_MODEL_BASE_DATA_DIR}/datasets/foster.parquet"
-foster_nz_dataset_results="${VS30_MODEL_BASE_DATA_DIR}/results/foster/foster_results_nz_site_db.parquet"
+foster_nz_dataset_results="${VS30_MODEL_BASE_DATA_DIR}/results/foster/foster_noMVN_nzCombined.parquet"
 foster_tif="${VS30_MODEL_BASE_DATA_DIR}/nz_estimates/foster_original/foster_paper_original.tif"
 
-cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0805_113906_cv100_ngboostV4p14_nzCombined"
-full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0806_112209_full_ngboostV4p14_nzCombined"
+cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0817_154329_cv100_ngboostV4p14_nzCombined"
+full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0817_154542_full_ngboostV4p14_nzCombined"
 
 
 out_dir="/Users/claudy/dev/work/tmp/vs30_plots"
@@ -69,17 +69,11 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # python "${scripts_dir}/gen_paper_figures.py" gen-residual-scatter-plot "${foster_nz_dataset_results}" "${out_dir}" --is-foster
 # export fig_size=$default_fig_size
 
-## One-to-one plot
+# # One-to-one plot
 # export fig_size="3.5, 3.5"
 # python "${scripts_dir}/gen_paper_figures.py" gen-one-to-one-plot "${cv_model_dir}/val_results.parquet" "${out_dir}" --full-model-dir "${full_model_dir}"
 # python "${scripts_dir}/gen_paper_figures.py" gen-one-to-one-plot "${foster_nz_dataset_results}" "${out_dir}" --is-foster --no-show-legend
 # export fig_size=$default_fig_size
-
-# ## Global feature importance
-# echo "Generating global feature importance plot..."
-# export fig_font_size="3"
-# python "${scripts_dir}/gen_paper_figures.py" gen-global-feature-importance "${cv_model_dir}" "${out_dir}"
-# export fig_font_size=$default_font_size
 
 # ### Standardized residuals CDF
 # export fig_size="3.25, 2.5"
