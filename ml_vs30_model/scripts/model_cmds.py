@@ -300,8 +300,8 @@ def add_other_nz_estimates(dataset_ffp: Path):
     """
     mlt.utils.setup_logging()
 
-    foster_data_dir = vs30.constants.BASE_DATA_DIR / "nz_estimates/vs30map_data_2023"
-    vs30.post_processing.add_foster_nz_estimates(dataset_ffp, foster_data_dir)
+    # foster_data_dir = vs30.constants.BASE_DATA_DIR / "nz_estimates/vs30map_data_2023"
+    # vs30.post_processing.add_foster_nz_estimates(dataset_ffp, foster_data_dir)
 
     foster_original_ffp = (
         vs30.constants.BASE_DATA_DIR
@@ -380,13 +380,19 @@ def run_feature_selection(
 
 
 @app.command("print-vs30-bin-metrics")
-def print_vs30_bin_metrics(cv_model_dir: Path):
+def print_vs30_bin_metrics(
+    cv_model_dir: Path, foster_results_ffp: Path | None = None
+):
     """
     For the given CV model results, print the model performance metrics for each Vs30 bin.
+    Optionally compare against a Foster results parquet (see `get-foster-residuals`).
     """
     mlt.utils.setup_logging()
     val_results = pd.read_parquet(cv_model_dir / "val_results.parquet")
-    vs30.post_processing.print_vs30_bin_metrics(val_results)
+    foster_results = (
+        pd.read_parquet(foster_results_ffp) if foster_results_ffp is not None else None
+    )
+    vs30.post_processing.print_vs30_bin_metrics(val_results, foster_results)
 
 
 

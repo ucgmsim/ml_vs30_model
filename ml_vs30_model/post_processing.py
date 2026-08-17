@@ -33,7 +33,7 @@ def add_residuals(results_df: pd.DataFrame) -> pd.DataFrame:
 
 def add_mae(results_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Adds mean absolute error (MAE) to the provided results dataframe.
+    Adds absolute error (MAE) to the provided results dataframe.
     """
     results_df["mae"] = np.abs(results_df["vs30"] - results_df["pred_vs30"])
     return results_df
@@ -334,7 +334,7 @@ def _create_dataset_from_estimates(
     mean_estimate: np.ndarray,
     prefix: str,
     std_estimate: np.ndarray | None = None,
-    res_only: bool = False
+    res_only: bool = False,
 ) -> xr.Dataset:
     y, x = ml_vs30_da.y.values, ml_vs30_da.x.values
 
@@ -365,8 +365,8 @@ def _create_dataset_from_estimates(
     ln_res_da.values[~nan_mask] = ln_res
 
     ds_dict = {
-            f"{prefix}_vs30_res": res_da,
-            f"{prefix}_vs30_ln_res": ln_res_da,
+        f"{prefix}_vs30_res": res_da,
+        f"{prefix}_vs30_ln_res": ln_res_da,
     }
     if not res_only:
         ds_dict[f"{prefix}_vs30_mean"] = vs30_mean_da
@@ -375,7 +375,7 @@ def _create_dataset_from_estimates(
 
     ds = xr.Dataset(ds_dict)
     # if std_estimate is not None:
-        # ds[f"{prefix}_vs30_std"] = vs30_std_da
+    # ds[f"{prefix}_vs30_std"] = vs30_std_da
 
     return ds
 
@@ -454,9 +454,13 @@ def add_jaehwi_nz_estimates(
     ds.to_netcdf(dataset_ffp, mode="a")
 
 
-def add_foster_original_nz_estimates(dataset_ffp: Path, foster_original_ffp: Path, use_kriged: bool = False):
+def add_foster_original_nz_estimates(
+    dataset_ffp: Path, foster_original_ffp: Path, use_kriged: bool = False
+):
     logger.info(f"Adding original Foster et al. result to database {dataset_ffp}...")
-    coords, nan_mask, vs30_da = _get_dataset_values(dataset_ffp, extract_kriged=use_kriged)
+    coords, nan_mask, vs30_da = _get_dataset_values(
+        dataset_ffp, extract_kriged=use_kriged
+    )
 
     logger.info("Extracting original Foster et al. estimates...")
     with rasterio.open(foster_original_ffp) as ds:
@@ -477,7 +481,7 @@ def add_foster_original_nz_estimates(dataset_ffp: Path, foster_original_ffp: Pat
         nan_mask,
         foster_original_vs30_mean,
         "kriged_vs30_foster_original" if use_kriged else "foster_original",
-        res_only=use_kriged
+        res_only=use_kriged,
     )
 
     # Save
@@ -552,10 +556,12 @@ def add_krigged_vs30(full_model_dir: Path):
         )
     )
 
-    target_locs, nan_mask, nz_vs30_da = _get_dataset_values(full_model_dir / "nz_vs30_results.nc")
+    target_locs, nan_mask, nz_vs30_da = _get_dataset_values(
+        full_model_dir / "nz_vs30_results.nc"
+    )
 
     # with xr.open_dataset(full_model_dir / "nz_vs30_results.nc") as nz_ds:
-        # nz_vs30_da = nz_ds.vs30
+    # nz_vs30_da = nz_ds.vs30
 
     # grid_x, grid_y = np.meshgrid(nz_vs30_da.x.values, nz_vs30_da.y.values)
     # nan_mask = nz_vs30_da.isnull().values
@@ -569,7 +575,6 @@ def add_krigged_vs30(full_model_dir: Path):
     results_df["ln_residual_z"] = (
         results_df["ln_residual"] - ln_residual_mean
     ) / ln_residual_std
-    
 
     # Fit the variogram model to the standardized residuals
     logger.info("Fitting variogram model to standardized residuals...")
@@ -592,23 +597,28 @@ def add_krigged_vs30(full_model_dir: Path):
         plot_path=full_model_dir / "kriging_variogram.png",
         transform="correlation",
     )
-    logger.info("Variogram model fitted with parameters: " + ", ".join([f"{k}={v:.4f}" for k, v in params_nug.items()]))
+    logger.info(
+        "Variogram model fitted with parameters: "
+        + ", ".join([f"{k}={v:.4f}" for k, v in params_nug.items()])
+    )
 
     # Ordinary Kriging
-    logger.info("Performing ordinary kriging to estimate residuals at target locations...")
+    logger.info(
+        "Performing ordinary kriging to estimate residuals at target locations..."
+    )
     est, std = ordinary_kriging(
-        values=results_df['ln_residual_z'].values,
-        coords=results_df[['nztm_x', 'nztm_y']] / 1000,
+        values=results_df["ln_residual_z"].values,
+        coords=results_df[["nztm_x", "nztm_y"]] / 1000,
         targets=target_locs / 1000,
-        model_family='correlation',
+        model_family="correlation",
         model_type=model_type,
         params=params_nug,
         distance_type=distance_type,
         jitter=1e-10,
         return_weights=False,
-        max_neighbors=10
+        max_neighbors=10,
     )
-    
+
     est = est * ln_residual_std + ln_residual_mean
     std = np.sqrt(std) * ln_residual_std
 
@@ -625,49 +635,116 @@ def add_krigged_vs30(full_model_dir: Path):
     kriged_vs30 = np.exp(np.log(nz_vs30_da.values[~nan_mask]) + est)
 
     kriged_vs30_da = xr.DataArray(
-        data=np.full(nz_vs30_da.shape, np.nan), coords=[nz_vs30_da.y.values, nz_vs30_da.x.values], dims=["y", "x"]
+        data=np.full(nz_vs30_da.shape, np.nan),
+        coords=[nz_vs30_da.y.values, nz_vs30_da.x.values],
+        dims=["y", "x"],
     )
     kriged_vs30_da.values[~nan_mask] = kriged_vs30
 
     kriged_vs30_std_da = xr.DataArray(
-        data=np.full(nz_vs30_da.shape, np.nan), coords=[nz_vs30_da.y.values, nz_vs30_da.x.values], dims=["y", "x"]
+        data=np.full(nz_vs30_da.shape, np.nan),
+        coords=[nz_vs30_da.y.values, nz_vs30_da.x.values],
+        dims=["y", "x"],
     )
     kriged_vs30_std_da.values[~nan_mask] = std
 
     ds = _create_dataset_from_estimates(
-        nz_vs30_da,
-        nan_mask,
-        kriged_vs30,
-        "kriged",
-        std_estimate=std
+        nz_vs30_da, nan_mask, kriged_vs30, "kriged", std_estimate=std
     )
 
     ds.to_netcdf(full_model_dir / "nz_vs30_results.nc", mode="a")
 
-    
-def print_vs30_bin_metrics(results_df: pd.DataFrame, metrics : list[str] = ["mae"]):
-    bin_sets = [
-            (constants.DENSE_VS30_BINS, constants.DENSE_VS30_BIN_NAMES),
-            (constants.GEYIN_VS30_BINS, constants.GEYIN_VS30_BIN_NAMES),
-        ]
 
-    for bins, bin_names in bin_sets:
-        print("------------------------------------------")
-        print(f"Metrics for Vs30 bins: {bin_names}")
+def print_vs30_bin_metrics(
+    results_df: pd.DataFrame,
+    foster_results_df: pd.DataFrame | None = None,
+    bin_set: tuple[list[float], list[str]] | None = None
+):
+    metrics = ["mae"]
+    if bin_set is None:
+        bin_set = (constants.GEYIN_VS30_BINS, constants.GEYIN_VS30_BIN_NAMES)
+    bins, bin_names = bin_set
 
-        cur_df = results_df.copy()
-        cur_df["cur_vs30_bin"] = pd.cut(cur_df["vs30"], bins=bins, labels=bin_names)
+    print("------------------------------------------")
+    print(f"Metrics for Vs30 bins: {bin_names}")
 
-        grouped = cur_df.groupby("cur_vs30_bin", observed=True)[metrics].agg(["mean", "std"])
-        counts = cur_df.groupby("cur_vs30_bin", observed=True)[metrics[0]].count()
+    cur_df = results_df.copy()
+    cur_df["cur_vs30_bin"] = pd.cut(cur_df["vs30"], bins=bins, labels=bin_names)
 
-        display_df = pd.DataFrame(index=grouped.index)
-        display_df["n"] = counts
-        for metric in metrics:
-            display_df[metric] = (
-                grouped[(metric, "mean")]
-                .map("{:.3f}".format)
-                .str.cat(grouped[(metric, "std")].map(" \u00b1 {:.3f}".format))
-            )
+    grouped = cur_df.groupby("cur_vs30_bin", observed=True)[metrics].agg(
+        ["mean", "std"]
+    )
+    counts = cur_df.groupby("cur_vs30_bin", observed=True)[metrics[0]].count()
 
-        print(display_df.to_string())
+    display_df = pd.DataFrame(index=grouped.index)
+    display_df["n"] = counts
+    for metric in metrics:
+        display_df[metric] = (
+            grouped[(metric, "mean")]
+            .map("{:.3f}".format)
+            .str.cat(grouped[(metric, "std")].map(" \u00b1 {:.3f}".format))
+        )
+
+    if foster_results_df is not None:
+        assert results_df.index.isin(
+            foster_results_df.index
+        ).all(), "Not all sites in results_df are present in foster_results_df"
+        foster_df = foster_results_df.loc[
+            foster_results_df.index.intersection(results_df.index)
+        ].copy()
+
+        # Load data points Foster was developed on
+        foster_data = pd.read_csv(constants.FOSTER_DATA_FFP)
+        foster_data["location_id"] = (
+            foster_data["location_id"].astype(str).str.strip()
+        )
+        foster_data = foster_data.loc[foster_data.location_id != "NA"]
+
+        # Get number of Foster data points in each bin
+        foster_df["in_foster_data"] = foster_df.index.isin(
+            foster_data.location_id.values
+        )
+
+        # Compute number of points in Chch region
+        cur_df["in_chch_region"] = (
+            (cur_df["lon"] >= constants.CHCH_REGION_BOUNDING_BOX[0])
+            & (cur_df["lon"] <= constants.CHCH_REGION_BOUNDING_BOX[1])
+            & (cur_df["lat"] >= constants.CHCH_REGION_BOUNDING_BOX[2])
+            & (cur_df["lat"] <= constants.CHCH_REGION_BOUNDING_BOX[3])
+        )
+        
+        foster_df["cur_vs30_bin"] = pd.cut(
+            foster_df["vs30"], bins=bins, labels=bin_names
+        )
+        foster_mae = foster_df.groupby("cur_vs30_bin", observed=True)["mae"].agg(
+            ["mean", "std"]
+        )
+        model_mae = grouped[("mae", "mean")]
+
+        display_df["foster_mae"] = (
+            foster_mae["mean"]
+            .map("{:.3f}".format)
+            .str.cat(foster_mae["std"].map(" \u00b1 {:.3f}".format))
+        )
+        display_df["pct_improvement"] = (
+            (foster_mae["mean"] - model_mae) / foster_mae["mean"] * 100
+        ).map("{:+.1f}%".format)
+        display_df["mae_improvement"] = (
+            (foster_mae["mean"] - model_mae).map("{:+.3f}".format)
+        )
+
+        display_df["n_foster_points"] = (
+            foster_df.groupby("cur_vs30_bin", observed=True)["in_foster_data"]
+            .sum()
+            .map("{:d}".format)
+        )
+
+        display_df["n_chch_points"] = (
+            cur_df.groupby("cur_vs30_bin", observed=True)["in_chch_region"]
+            .sum()
+            .map("{:d}".format)
+        )
+
+    print(display_df.to_string())
+
+
