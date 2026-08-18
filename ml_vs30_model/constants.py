@@ -72,6 +72,8 @@ class InputVariable(StrEnum):
     NZGeologyAgeLnMid = "nz_geology_age_ln_mid"
     NZLithologyCategory = "nz_lithology_category"  # GNS Lithology Units
     NZGeologicalUnit = "nz_geological_unit"  # GNS Geological Unit ID
+    NZMainRock = "nz_main_rock"  # GNS Geology Units, MAINROCK column
+    MainrockProxy = "mainrock_proxy"  # Ordinal grain-size proxy derived from NZMainRock
     NZNLMGroundwaterDepth = "nz_nlm_groundwater_depth"  # NLM Groundwater Depth Model
     NZNWTGroundwaterDepth = "nz_nwt_groundwater_depth"  # National Water Table
     NZCombinedGroundwaterDepth = (
@@ -135,6 +137,7 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.NZGeologyAgeMax: DataSource.ShapeLoader,
     InputVariable.NZLithologyCategory: DataSource.ShapeLoader,
     InputVariable.NZGeologicalUnit: DataSource.ShapeLoader,
+    InputVariable.NZMainRock: DataSource.ShapeLoader,
     InputVariable.NZQuaternaryRegion: DataSource.NZQuaternaryRegion,
     InputVariable.NZNLMGroundwaterDepth: DataSource.NZTMTIFLoader,
     InputVariable.NZNWTGroundwaterDepth: DataSource.NZTMTIFLoader,
@@ -178,6 +181,8 @@ INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
     InputVariable.NZGeologyAgeMax: "NZ Geology Age (Max)",
     InputVariable.NZGeologyAgeMid: "NZ Geology Age (Mid)",
     InputVariable.NZGeologyAgeLnMid: "NZ Geology Age (Ln Mid)",
+    InputVariable.NZMainRock: "NZ Main Rock Type",
+    InputVariable.MainrockProxy: "Main Rock Grain-Size Proxy",
     InputVariable.NZNLMGroundwaterDepth: "NZ NLM Groundwater Depth",
     InputVariable.NZNWTGroundwaterDepth: "NZ NWT Groundwater Depth",
     InputVariable.NZCombinedGroundwaterDepth: "NZ Groundwater Depth (Comb)",
@@ -218,6 +223,7 @@ CATEGORIAL_VARIABLES = [
     InputVariable.NZGeologicalUnit,
     InputVariable.NZLithologyCategory,
     InputVariable.NZQuaternaryRegion,
+    InputVariable.NZMainRock,
 ]
 
 ORDINAL_VARIABLES = [
@@ -227,6 +233,7 @@ ORDINAL_VARIABLES = [
     InputVariable.NZEnvDSSoilDrainage,
     InputVariable.NZEnvDSSoilInduration,
     InputVariable.NZEnvDSSoilParticleSize,
+    InputVariable.MainrockProxy,
 ]
 
 
@@ -273,6 +280,7 @@ NZ_INPUT_VARS = np.array(
         InputVariable.NZEnvDSTopoRuggedness,
         InputVariable.NZEnvDSTopoValleyDepth,
         InputVariable.NZEnvDSTopoWetness,
+        InputVariable.MainrockProxy,
     ]
 )
 
@@ -294,6 +302,9 @@ DERIVED_VARIABLES_DEPENDENCIES = {
         InputVariable.NZNLMGroundwaterDepth,
         InputVariable.NZNWTGroundwaterDepth,
         InputVariable.DepthToGroundwater,
+    ],
+    InputVariable.MainrockProxy: [
+        InputVariable.NZMainRock,
     ],
 }
 
@@ -394,6 +405,7 @@ MIN_MAX_CLIP_SCALE_PARAMS = {
     InputVariable.NZDistanceToRiver_ST6_Greater: (0, 30_000, True),
     InputVariable.NZDistanceToRiver_ST7_Greater: (0, 30_000, True),
     InputVariable.NZEnvDSDistanceRiversVertical: (0, 300, True),
+    InputVariable.MainrockProxy: (0, 7.5, False),
 }
 
 INPUT_VARIABLE_CMAP_LIMITS = {
@@ -435,6 +447,7 @@ INPUT_VARIABLE_CMAP_LIMITS = {
     InputVariable.NZGeologyAgeLnMid: (-5, 6),
     InputVariable.NZCombinedGroundwaterDepth: (0, 25),
     InputVariable.NZCombinedGroundwaterDepthLn: (-2, 6),
+    InputVariable.MainrockProxy: (0, 7.5),
 }
 
 QUATERNARY_REGION_TO_ID_MAPPING = pd.Series(
@@ -452,6 +465,142 @@ QUATERNARY_REGION_TO_ID_MAPPING = pd.Series(
 )
 QUATERNARY_ID_TO_REGION_MAPPING = pd.Series(
     {v: k for k, v in QUATERNARY_REGION_TO_ID_MAPPING.items()}
+)
+
+# Hand-assigned ordinal grain-size/hardness scale (0 = finest/softest sediment,
+# 7.5 = hardest crystalline rock) for the GNS 250k geology shapefile's MAINROCK
+# column. Not geologist-reviewed - a first-pass proxy for VS30 prediction.
+# Values not present here (e.g. "unknown", "none") are intentionally left
+# unmapped and resolve to NaN.
+MAINROCK_GRAIN_RANK = pd.Series(
+    {
+        "peat": 0,
+        "coal": 0.5,
+        "lignite": 1,
+        "mud": 1,
+        "clay": 1,
+        "marl": 1.5,
+        "fill": 1.5,
+        "diatomite": 1.5,
+        "loess": 2,
+        "silt": 2,
+        "sinter": 2,
+        "greensand": 2.5,
+        "siltstone": 2.5,
+        "mudstone": 2.5,
+        "claystone": 2.5,
+        "shale": 2.5,
+        "pelite": 3,
+        "ash": 2.5,
+        "tephra": 2.5,
+        "tuff": 3,
+        "vitric tuff": 3,
+        "pyroclastics": 3,
+        "epiclastic": 3.5,
+        "metamudstone": 3,
+        "pumice": 3,
+        "sand": 3.5,
+        "lapilli": 4,
+        "lapilli tuff": 3.5,
+        "till": 4.5,
+        "sandstone": 4,
+        "volcanic sandstone": 4,
+        "grit": 4.5,
+        "psammite": 5,
+        "shell beds": 4,
+        "coquina": 4.5,
+        "biosparite": 6,
+        "micrite": 5.5,
+        "algal limestone": 6,
+        "travertine": 5,
+        "pyroclastic breccia": 4.5,
+        "gravel": 5.5,
+        "conglomerate": 5.5,
+        "volcanic conglomerate": 5.5,
+        "debrite": 4.5,
+        "turbidite": 5.5,
+        "boulders": 6,
+        "breccia": 6,
+        "volcanic breccia": 5.5,
+        "agglomerate": 6,
+        "melange": 6,
+        "broken formation": 5.5,
+        "greywacke": 6,
+        "argillite": 5.5,
+        "metasandstone": 5,
+        "metaconglomerate": 6,
+        "chert": 6.5,
+        "metachert": 7,
+        "quartzite": 7,
+        "limestone": 6,
+        "marble": 6.5,
+        "calc-silicate": 7,
+        "scoria": 5,
+        "basalt": 7,
+        "olivine basalt": 7,
+        "hawaiite": 7,
+        "basanite": 7,
+        "boninite": 7,
+        "benmoreite": 7,
+        "spilite": 6.5,
+        "serpentinite": 6.5,
+        "trachyte": 7,
+        "phonolite": 7,
+        "keratophyre": 7,
+        "porphyry": 7,
+        "lamprophyre": 7,
+        "rhyodacite": 7,
+        "olivine nephelinite": 7,
+        "andesite": 7,
+        "basaltic andesite": 7,
+        "dacite": 7,
+        "rhyolite": 7,
+        "ignimbrite": 3.5,
+        "granite": 7.5,
+        "granodiorite": 7.5,
+        "granitoid": 7.5,
+        "tonalite": 7.5,
+        "trondhjemite": 7.5,
+        "diorite": 7.5,
+        "quartz diorite": 7.5,
+        "microdiorite": 7.5,
+        "monzodiorite": 7.5,
+        "quartz monzodiorite": 7.5,
+        "quartz monzonite": 7.5,
+        "monzogranite": 7.5,
+        "syenogranite": 7.5,
+        "syenite": 7.5,
+        "dolerite": 7.5,
+        "gabbro": 7.5,
+        "gabbronorite": 7.5,
+        "norite": 7.5,
+        "anorthosite": 7.5,
+        "dunite": 7.5,
+        "harzburgite": 7.5,
+        "peridotite": 7.5,
+        "ultramafics": 7.5,
+        "clinopyroxenite": 7.5,
+        "pyroxenite": 7.5,
+        "hornblendite": 7.5,
+        "epidiorite": 7.5,
+        "amphibolite": 7.5,
+        "gneiss": 7.5,
+        "orthogneiss": 7.5,
+        "paragneiss": 7.5,
+        "dioritic orthogneiss": 7.5,
+        "gabbroic orthogneiss": 7.5,
+        "granulite": 7.5,
+        "migmatite": 7.5,
+        "greenschist": 7.5,
+        "schist": 7.5,
+        "semischist": 7,
+        "hornfels": 7,
+        "metapelite": 6.5,
+        "metavolcanics": 6.5,
+        "phyllonite": 6.5,
+        "mylonite": 7,
+        "cataclasite": 6.5,
+    }
 )
 
 VS30_WEIGHTING_BINS = np.asarray([0, 180, 360, 760, 10_000])

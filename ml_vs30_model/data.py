@@ -127,7 +127,6 @@ def gen_dataset(
         df["index"] = vs30_values_df[data_config.index_col]
         df = df.set_index("index")
 
-
     if "std" in vs30_values_df.columns:
         assert np.all(df.index.values == vs30_values_df.sta.values)
         df["ln_vs30_std"] = vs30_values_df["std"].values
@@ -138,7 +137,9 @@ def gen_dataset(
         df["quality_score"] = vs30_values_df["quality_score"].values
 
         # Always use 0.3 as ln_vs30_std for Q3 sites
-        df["ln_vs30_std"] = np.where(df.quality_score == "Q3", 0.3, df.ln_vs30_std.values)
+        df["ln_vs30_std"] = np.where(
+            df.quality_score == "Q3", 0.3, df.ln_vs30_std.values
+        )
 
         if data_config.drop_quality_score is not None:
             drop_mask = df["quality_score"].isin(data_config.drop_quality_score)
@@ -152,7 +153,7 @@ def gen_dataset(
                     "No sites were dropped based on drop_quality_score list in config. "
                     "Check that quality score values in drop_quality_score match those in dataset."
                 )
-                
+
     # Add input variable values
     logger.info(f"Retrieving input variable values for {len(df)} sites.")
     for variable in data_config.input_variables:
@@ -232,7 +233,9 @@ def get_input_values(
     elif data_source == constants.DataSource.NZTMTIFLoader:
         logger.info(f"Using NZTMTIFLoader data source for variable: {variable.value}")
         nztm_loader = data_loaders.NZTMTIFLoader()
-        values = nztm_loader.get_values(points, variable, address_missing=address_missing)
+        values = nztm_loader.get_values(
+            points, variable, address_missing=address_missing
+        )
     elif data_source == constants.DataSource.GlobalGWT:
         logger.info(f"Using GlobalGWT data source for variable: {variable.value}")
         global_gwt = data_loaders.GlobalGWT()
@@ -274,9 +277,12 @@ def get_input_values(
             constants.InputVariable.NZLithologyCategory,
             constants.InputVariable.NZGeologicalUnit,
             constants.InputVariable.NZQuaternaryRegion,
+            constants.InputVariable.NZMainRock,
         ]
-        and (np.any(values == constants.INTEGER_NO_DATA_VALUE) or np.any(np.isnan(values)))
-        and variable
+        and (
+            np.any(values == constants.INTEGER_NO_DATA_VALUE)
+            or np.any(np.isnan(values))
+        )
     ):
         if variable in [
             constants.InputVariable.NZNLMGroundwaterDepth,
@@ -452,8 +458,6 @@ def create_nz_nztm_input_grid(
         land_mask.astype(np.int16), coords=[nztm_y, nztm_x], dims=["y", "x"]
     )
 
-
-
     # on_land_da.attrs["_FillValue"] = np.int16(-9999)
     grid_dataset = xr.Dataset({"on_land": on_land_da})
     grid_dataset = grid_dataset.rio.write_crs(constants.NZTM2000_EPSG_STR)
@@ -516,7 +520,9 @@ def create_nz_nztm_input_grid(
         del variable_da
 
 
-def _write_variable_to_netcdf(variable_da: xr.DataArray, variable: constants.InputVariable, out_ffp: Path) -> None:
+def _write_variable_to_netcdf(
+    variable_da: xr.DataArray, variable: constants.InputVariable, out_ffp: Path
+) -> None:
     """Writes a variable DataArray to a NetCDF file, preserving dtype."""
     variable_da.attrs.pop("_FillValue", None)
     ds = xr.Dataset({variable.value: variable_da})
@@ -538,6 +544,7 @@ def _write_variable_to_netcdf(variable_da: xr.DataArray, variable: constants.Inp
 
     # ds.to_netcdf(out_ffp, mode="a", encoding=encoding)
     ds.to_netcdf(out_ffp, mode="a", encoding={variable.value: enc})
+
 
 def select_test_sites(dataset_ffp: Path, output_dir: Path, seed: int):
     """
@@ -586,7 +593,12 @@ def select_test_sites(dataset_ffp: Path, output_dir: Path, seed: int):
     fig.write_html(output_dir / "test_sites_map.html")
 
 
-def compute_nz_quaternary_polygon_groups(geo_df: gpd.GeoDataFrame, dataset_df: gpd.GeoDataFrame, q1_count_threshold: int = 3, min_group_area: float = 1e6):
+def compute_nz_quaternary_polygon_groups(
+    geo_df: gpd.GeoDataFrame,
+    dataset_df: gpd.GeoDataFrame,
+    q1_count_threshold: int = 3,
+    min_group_area: float = 1e6,
+):
     """Computes connected polygon groups for quaternary regions in New Zealand."""
     GROUPING_SITE_MAPPING = {
         "ICCS": "invercargill",
@@ -654,18 +666,32 @@ def compute_nz_quaternary_polygon_groups(geo_df: gpd.GeoDataFrame, dataset_df: g
 
     # Apply filtering
     q1_points = dataset_df[dataset_df.quality_score == "Q1"]["geometry"].values
-    filtered_groups = {i:p for i, p in raw_comb_group_polygons.items() if p.contains(q1_points).sum() > q1_count_threshold}
+    filtered_groups = {
+        i: p
+        for i, p in raw_comb_group_polygons.items()
+        if p.contains(q1_points).sum() > q1_count_threshold
+    }
 
-    filtered_groups_df = gpd.GeoDataFrame(filtered_groups.values(), index=filtered_groups.keys(), columns=["geometry"]).set_crs(constants.NZTM2000_EPSG_STR)
+    filtered_groups_df = gpd.GeoDataFrame(
+        filtered_groups.values(), index=filtered_groups.keys(), columns=["geometry"]
+    ).set_crs(constants.NZTM2000_EPSG_STR)
     filtered_groups_df["group_id"] = filtered_groups_df.index
 
     mapping_sites = list(GROUPING_SITE_MAPPING.keys())
     for i in filtered_groups_df.index:
-        cur_site = filtered_groups_df.loc[i].geometry.contains(dataset_df.loc[mapping_sites, "geometry"]).idxmax()
-        filtered_groups_df.loc[i, "region"] = GROUPING_SITE_MAPPING.get(cur_site, "Unknown")
+        cur_site = (
+            filtered_groups_df.loc[i]
+            .geometry.contains(dataset_df.loc[mapping_sites, "geometry"])
+            .idxmax()
+        )
+        filtered_groups_df.loc[i, "region"] = GROUPING_SITE_MAPPING.get(
+            cur_site, "Unknown"
+        )
     filtered_groups_df = filtered_groups_df.set_index("region", drop=True)
 
-    filtered_ind_group_polygons = {k: raw_ind_group_polygons[row.group_id] for k, row in filtered_groups_df.iterrows()}
+    filtered_ind_group_polygons = {
+        k: raw_ind_group_polygons[row.group_id]
+        for k, row in filtered_groups_df.iterrows()
+    }
 
     return filtered_groups_df, filtered_ind_group_polygons, raw_comb_group_polygons_df
-

@@ -19,6 +19,7 @@ class FeatureEngineer:
         constants.InputVariable.NZGeologyAgeLnMid,
         constants.InputVariable.NZCombinedGroundwaterDepth,
         constants.InputVariable.NZCombinedGroundwaterDepthLn,
+        constants.InputVariable.MainrockProxy,
     }
 
     def __init__(self, data_df: pd.DataFrame):
@@ -86,6 +87,13 @@ class FeatureEngineer:
 
             self.data_df[variable] = np.log(
                 self.data_df[constants.InputVariable.NZCombinedGroundwaterDepth].clip(lower=np.exp(-2))
+            )
+        elif variable == constants.InputVariable.MainrockProxy:
+            self.data_df[variable] = (
+                self.data_df[constants.InputVariable.NZMainRock]
+                .str.strip()
+                .str.lower()
+                .map(constants.MAINROCK_GRAIN_RANK)
             )
         else:
             utils.raise_log(
