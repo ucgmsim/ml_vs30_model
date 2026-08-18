@@ -74,6 +74,11 @@ class InputVariable(StrEnum):
     NZGeologicalUnit = "nz_geological_unit"  # GNS Geological Unit ID
     NZMainRock = "nz_main_rock"  # GNS Geology Units, MAINROCK column
     MainrockProxy = "mainrock_proxy"  # Ordinal grain-size proxy derived from NZMainRock
+    NZSubRocks = "nz_sub_rocks"  # GNS Geology Units, SUBROCKS column
+    SubrockMinProxy = "subrock_min_proxy"  # Ordinal grain-size proxy derived from NZSubRocks
+    SubrockMeanProxy = "subrock_mean_proxy"
+    SubrockMedianProxy = "subrock_median_proxy"
+    SubrockMaxProxy = "subrock_max_proxy"
     NZNLMGroundwaterDepth = "nz_nlm_groundwater_depth"  # NLM Groundwater Depth Model
     NZNWTGroundwaterDepth = "nz_nwt_groundwater_depth"  # National Water Table
     NZCombinedGroundwaterDepth = (
@@ -138,6 +143,7 @@ INPUT_VARIABLE_SOURCE_MAPPING = {
     InputVariable.NZLithologyCategory: DataSource.ShapeLoader,
     InputVariable.NZGeologicalUnit: DataSource.ShapeLoader,
     InputVariable.NZMainRock: DataSource.ShapeLoader,
+    InputVariable.NZSubRocks: DataSource.ShapeLoader,
     InputVariable.NZQuaternaryRegion: DataSource.NZQuaternaryRegion,
     InputVariable.NZNLMGroundwaterDepth: DataSource.NZTMTIFLoader,
     InputVariable.NZNWTGroundwaterDepth: DataSource.NZTMTIFLoader,
@@ -183,6 +189,11 @@ INPUT_VARIABLE_TO_NICE_NAME_MAPPING = {
     InputVariable.NZGeologyAgeLnMid: "NZ Geology Age (Ln Mid)",
     InputVariable.NZMainRock: "NZ Main Rock Type",
     InputVariable.MainrockProxy: "Main Rock Grain-Size Proxy",
+    InputVariable.NZSubRocks: "NZ Sub Rocks",
+    InputVariable.SubrockMinProxy: "Sub Rock Grain-Size Proxy (Min)",
+    InputVariable.SubrockMeanProxy: "Sub Rock Grain-Size Proxy (Mean)",
+    InputVariable.SubrockMedianProxy: "Sub Rock Grain-Size Proxy (Median)",
+    InputVariable.SubrockMaxProxy: "Sub Rock Grain-Size Proxy (Max)",
     InputVariable.NZNLMGroundwaterDepth: "NZ NLM Groundwater Depth",
     InputVariable.NZNWTGroundwaterDepth: "NZ NWT Groundwater Depth",
     InputVariable.NZCombinedGroundwaterDepth: "NZ Groundwater Depth (Comb)",
@@ -234,6 +245,10 @@ ORDINAL_VARIABLES = [
     InputVariable.NZEnvDSSoilInduration,
     InputVariable.NZEnvDSSoilParticleSize,
     InputVariable.MainrockProxy,
+    InputVariable.SubrockMinProxy,
+    InputVariable.SubrockMeanProxy,
+    InputVariable.SubrockMedianProxy,
+    InputVariable.SubrockMaxProxy,
 ]
 
 
@@ -281,6 +296,10 @@ NZ_INPUT_VARS = np.array(
         InputVariable.NZEnvDSTopoValleyDepth,
         InputVariable.NZEnvDSTopoWetness,
         InputVariable.MainrockProxy,
+        InputVariable.SubrockMinProxy,
+        InputVariable.SubrockMeanProxy,
+        InputVariable.SubrockMedianProxy,
+        InputVariable.SubrockMaxProxy,
     ]
 )
 
@@ -305,6 +324,22 @@ DERIVED_VARIABLES_DEPENDENCIES = {
     ],
     InputVariable.MainrockProxy: [
         InputVariable.NZMainRock,
+    ],
+    InputVariable.SubrockMinProxy: [
+        InputVariable.NZMainRock,
+        InputVariable.NZSubRocks,
+    ],
+    InputVariable.SubrockMeanProxy: [
+        InputVariable.NZMainRock,
+        InputVariable.NZSubRocks,
+    ],
+    InputVariable.SubrockMedianProxy: [
+        InputVariable.NZMainRock,
+        InputVariable.NZSubRocks,
+    ],
+    InputVariable.SubrockMaxProxy: [
+        InputVariable.NZMainRock,
+        InputVariable.NZSubRocks,
     ],
 }
 
@@ -406,6 +441,10 @@ MIN_MAX_CLIP_SCALE_PARAMS = {
     InputVariable.NZDistanceToRiver_ST7_Greater: (0, 30_000, True),
     InputVariable.NZEnvDSDistanceRiversVertical: (0, 300, True),
     InputVariable.MainrockProxy: (0, 7.5, False),
+    InputVariable.SubrockMinProxy: (0, 7.5, False),
+    InputVariable.SubrockMeanProxy: (0, 7.5, False),
+    InputVariable.SubrockMedianProxy: (0, 7.5, False),
+    InputVariable.SubrockMaxProxy: (0, 7.5, False),
 }
 
 INPUT_VARIABLE_CMAP_LIMITS = {
@@ -448,6 +487,10 @@ INPUT_VARIABLE_CMAP_LIMITS = {
     InputVariable.NZCombinedGroundwaterDepth: (0, 25),
     InputVariable.NZCombinedGroundwaterDepthLn: (-2, 6),
     InputVariable.MainrockProxy: (0, 7.5),
+    InputVariable.SubrockMinProxy: (0, 7.5),
+    InputVariable.SubrockMeanProxy: (0, 7.5),
+    InputVariable.SubrockMedianProxy: (0, 7.5),
+    InputVariable.SubrockMaxProxy: (0, 7.5),
 }
 
 QUATERNARY_REGION_TO_ID_MAPPING = pd.Series(
@@ -469,10 +512,13 @@ QUATERNARY_ID_TO_REGION_MAPPING = pd.Series(
 
 # Hand-assigned ordinal grain-size/hardness scale (0 = finest/softest sediment,
 # 7.5 = hardest crystalline rock) for the GNS 250k geology shapefile's MAINROCK
-# column. Not geologist-reviewed - a first-pass proxy for VS30 prediction.
-# Values not present here (e.g. "unknown", "none") are intentionally left
-# unmapped and resolve to NaN.
-MAINROCK_GRAIN_RANK = pd.Series(
+# and SUBROCKS columns. Not geologist-reviewed - a first-pass proxy for VS30
+# prediction. Covers every distinct MAINROCK/SUBROCKS term in the national
+# shapefile (verified), including non-informative values ("unknown", "none",
+# "gold") mapped to 5.5 (gravel's value, the most common single MAINROCK term
+# across actual VS30 sites and close to their site-level median) as a neutral
+# default, rather than left unmapped/NaN.
+ROCK_GRAIN_RANK = pd.Series(
     {
         "peat": 0,
         "coal": 0.5,
@@ -600,6 +646,66 @@ MAINROCK_GRAIN_RANK = pd.Series(
         "phyllonite": 6.5,
         "mylonite": 7,
         "cataclasite": 6.5,
+        # Additional terms appearing only in SUBROCKS (not MAINROCK)
+        "anthropogenic material": 1.5,
+        "clastic sediment": 3,
+        "cobble": 5.5,
+        "pebble": 5,
+        "shingle": 5.5,
+        "diamictite": 4.5,
+        "dolomite": 6,
+        "oil shale": 2.5,
+        "carbonaceous shale": 2,
+        "ironstone": 5,
+        "leaf beds": 1,
+        "ash and lapilli": 3,
+        "metasediment": 5.5,
+        "metapsammite": 6.5,
+        "metatuff": 5,
+        "slate": 5.5,
+        "phyllite": 6,
+        "semi-pelite": 6.5,
+        "nephrite": 7,
+        "eclogite": 7.5,
+        "metabasite": 7,
+        "rodingite": 7,
+        "obsidian": 6.5,
+        "hyaloclastite": 5,
+        "basaltic agglomerate": 6,
+        "basic igneous rock": 7,
+        "igneous rock": 7,
+        "ultramafic igneous rock": 7.5,
+        "agmatite": 7.5,
+        "albite granite": 7.5,
+        "alkali feldspar granite": 7.5,
+        "aplite": 7.5,
+        "camptonite": 7,
+        "hornblende diorite": 7.5,
+        "hornblende gabbro": 7.5,
+        "leucodiorite": 7.5,
+        "leucogranite": 7.5,
+        "leucotonalite": 7.5,
+        "lherzolite": 7.5,
+        "meladiorite": 7.5,
+        "metadolerite": 7.5,
+        "metagabbro": 7.5,
+        "microgabbro": 7.5,
+        "monzonite": 7.5,
+        "nepheline syenite": 7.5,
+        "pegmatite": 7.5,
+        "plagiogranite": 7.5,
+        "quartz syenite": 7.5,
+        "teschenite": 7,
+        "tinguaite": 7,
+        "trachyandesite": 7,
+        "trachybasalt": 7,
+        "trachydacite": 7,
+        "troctolite": 7.5,
+        "wehrlite": 7.5,
+        # Non-informative values: neutral default (scale's overall median)
+        "unknown": 5.5,
+        "none": 5.5,
+        "gold": 5.5,
     }
 )
 

@@ -20,10 +20,40 @@ class FeatureEngineer:
         constants.InputVariable.NZCombinedGroundwaterDepth,
         constants.InputVariable.NZCombinedGroundwaterDepthLn,
         constants.InputVariable.MainrockProxy,
+        constants.InputVariable.SubrockMinProxy,
+        constants.InputVariable.SubrockMeanProxy,
+        constants.InputVariable.SubrockMedianProxy,
+        constants.InputVariable.SubrockMaxProxy,
     }
 
     def __init__(self, data_df: pd.DataFrame):
         self.data_df = data_df.copy()
+        self._subrock_ranks = None
+
+    def _get_subrock_ranks(self) -> pd.Series:
+        """Per-row list of matched grain-rank scores parsed from NZSubRocks.
+
+        Cached on the instance (not written to data_df) so repeated calls for
+        the different subrock proxy aggregates don't re-parse SUBROCKS text.
+        """
+
+        def _parse(value):
+            return (
+                [
+                    constants.ROCK_GRAIN_RANK[cur_subrock]
+                    for cur_subrock in (t.strip().lower() for t in value.split(","))
+                    if cur_subrock in constants.ROCK_GRAIN_RANK
+                ]
+                if isinstance(value, str)
+                else []
+            )
+
+        if self._subrock_ranks is None:
+            self._subrock_ranks = self.data_df[
+                constants.InputVariable.NZSubRocks
+            ].apply(_parse)
+
+        return self._subrock_ranks
 
     def compute_features(
         self, variables: list[constants.InputVariable]
@@ -37,7 +67,10 @@ class FeatureEngineer:
                     logger,
                 )
 
-            self._compute_values(variable)
+            self.data_df = self._compute_values(variable)
+            assert (
+                self.data_df[variable].notna().all()
+            ), f"NaN values found in computed variable {variable}."
 
         return self.data_df
 
@@ -50,10 +83,7 @@ class FeatureEngineer:
             ) / 2
         elif variable == constants.InputVariable.NZGeologyAgeLnMid:
             # Compute mid-age if not already computed
-            if (
-                constants.InputVariable.NZGeologyAgeMid
-                not in self.data_df.columns
-            ):
+            if constants.InputVariable.NZGeologyAgeMid not in self.data_df.columns:
                 self._compute_values(constants.InputVariable.NZGeologyAgeMid)
 
             self.data_df[variable] = np.log(
@@ -63,9 +93,7 @@ class FeatureEngineer:
             # Fill NLM nan values with NWT values
             self.data_df[variable] = self.data_df[
                 constants.InputVariable.NZNLMGroundwaterDepth
-            ].combine_first(
-                self.data_df[constants.InputVariable.NZNWTGroundwaterDepth]
-            )
+            ].combine_first(self.data_df[constants.InputVariable.NZNWTGroundwaterDepth])
 
             # Deal with any remaining nan values (if any)
             if self.data_df[variable].isna().any():
@@ -86,18 +114,51 @@ class FeatureEngineer:
                 self._compute_values(constants.InputVariable.NZCombinedGroundwaterDepth)
 
             self.data_df[variable] = np.log(
-                self.data_df[constants.InputVariable.NZCombinedGroundwaterDepth].clip(lower=np.exp(-2))
+                self.data_df[constants.InputVariable.NZCombinedGroundwaterDepth].clip(
+                    lower=np.exp(-2)
+                )
             )
         elif variable == constants.InputVariable.MainrockProxy:
             self.data_df[variable] = (
                 self.data_df[constants.InputVariable.NZMainRock]
                 .str.strip()
                 .str.lower()
-                .map(constants.MAINROCK_GRAIN_RANK)
+                .map(constants.ROCK_GRAIN_RANK)
             )
+        elif variable in [
+            constants.InputVariable.SubrockMinProxy,
+            constants.InputVariable.SubrockMeanProxy,
+            constants.InputVariable.SubrockMedianProxy,
+            constants.InputVariable.SubrockMaxProxy,
+        ]:
+            self.data_df[variable] = self._subrock_helper(variable)
         else:
             utils.raise_log(
                 NotImplementedError,
                 f"Implementation missing for variable {variable} in FeatureEngineer.",
                 logger,
             )
+
+        return self.data_df
+
+    def _subrock_helper(self, subrock_variable: constants.InputVariable):
+        subrock_proxy_agg_fn_mapping = {
+            constants.InputVariable.SubrockMinProxy: min,
+            constants.InputVariable.SubrockMeanProxy: np.mean,
+            constants.InputVariable.SubrockMedianProxy: np.median,
+            constants.InputVariable.SubrockMaxProxy: max,
+        }
+        assert (
+            subrock_variable in subrock_proxy_agg_fn_mapping.keys()
+        ), f"Invalid subrock variable: {subrock_variable}"
+
+        if constants.InputVariable.MainrockProxy not in self.data_df.columns:
+            self._compute_values(constants.InputVariable.MainrockProxy)
+
+        return [
+            subrock_proxy_agg_fn_mapping[subrock_variable](ranks) if ranks else mainrock
+            for ranks, mainrock in zip(
+                self._get_subrock_ranks(),
+                self.data_df[constants.InputVariable.MainrockProxy],
+            )
+        ]

@@ -278,6 +278,7 @@ def get_input_values(
             constants.InputVariable.NZGeologicalUnit,
             constants.InputVariable.NZQuaternaryRegion,
             constants.InputVariable.NZMainRock,
+            constants.InputVariable.NZSubRocks,
         ]
         and (
             np.any(values == constants.INTEGER_NO_DATA_VALUE)

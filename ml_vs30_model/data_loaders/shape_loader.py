@@ -21,6 +21,7 @@ class ShapeLoader(BaseLoader):
         constants.InputVariable.NZLithologyCategory,
         constants.InputVariable.NZGeologicalUnit,
         constants.InputVariable.NZMainRock,
+        constants.InputVariable.NZSubRocks,
     }
 
     VAR_TO_FILENAME_MAP = {
@@ -30,6 +31,7 @@ class ShapeLoader(BaseLoader):
         constants.InputVariable.NZLithologyCategory: "nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp",
         constants.InputVariable.NZGeologicalUnit: "nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp",
         constants.InputVariable.NZMainRock: "nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp",
+        constants.InputVariable.NZSubRocks: "nz_geology/ShapeFiles/NZL_GNS_250K_geological_units.shp",
     }
 
     def __init__(
@@ -73,6 +75,8 @@ class ShapeLoader(BaseLoader):
             shape_df = shape_df.rename(columns={"MAPSYMBOL": "value"})
         elif variable == constants.InputVariable.NZMainRock:
             shape_df = shape_df.rename(columns={"MAINROCK": "value"})
+        elif variable == constants.InputVariable.NZSubRocks:
+            shape_df = shape_df.rename(columns={"SUBROCKS": "value"})
         else:
             utils.raise_log(
                 NotImplementedError,

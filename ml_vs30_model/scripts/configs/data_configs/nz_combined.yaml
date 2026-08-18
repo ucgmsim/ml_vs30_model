@@ -39,6 +39,7 @@ input_variables:
   - nz_lithology_category
   - nz_geological_unit
   - nz_main_rock
+  - nz_sub_rocks
   - nz_quaternary_region
   - nz_geology_category
   - nz_distance_to_coast
@@ -83,6 +84,10 @@ derived_variables:
   - nz_combined_groundwater_depth
   - nz_combined_groundwater_depth_ln
   - mainrock_proxy
+  - subrock_min_proxy
+  - subrock_mean_proxy
+  - subrock_median_proxy
+  - subrock_max_proxy
 
 
 
