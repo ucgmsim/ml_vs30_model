@@ -26,9 +26,10 @@ class FeatureEngineer:
         constants.InputVariable.SubrockMaxProxy,
     }
 
-    def __init__(self, data_df: pd.DataFrame):
+    def __init__(self, data_df: pd.DataFrame, allow_missing: bool = False):
         self.data_df = data_df.copy()
         self._subrock_ranks = None
+        self._allow_missing = allow_missing
 
     def _get_subrock_ranks(self) -> pd.Series:
         """Per-row list of matched grain-rank scores parsed from NZSubRocks.
@@ -68,9 +69,10 @@ class FeatureEngineer:
                 )
 
             self.data_df = self._compute_values(variable)
-            assert (
-                self.data_df[variable].notna().all()
-            ), f"NaN values found in computed variable {variable}."
+            if not self._allow_missing:
+                assert (
+                    self.data_df[variable].notna().all()
+                ), f"NaN values found in computed variable {variable}."
 
         return self.data_df
 
@@ -152,6 +154,7 @@ class FeatureEngineer:
             subrock_variable in subrock_proxy_agg_fn_mapping.keys()
         ), f"Invalid subrock variable: {subrock_variable}"
 
+        # Get mainrock proxy values if not already
         if constants.InputVariable.MainrockProxy not in self.data_df.columns:
             self._compute_values(constants.InputVariable.MainrockProxy)
 

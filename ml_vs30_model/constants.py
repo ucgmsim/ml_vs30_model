@@ -343,6 +343,14 @@ DERIVED_VARIABLES_DEPENDENCIES = {
     ],
 }
 
+ROCK_PROXY_VARIABLES = [
+    InputVariable.MainrockProxy,
+    InputVariable.SubrockMinProxy,
+    InputVariable.SubrockMeanProxy,
+    InputVariable.SubrockMedianProxy,
+    InputVariable.SubrockMaxProxy,
+]
+
 # Input variables locations
 INPUT_VAR_TO_FFP_MAP = {
     InputVariable.NZEnvDSSlopeDeg: BASE_DATA_DIR
@@ -704,7 +712,6 @@ ROCK_GRAIN_RANK = pd.Series(
         "wehrlite": 7.5,
         # Non-informative values: neutral default (scale's overall median)
         "unknown": 5.5,
-        "none": 5.5,
         "gold": 5.5,
     }
 )

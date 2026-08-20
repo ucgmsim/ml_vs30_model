@@ -4,6 +4,7 @@ import multiprocessing as mp
 from pathlib import Path
 from dataclasses import dataclass
 from functools import partial
+from itertools import chain
 
 import xarray as xr
 import numpy as np
@@ -366,6 +367,53 @@ def _get_variable_nztm_da(
     return variable, variable_da
 
 
+def _compute_derived_rock_proxies(
+    land_mask: np.ndarray,
+    land_points: np.ndarray,
+    nztm_y_coords: np.ndarray,
+    nztm_x_coords: np.ndarray,
+    variable: constants.InputVariable,
+):
+    assert (
+        variable in constants.ROCK_PROXY_VARIABLES
+    ), f"Variable {variable} is not a rock proxy variable."
+
+    dependencies = set(
+        chain.from_iterable(
+            constants.DERIVED_VARIABLES_DEPENDENCIES[var]
+            for var in constants.ROCK_PROXY_VARIABLES
+        )
+    )
+
+    data_df = pd.DataFrame(data=land_points, columns=["lon", "lat"])
+    for cur_og_var in dependencies:
+        logger.info(
+            f"Computing required original variable {cur_og_var} for derived rock proxy variables."
+        )
+        variable_values = get_input_values(
+            land_points, cur_og_var, address_missing=False
+        )
+        data_df[cur_og_var.value] = variable_values
+
+    feature_engineer = FeatureEngineer(data_df, allow_missing=True)
+    rock_proxies = feature_engineer.compute_features(constants.ROCK_PROXY_VARIABLES)[
+        constants.ROCK_PROXY_VARIABLES
+    ]
+
+    variable_das = {}
+    for cur_variable in constants.ROCK_PROXY_VARIABLES:
+        variable_da = __get_variable_da(
+            rock_proxies[cur_variable].values,
+            land_mask,
+            nztm_y_coords,
+            nztm_x_coords,
+            cur_variable,
+        )
+        variable_das[cur_variable] = variable_da
+
+    return variable_das
+
+
 def _compute_derived_variables_nztm_da(
     dataset_ffp: Path,
     land_mask: np.ndarray,
@@ -387,16 +435,34 @@ def _compute_derived_variables_nztm_da(
     dependencies = constants.DERIVED_VARIABLES_DEPENDENCIES[variable]
 
     # Load required data
-    with xr.open_dataset(dataset_ffp, mode="r") as ds:
-        data_df = (
-            ds[dependencies]
-            .to_dataframe()
-            .loc[land_mask.ravel()]
-            .reset_index(drop=True)
+    try:
+        with xr.open_dataset(dataset_ffp, mode="r") as ds:
+            data_df = (
+                ds[dependencies]
+                .to_dataframe()
+                .loc[land_mask.ravel()]
+                .reset_index(drop=True)
+            )
+    # Compute required original variables
+    except KeyError:
+        utils.raise_log(
+            KeyError,
+            f"Dataset {dataset_ffp} does not contain required "
+            f"dependencies for derived variable {variable}: {dependencies}.",
+            logger,
         )
+        # data_df = pd.DataFrame(data=land_points, columns=["lon", "lat"])
+        # for cur_og_var in dependencies:
+        #     logger.info(
+        #         f"Computing required original variable {cur_og_var} for derived variable {variable}."
+        #     )
+        #     variable_values = get_input_values(
+        #         land_points, cur_og_var, address_missing=False
+        #     )
+        #     data_df[cur_og_var.value] = variable_values
 
     # Compute derived variable values
-    feature_engineer = FeatureEngineer(data_df)
+    feature_engineer = FeatureEngineer(data_df, allow_missing=True)
     variable_values = feature_engineer.compute_features([variable])[variable].values
 
     variable_da = __get_variable_da(
@@ -511,14 +577,30 @@ def create_nz_nztm_input_grid(
                 # xr.Dataset({variable.value: variable_da}).to_netcdf(out_ffp, mode="a")
                 del variable_da
 
-    logger.info("Computing derived variable values.")
+    rock_proxy_done = False
     for variable in derived_variables:
-        _, variable_da = _compute_derived_variables_nztm_da(
-            out_ffp, land_mask, nztm_y, nztm_x, variable
-        )
-        _write_variable_to_netcdf(variable_da, variable, out_ffp)
-        # xr.Dataset({variable.value: variable_da}).to_netcdf(out_ffp, mode="a")
-        del variable_da
+        if variable in constants.ROCK_PROXY_VARIABLES:
+            if not rock_proxy_done:
+                logger.info("Computing derived rock proxy variables.")
+                rock_proxy_das = _compute_derived_rock_proxies(
+                    land_mask, land_points_lonlat, nztm_y, nztm_x, variable
+                )
+                rock_proxy_done = True
+
+                for cur_variable in constants.ROCK_PROXY_VARIABLES:
+                    _write_variable_to_netcdf(
+                        rock_proxy_das[cur_variable], cur_variable, out_ffp
+                    )
+                    del rock_proxy_das[cur_variable]
+                logger.info("Completed computing & writing of derived rock proxy variables.")
+            else:
+                continue
+        else:
+            _, variable_da = _compute_derived_variables_nztm_da(
+                out_ffp, land_mask, nztm_y, nztm_x, variable
+            )
+            _write_variable_to_netcdf(variable_da, variable, out_ffp)
+            del variable_da
 
 
 def _write_variable_to_netcdf(

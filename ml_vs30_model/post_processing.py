@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import time
 
 import rasterio
 from rasterio import transform
@@ -145,27 +146,11 @@ def gen_model_perfomance_plots(
     logger.info("Generating model performance plots...")
     (outdir := results_dir / "plots").mkdir(exist_ok=True, parents=False)
     model_perf_plots.one_to_one_plot(results_df, outdir / "one_to_one_plot.png")
-    # model_perf_plots.one_to_one_plot(
-    #     results_df, outdir / "one_to_one_plot_Q1.png", quality_score="Q1"
-    # )
-    # model_perf_plots.one_to_one_plot(
-    #     results_df, outdir / "one_to_one_plot_Q2.png", quality_score="Q2"
-    # )
-    # model_perf_plots.one_to_one_plot(
-    #     results_df, outdir / "one_to_one_plot_Q3.png", quality_score="Q3"
-    # )
-    # model_perf_plots.pred_vs30_variable_scatter_plot(
-    #     results_df,
-    #     dataset_df,
-    #     "elevation",
-    #     outdir / "pred_vs30_elevation_scatter.png",
-    #     x_limits=(0, None),
-    # )
-    model_perf_plots.residuals_histogram(results_df, outdir / "residuals_histogram.png")
+    # model_perf_plots.residuals_histogram(results_df, outdir / "residuals_histogram.png")
     model_perf_plots.residual_kde(results_df, outdir / "residuals_kde.png")
-    model_perf_plots.quaternary_region_residual(
-        results_df, dataset_df, outdir / "quaternary_region_residuals.png"
-    )
+    # model_perf_plots.quaternary_region_residual(
+    # results_df, dataset_df, outdir / "quaternary_region_residuals.png"
+    # )
     model_perf_plots.metric_scatter_plot(
         results_df,
         outdir / "mae_scatter_plot.png",
@@ -190,7 +175,7 @@ def gen_model_perfomance_plots(
         show_quality_trend_lines=True,
     )
 
-    model_perf_plots.pit_plot(results_df, outdir)
+    # model_perf_plots.pit_plot(results_df, outdir)
 
 
 def gen_cv_iteration_metric_plots(
@@ -655,10 +640,60 @@ def add_krigged_vs30(full_model_dir: Path):
     ds.to_netcdf(full_model_dir / "nz_vs30_results.nc", mode="a")
 
 
+def add_grid_SHAP_values(
+    full_model_dir: Path,
+    input_grid_ffp: Path,
+):
+    run_config = RunConfig.from_yaml(full_model_dir / "run_config.yaml")
+    dataset_ffp = full_model_dir / "nz_vs30_results.nc"
+    coords, nan_mask, vs30_da = _get_dataset_values(dataset_ffp)
+
+    logger.info("Loading input grid dataset...")
+    with xr.open_dataset(input_grid_ffp, mode="r", mask_and_scale=False) as ds:
+        land_mask = ds["on_land"].values.astype(bool)
+        input_ds = ds[run_config.input_variables]
+
+        # NaN values in numerical variables
+        null_mask = np.any(
+            np.isnan(input_ds[run_config.numerical_variables].to_array().values),
+            axis=0,
+        )
+        assert (
+            len(run_config.categorial_variables) == 0
+        ), "Categorical variables not supported for SHAP value computation on grid."
+        logger.info(
+            f"Input dataset contains {null_mask.sum() - (~land_mask).sum()} NaN/-9999 values. Dropping these for prediction."
+        )
+
+    logger.info("Pre-processing input grid dataset...")
+    input_df = input_ds.to_dataframe().loc[(~null_mask).ravel()].reset_index()
+    assert np.all(input_df.x == coords[:, 0]) and np.all(
+        input_df.y == coords[:, 1]
+    ), "Input grid coordinates do not match dataset coordinates."
+    pre_input_df, _ = pre_processing.pre_process_features(input_df, run_config)
+
+    model = mlt.utils.load_pickle(full_model_dir / "model.pkl")
+    _, train_X, *_ = pre_processing.get_pre_processed_train_val_df(
+        pd.read_parquet(run_config.dataset_ffp),
+        pd.read_parquet(full_model_dir / "train_results.parquet").index.values,
+        run_config,
+    )
+
+    logger.info("Computing SHAP values for input grid dataset...")
+    start = time.time()
+    explainer = shap.TreeExplainer(model, train_X, model_output=0)
+    explainer_values = explainer(pre_input_df, check_additivity=False)
+    logger.info(
+        f"Took: {time.time() - start} to compute SHAP values for {len(pre_input_df)} grid points."
+    )
+
+    print("wtf")
+
+
 def print_vs30_bin_metrics(
     results_df: pd.DataFrame,
     foster_results_df: pd.DataFrame | None = None,
-    bin_set: tuple[list[float], list[str]] | None = None
+    bin_set: tuple[list[float], list[str]] | None = None,
 ):
     metrics = ["mae"]
     if bin_set is None:
@@ -695,9 +730,7 @@ def print_vs30_bin_metrics(
 
         # Load data points Foster was developed on
         foster_data = pd.read_csv(constants.FOSTER_DATA_FFP)
-        foster_data["location_id"] = (
-            foster_data["location_id"].astype(str).str.strip()
-        )
+        foster_data["location_id"] = foster_data["location_id"].astype(str).str.strip()
         foster_data = foster_data.loc[foster_data.location_id != "NA"]
 
         # Get number of Foster data points in each bin
@@ -712,7 +745,7 @@ def print_vs30_bin_metrics(
             & (cur_df["lat"] >= constants.CHCH_REGION_BOUNDING_BOX[2])
             & (cur_df["lat"] <= constants.CHCH_REGION_BOUNDING_BOX[3])
         )
-        
+
         foster_df["cur_vs30_bin"] = pd.cut(
             foster_df["vs30"], bins=bins, labels=bin_names
         )
@@ -729,8 +762,8 @@ def print_vs30_bin_metrics(
         display_df["pct_improvement"] = (
             (foster_mae["mean"] - model_mae) / foster_mae["mean"] * 100
         ).map("{:+.1f}%".format)
-        display_df["mae_improvement"] = (
-            (foster_mae["mean"] - model_mae).map("{:+.3f}".format)
+        display_df["mae_improvement"] = (foster_mae["mean"] - model_mae).map(
+            "{:+.3f}".format
         )
 
         display_df["n_foster_points"] = (
@@ -746,5 +779,3 @@ def print_vs30_bin_metrics(
         )
 
     print(display_df.to_string())
-
-

@@ -87,11 +87,11 @@ def full_train(run_config: RunConfig, out_dir: Path, run_post_processing: bool =
         )
 
 
-def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path) -> pd.DataFrame:
+def estimate_vs30_nz(full_model_dir: Path, input_grid_ffp: Path) -> pd.DataFrame:
     """Estimates Vs30 for New Zealand using the trained model."""
-    run_config = RunConfig.from_yaml(model_dir / "run_config.yaml")
+    run_config = RunConfig.from_yaml(full_model_dir / "run_config.yaml")
 
-    with xr.open_dataset(input_dataset_ffp, mode="r", mask_and_scale=False) as ds:
+    with xr.open_dataset(input_grid_ffp, mode="r", mask_and_scale=False) as ds:
         logger.info("Loading input dataset for Vs30 estimation across New Zealand")
         land_mask = ds["on_land"].values.astype(bool)
         input_ds = ds[run_config.input_variables]
@@ -115,7 +115,7 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path) -> pd.DataFrame:
         logger.info("Running Vs30 estimation across New Zealand...")
         input_df = input_ds.to_dataframe().loc[(~null_mask).ravel()].reset_index()
         pre_input_df, _ = pre_processing.pre_process_features(input_df, run_config)
-        model = mlt.utils.load_pickle(model_dir / "model.pkl")
+        model = mlt.utils.load_pickle(full_model_dir / "model.pkl")
         pred_dist = model.pred_dist(pre_input_df)
         pred_lnVs30_mean, pred_lnVs30_std = (
             pred_dist.params["loc"],
@@ -139,7 +139,7 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path) -> pd.DataFrame:
         pred_vs30 = np.exp(pred_lnVs30_mean_da)
 
     # Save
-    out_ffp = model_dir / "nz_vs30_results.nc"
+    out_ffp = full_model_dir / "nz_vs30_results.nc"
     grid_dataset = xr.Dataset(
         {
             "vs30": pred_vs30,

@@ -35,7 +35,7 @@ def run_feature_selection(
 
     # Run base
     if len(base_run_config.input_variables) > 0:
-        _run_helper(base_run_config, "base", base_out_dir, run_fn)
+        _run_helper(base_run_config, "base", base_out_dir, run_fn, n_procs=n_procs)
 
     # Run variable variations
     if n_procs == 1:
@@ -127,6 +127,7 @@ def _run_helper(
     base_out_dir: Path,
     run_fn: callable,
     p_ix: int | None = None,
+    n_procs: int = 1,
 ):
     """Helper function to run a single feature selection run for a given variable."""
     if variable in base_run_config.input_variables:
@@ -159,4 +160,4 @@ def _run_helper(
     if variable != "base":
         run_config.input_variables.append(str(variable))
 
-    run_fn(run_config, run_dir, n_procs=1)
+    run_fn(run_config, run_dir, n_procs=n_procs)

@@ -233,18 +233,18 @@ def run_post_processing(results_dir: Path, gen_waterfall_plots: bool = False):
 
 
 @app.command("estimate-vs30-nz")
-def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path):
+def estimate_vs30_nz(full_model_dir: Path, input_dataset_ffp: Path):
     """
     Estimates Vs30 across New Zealand using the trained model.
     """
     mlt.utils.setup_logging()
 
-    run_config = vs30.RunConfig.from_yaml(model_dir / "run_config.yaml")
+    run_config = vs30.RunConfig.from_yaml(full_model_dir / "run_config.yaml")
 
     if run_config.model_type == vs30.configs.ModelType.CatBoost:
-        ffp = vs30.catboost_model.estimate_vs30_nz(model_dir, input_dataset_ffp)
+        ffp = vs30.catboost_model.estimate_vs30_nz(full_model_dir, input_dataset_ffp)
     elif run_config.model_type == vs30.configs.ModelType.NGBoost:
-        ffp = vs30.ngboost_model.estimate_vs30_nz(model_dir, input_dataset_ffp)
+        ffp = vs30.ngboost_model.estimate_vs30_nz(full_model_dir, input_dataset_ffp)
     else:
         vs30.utils.raise_log(
             NotImplementedError,
@@ -255,7 +255,7 @@ def estimate_vs30_nz(model_dir: Path, input_dataset_ffp: Path):
     ds = xr.open_dataset(ffp)
     vs30_values = ds["vs30"].values[~ds["vs30"].isnull()]
     vs30.plotting.other.plot_nz_vs30_hist(
-        vs30_values, model_dir / "nz_vs30_histogram.png"
+        vs30_values, full_model_dir / "nz_vs30_histogram.png"
     )
 
 
@@ -311,18 +311,18 @@ def add_other_nz_estimates(dataset_ffp: Path):
         dataset_ffp, foster_original_ffp
     )
 
-    jaehwi_v1p0_ffp = (
-        vs30.constants.BASE_DATA_DIR / "nz_estimates/jaehwi_v1p0_26March/v1p0_26Mar.tif"
-    )
-    vs30.post_processing.add_jaehwi_nz_estimates(
-        dataset_ffp, jaehwi_v1p0_ffp, prefix="jw_v1p0"
-    )
+    # jaehwi_v1p0_ffp = (
+    #     vs30.constants.BASE_DATA_DIR / "nz_estimates/jaehwi_v1p0_26March/v1p0_26Mar.tif"
+    # )
+    # vs30.post_processing.add_jaehwi_nz_estimates(
+    #     dataset_ffp, jaehwi_v1p0_ffp, prefix="jw_v1p0"
+    # )
 
 
 @app.command("add-ml-model-residuals")
 def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
     """
-    Adds residuals with respect to the other model
+    Adds residuals with respect to the other ML model
     """
     mlt.utils.setup_logging()
     vs30.post_processing.add_ml_model_residuals(dataset_ffp, other_dataset_ffp)
@@ -351,6 +351,20 @@ def add_kriged_vs30_foster_original_residuals(full_model_dir: Path):
     vs30.post_processing.add_foster_original_nz_estimates(
         full_model_dir / "nz_vs30_results.nc", foster_original_ffp, use_kriged=True
     )
+
+@app.command("add-grid-SHAP-values")
+def add_grid_SHAP_values(
+    full_model_dir: Path,
+    input_grid_ffp: Path):
+    """
+    Adds SHAP values for the input grid to the dataset used for the full model.
+    """
+    mlt.utils.setup_logging()
+
+    run_config = vs30.RunConfig.from_yaml(full_model_dir / "run_config.yaml")
+    assert run_config.model_type == vs30.configs.ModelType.NGBoost
+
+    vs30.post_processing.add_grid_SHAP_values(full_model_dir, input_grid_ffp)
 
 
 @app.command("run-feature-selection")
