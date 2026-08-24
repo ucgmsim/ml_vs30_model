@@ -520,9 +520,8 @@ QUATERNARY_ID_TO_REGION_MAPPING = pd.Series(
 
 # Hand-assigned ordinal grain-size/hardness scale (0 = finest/softest sediment,
 # 7.5 = hardest crystalline rock) for the GNS 250k geology shapefile's MAINROCK
-# and SUBROCKS columns. Not geologist-reviewed - a first-pass proxy for VS30
-# prediction. Covers every distinct MAINROCK/SUBROCKS term in the national
-# shapefile (verified), including non-informative values ("unknown", "none",
+# and SUBROCKS columns. Covers every distinct MAINROCK/SUBROCKS term in the national
+# shapefile, including non-informative values ("unknown", "none",
 # "gold") mapped to 5.5 (gravel's value, the most common single MAINROCK term
 # across actual VS30 sites and close to their site-level median) as a neutral
 # default, rather than left unmapped/NaN.

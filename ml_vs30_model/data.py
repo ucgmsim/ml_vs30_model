@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from functools import partial
 from itertools import chain
 
+import shap
 import xarray as xr
 import numpy as np
 import pandas as pd
@@ -306,12 +307,32 @@ def get_input_values(
     return values
 
 
-def __get_variable_da(
-    variable_values: np.ndarray,
-    land_mask: np.ndarray,
+def write_SHAP_grid_values(
+    explainer_values: shap.Explanation,
+    value_mask: np.ndarray,
     nztm_y_coords: np.ndarray,
     nztm_x_coords: np.ndarray,
-    variable: constants.InputVariable,
+    dataset_ffp: Path,
+):
+    for i in range(len(explainer_values.feature_names)):
+        variable_da = __get_variable_da(
+            explainer_values.values[:, i],
+            value_mask,
+            nztm_y_coords,
+            nztm_x_coords,
+            explainer_values.feature_names[i],
+        )
+        _write_variable_to_netcdf(
+            variable_da, f"SHAP_{explainer_values.feature_names[i]}", dataset_ffp
+        )
+
+
+def __get_variable_da(
+    variable_values: np.ndarray,
+    value_mask: np.ndarray,
+    nztm_y_coords: np.ndarray,
+    nztm_x_coords: np.ndarray,
+    variable: constants.InputVariable | str,
 ) -> xr.DataArray:
     """
     Helper function to create a DataArray for a variable,
@@ -319,7 +340,7 @@ def __get_variable_da(
     """
     if np.issubdtype(variable_values.dtype, np.floating):
         variable_da = xr.DataArray(
-            np.full(land_mask.shape, np.nan, dtype=np.float32),
+            np.full(value_mask.shape, np.nan, dtype=np.float32),
             coords=[nztm_y_coords, nztm_x_coords],
             dims=["y", "x"],
         )
@@ -328,7 +349,7 @@ def __get_variable_da(
         ).rio.write_nodata(np.nan)
     elif np.issubdtype(variable_values.dtype, np.integer):
         variable_da = xr.DataArray(
-            np.full(land_mask.shape, -9999, dtype=np.int32),
+            np.full(value_mask.shape, -9999, dtype=np.int32),
             coords=[nztm_y_coords, nztm_x_coords],
             dims=["y", "x"],
         )
@@ -340,7 +361,7 @@ def __get_variable_da(
             f"Unsupported data type for variable {variable}: {variable_values.dtype}"
         )
 
-    variable_da.values[land_mask] = variable_values
+    variable_da.values[value_mask] = variable_values
     return variable_da
 
 
@@ -592,7 +613,9 @@ def create_nz_nztm_input_grid(
                         rock_proxy_das[cur_variable], cur_variable, out_ffp
                     )
                     del rock_proxy_das[cur_variable]
-                logger.info("Completed computing & writing of derived rock proxy variables.")
+                logger.info(
+                    "Completed computing & writing of derived rock proxy variables."
+                )
             else:
                 continue
         else:
@@ -604,17 +627,21 @@ def create_nz_nztm_input_grid(
 
 
 def _write_variable_to_netcdf(
-    variable_da: xr.DataArray, variable: constants.InputVariable, out_ffp: Path
+    variable_da: xr.DataArray, variable: constants.InputVariable | str, out_ffp: Path
 ) -> None:
     """Writes a variable DataArray to a NetCDF file, preserving dtype."""
+    variable = (
+        variable.value if isinstance(variable, constants.InputVariable) else variable
+    )
+
     variable_da.attrs.pop("_FillValue", None)
-    ds = xr.Dataset({variable.value: variable_da})
+    ds = xr.Dataset({variable: variable_da})
 
     ds = ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
     ds = ds.rio.write_grid_mapping()
     ds = ds.rio.write_crs("EPSG:2193")
 
-    enc = dict(ds[variable.value].encoding)
+    enc = dict(ds[variable].encoding)
     if np.issubdtype(variable_da.dtype, np.integer):
         enc.update({"dtype": variable_da.dtype, "_FillValue": -9999})
     else:
@@ -626,7 +653,7 @@ def _write_variable_to_netcdf(
     #     encoding = {variable.value: {"dtype": variable_da.dtype, "_FillValue": None}}
 
     # ds.to_netcdf(out_ffp, mode="a", encoding=encoding)
-    ds.to_netcdf(out_ffp, mode="a", encoding={variable.value: enc})
+    ds.to_netcdf(out_ffp, mode="a", encoding={variable: enc})
 
 
 def select_test_sites(dataset_ffp: Path, output_dir: Path, seed: int):

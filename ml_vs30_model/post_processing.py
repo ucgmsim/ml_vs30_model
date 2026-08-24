@@ -18,6 +18,7 @@ from .configs import RunConfig, ModelType
 from . import pre_processing
 from . import constants
 from . import utils
+from . import data
 
 logger = logging.getLogger(__name__)
 
@@ -650,23 +651,11 @@ def add_grid_SHAP_values(
 
     logger.info("Loading input grid dataset...")
     with xr.open_dataset(input_grid_ffp, mode="r", mask_and_scale=False) as ds:
-        land_mask = ds["on_land"].values.astype(bool)
         input_ds = ds[run_config.input_variables]
 
-        # NaN values in numerical variables
-        null_mask = np.any(
-            np.isnan(input_ds[run_config.numerical_variables].to_array().values),
-            axis=0,
-        )
-        assert (
-            len(run_config.categorial_variables) == 0
-        ), "Categorical variables not supported for SHAP value computation on grid."
-        logger.info(
-            f"Input dataset contains {null_mask.sum() - (~land_mask).sum()} NaN/-9999 values. Dropping these for prediction."
-        )
 
     logger.info("Pre-processing input grid dataset...")
-    input_df = input_ds.to_dataframe().loc[(~null_mask).ravel()].reset_index()
+    input_df = input_ds.to_dataframe().loc[(~nan_mask).ravel()].reset_index()
     assert np.all(input_df.x == coords[:, 0]) and np.all(
         input_df.y == coords[:, 1]
     ), "Input grid coordinates do not match dataset coordinates."
@@ -687,7 +676,13 @@ def add_grid_SHAP_values(
         f"Took: {time.time() - start} to compute SHAP values for {len(pre_input_df)} grid points."
     )
 
-    print("wtf")
+    data.write_SHAP_grid_values(
+        explainer_values,
+        ~nan_mask,
+        input_ds.coords["y"].values,
+        input_ds.coords["x"].values,
+        dataset_ffp,
+    )
 
 
 def print_vs30_bin_metrics(

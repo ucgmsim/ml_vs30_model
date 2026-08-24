@@ -308,6 +308,7 @@ VS30_CMAP_STD_MIN, VS30_CMAP_STD_MAX = 0, 1
 DEFAULT_CMAP = "viridis"
 STD_CMAP = "Reds"
 RES_CMAP = "bwr_r"
+SHAP_CMAP = "bwr"
 
 
 def _get_model_dir(model_name: str) -> Path:
@@ -534,6 +535,9 @@ def create_model_map(
     elif variable.endswith("_std"):
         cmap_min, cmap_max = VS30_CMAP_STD_MIN, VS30_CMAP_STD_MAX
         cmap = STD_CMAP
+    elif variable.startswith("SHAP_"):
+        cmap_min, cmap_max = -0.5, 0.5
+        cmap = SHAP_CMAP
     else:
         cmap_min, cmap_max = VS30_CMAP_MIN, VS30_CMAP_MAX
         cmap = DEFAULT_CMAP
