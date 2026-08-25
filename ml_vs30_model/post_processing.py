@@ -1,6 +1,8 @@
 import logging
 from pathlib import Path
 import time
+import multiprocessing as mp
+from functools import partial
 
 import rasterio
 from rasterio import transform
@@ -644,6 +646,7 @@ def add_krigged_vs30(full_model_dir: Path):
 def add_grid_SHAP_values(
     full_model_dir: Path,
     input_grid_ffp: Path,
+    n_procs: int = 1,
 ):
     run_config = RunConfig.from_yaml(full_model_dir / "run_config.yaml")
     dataset_ffp = full_model_dir / "nz_vs30_results.nc"
@@ -652,7 +655,6 @@ def add_grid_SHAP_values(
     logger.info("Loading input grid dataset...")
     with xr.open_dataset(input_grid_ffp, mode="r", mask_and_scale=False) as ds:
         input_ds = ds[run_config.input_variables]
-
 
     logger.info("Pre-processing input grid dataset...")
     input_df = input_ds.to_dataframe().loc[(~nan_mask).ravel()].reset_index()
@@ -671,7 +673,24 @@ def add_grid_SHAP_values(
     logger.info("Computing SHAP values for input grid dataset...")
     start = time.time()
     explainer = shap.TreeExplainer(model, train_X, model_output=0)
-    explainer_values = explainer(pre_input_df, check_additivity=False)
+
+    if n_procs == 1:
+        explainer_values = explainer(pre_input_df, check_additivity=False)
+    else:
+        batches = np.array_split(pre_input_df, n_procs)
+        worker = partial(explainer, check_additivity=False)
+        with mp.Pool(n_procs) as pool:
+            batch_results = pool.map(worker, batches)
+
+        explainer_values = shap.Explanation(
+            values=np.concatenate([res.values for res in batch_results], axis=0),
+            base_values=np.concatenate(
+                [np.atleast_1d(res.base_values) for res in batch_results], axis=0
+            ),
+            data=np.concatenate([res.data for res in batch_results], axis=0),
+            feature_names=batch_results[0].feature_names,
+        )
+
     logger.info(
         f"Took: {time.time() - start} to compute SHAP values for {len(pre_input_df)} grid points."
     )

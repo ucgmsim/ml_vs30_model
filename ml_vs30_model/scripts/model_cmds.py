@@ -355,7 +355,9 @@ def add_kriged_vs30_foster_original_residuals(full_model_dir: Path):
 @app.command("add-grid-SHAP-values")
 def add_grid_SHAP_values(
     full_model_dir: Path,
-    input_grid_ffp: Path):
+    input_grid_ffp: Path,
+    n_procs: int = 1,
+):
     """
     Adds SHAP values for the input grid to the dataset used for the full model.
     """
@@ -364,7 +366,7 @@ def add_grid_SHAP_values(
     run_config = vs30.RunConfig.from_yaml(full_model_dir / "run_config.yaml")
     assert run_config.model_type == vs30.configs.ModelType.NGBoost
 
-    vs30.post_processing.add_grid_SHAP_values(full_model_dir, input_grid_ffp)
+    vs30.post_processing.add_grid_SHAP_values(full_model_dir, input_grid_ffp, n_procs=n_procs)
 
 
 @app.command("run-feature-selection")
