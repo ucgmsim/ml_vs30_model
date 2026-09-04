@@ -131,7 +131,7 @@ class SpatialPlot:
 
     def add_highways(self, pen_width: float = 0.3, pen_color: str = "orange"):
         map_data = plotting.NZMapData.load(
-            region=self.region.bounding_box, high_res_topo=False
+            bounds=self.region.bounding_box, high_res_topo=False
         )
         self.fig.plot(
             data=map_data.highway_df,
@@ -153,7 +153,7 @@ class SpatialPlot:
     def plot_ratio(
         self,
         ratio_df: pd.DataFrame,
-        cb_label: str | None = None,
+        # cb_label: str | None = None,
         data_key: str = "ln_residual",
         grid_spacing: str = "250e/250e",
         region: plotting.ProjectedRegion | None = None,

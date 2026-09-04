@@ -506,7 +506,7 @@ def gen_residual_map(
         residual_df,
         cmap_limits=(-1.0, 1.0, 2.0 / 16),
         region=plot_region,
-        cb_label=cb_label,
+        # cb_label=cb_label,
         grid_spacing=grid_spacing,
         show_colorbar=show_colorbar,
     )

@@ -222,6 +222,9 @@ INPUT_VAR_TO_PAPER_NICE_NAME_MAPPING = {
     InputVariable.NZCombinedGroundwaterDepth: "Groundwater Depth (m)",
     InputVariable.NZEnvDSTopoNormalisedHeight: "Topographic Normalised Height (index)",
     InputVariable.NZEnvDSDistanceRiversVertical: "Distance to Rivers (Vertical) (m)",
+    InputVariable.MainrockProxy: "Main Rock Grain-Size Proxy (ordinal)",
+    InputVariable.SubrockMedianProxy: "Sub Rock Grain-Size Proxy (Median) (ordinal)",
+    InputVariable.NZDistanceToCoast: "Distance to Coast (km)",
 }
 
 REVERSE_NICE_NAME_TO_INPUT_VARIABLE_MAPPING = {

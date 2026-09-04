@@ -707,6 +707,7 @@ def add_grid_SHAP_values(
 def print_vs30_bin_metrics(
     results_df: pd.DataFrame,
     foster_results_df: pd.DataFrame | None = None,
+    test_results_df: pd.DataFrame | None = None,
     bin_set: tuple[list[float], list[str]] | None = None,
 ):
     metrics = ["mae"]
@@ -733,6 +734,22 @@ def print_vs30_bin_metrics(
             .map("{:.3f}".format)
             .str.cat(grouped[(metric, "std")].map(" \u00b1 {:.3f}".format))
         )
+
+    if test_results_df is not None:
+        test_df = test_results_df.copy()
+        test_df["mae"] = np.abs(test_df["vs30"] - test_df["pred_vs30"])
+        test_df["cur_vs30_bin"] = pd.cut(test_df["vs30"], bins=bins, labels=bin_names)
+        test_grouped = test_df.groupby("cur_vs30_bin", observed=True)[metrics].agg(
+            ["mean", "std"]
+        )
+        display_df["test_n"] = test_df.groupby("cur_vs30_bin", observed=True)[metrics[0]].count()
+        
+        for metric in metrics:
+            display_df[f"test_{metric}"] = (
+                test_grouped[(metric, "mean")]
+                .map("{:.3f}".format)
+                .str.cat(test_grouped[(metric, "std")].map(" \u00b1 {:.3f}".format))
+            )
 
     if foster_results_df is not None:
         assert results_df.index.isin(

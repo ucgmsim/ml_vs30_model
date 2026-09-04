@@ -311,12 +311,12 @@ def add_other_nz_estimates(dataset_ffp: Path):
         dataset_ffp, foster_original_ffp
     )
 
-    # jaehwi_v1p0_ffp = (
-    #     vs30.constants.BASE_DATA_DIR / "nz_estimates/jaehwi_v1p0_26March/v1p0_26Mar.tif"
-    # )
-    # vs30.post_processing.add_jaehwi_nz_estimates(
-    #     dataset_ffp, jaehwi_v1p0_ffp, prefix="jw_v1p0"
-    # )
+    jaehwi_ffp = (
+        vs30.constants.BASE_DATA_DIR / "nz_estimates/jaehwi_26Aug/Vs30map_AUG26.tif"
+    )
+    vs30.post_processing.add_jaehwi_nz_estimates(
+        dataset_ffp, jaehwi_ffp, prefix="jw_aug26"
+    )
 
 
 @app.command("add-ml-model-residuals")
@@ -397,7 +397,7 @@ def run_feature_selection(
 
 @app.command("print-vs30-bin-metrics")
 def print_vs30_bin_metrics(
-    cv_model_dir: Path, foster_results_ffp: Path | None = None
+    cv_model_dir: Path, foster_results_ffp: Path | None = None, full_model_dir: Path | None = None
 ):
     """
     For the given CV model results, print the model performance metrics for each Vs30 bin.
@@ -408,7 +408,12 @@ def print_vs30_bin_metrics(
     foster_results = (
         pd.read_parquet(foster_results_ffp) if foster_results_ffp is not None else None
     )
-    vs30.post_processing.print_vs30_bin_metrics(val_results, foster_results)
+    test_results = (
+        pd.read_parquet(full_model_dir / "test_results.parquet")
+        if full_model_dir is not None
+        else None
+    )
+    vs30.post_processing.print_vs30_bin_metrics(val_results, foster_results_df=foster_results, test_results_df=test_results)
 
 
 
