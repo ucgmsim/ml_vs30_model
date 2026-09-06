@@ -2,7 +2,6 @@ import time
 import logging
 from pathlib import Path
 
-import xarray as xr
 import pygmt
 import pandas as pd
 import plotly.graph_objects as go
@@ -262,6 +261,49 @@ class SpatialPlot:
         )
 
         self.fig.colorbar(position=self.CB_POSITION, frame=["x+lPredicted Standard Deviation"])
+
+        return self
+
+    def plot_shap_values(
+        self,
+        shap_values_df: pd.DataFrame,
+        transparency: float | None = None,
+        region: plotting.ProjectedRegion | None = None,
+        shap_cmap_limits: tuple[float, float] = (-0.5, 0.5),
+        grid_spacing: str = "250e/250e",
+        interp_method: str = "nearest",
+        show_colorbar: bool = True,
+        show_colorbar_label: bool = True
+    ):
+        start = time.time()
+        grid = plotting.create_grid(
+            shap_values_df,
+            "shap_value",
+            bounds=region.bounding_box if region else None,
+            grid_spacing=grid_spacing,
+            interp_method=interp_method,
+        )
+        logger.info(f"Took: {time.time() - start} to create grid.")
+
+        # Set the extreme colors
+        pygmt.config(COLOR_BACKGROUND="blue", COLOR_FOREGROUND="red")
+
+        # Plot the grid
+        pygmt.makecpt(
+            cmap="polar", series=[shap_cmap_limits[0], shap_cmap_limits[1]]
+        )
+        self.fig.grdimage(
+            grid,
+            cmap=True,
+            transparency=transparency,
+            interpolation="c",
+            nan_transparent=True,
+        )
+        if show_colorbar:
+            cb_frame = ["x+lSHAP Value - {feature}"]
+            if not show_colorbar_label:
+                cb_frame[0] = "x"
+            self.fig.colorbar(position=self.CB_POSITION, frame=cb_frame)
 
         return self
 

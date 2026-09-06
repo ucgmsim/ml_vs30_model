@@ -237,6 +237,7 @@ def gen_site_map(dataset_ffp: Path, output_dir: Path):
     )
     spatial_plot.save(output_dir / f"site_map.{vs30.constants.FIG_FORMAT}")
 
+
 @app.command("gen-pred-std-map")
 def gen_pred_std_map(
     full_model_dir: Path,
@@ -253,7 +254,9 @@ def gen_pred_std_map(
         pred_std_da = ds["lnVs30_std"]
 
     nan_mask = pred_std_da.isnull().values
-    mesh_x, mesh_y = np.meshgrid(pred_std_da.coords["x"].values, pred_std_da.coords["y"].values)
+    mesh_x, mesh_y = np.meshgrid(
+        pred_std_da.coords["x"].values, pred_std_da.coords["y"].values
+    )
     pred_std_df = pd.DataFrame(
         {
             "nztm_x": mesh_x[~nan_mask],
@@ -262,7 +265,9 @@ def gen_pred_std_map(
         }
     )
 
-    latlon_coords = coordinates.nztm_to_wgs_depth(pred_std_df[["nztm_y", "nztm_x"]].values)
+    latlon_coords = coordinates.nztm_to_wgs_depth(
+        pred_std_df[["nztm_y", "nztm_x"]].values
+    )
     pred_std_df["lat"], pred_std_df["lon"] = latlon_coords[:, 0], latlon_coords[:, 1]
 
     if region_key != "nz":
@@ -286,13 +291,11 @@ def gen_pred_std_map(
         pred_std_df,
         region=plot_region,
         grid_spacing=grid_spacing,
-        std_limits=(0.0, 0.5)
+        std_limits=(0.0, 0.5),
     )
     logger.info(f"Took: {time.time() - start} to plot Pred Std values")
 
-    spatial_plot.save(
-        output_dir / f"pred_std_{region_key}.{vs30.constants.FIG_FORMAT}"
-    )
+    spatial_plot.save(output_dir / f"pred_std_{region_key}.{vs30.constants.FIG_FORMAT}")
 
 
 @app.command("gen-vs30-map")
@@ -432,7 +435,9 @@ def gen_vs30_map(
             text=label,
             justify="TL",
             offset="0.05c/-0.1c",
-            font=vs30.constants.GMT_FIG_FONT_LABEL.replace("Helvetica", "Helvetica-Bold")
+            font=vs30.constants.GMT_FIG_FONT_LABEL.replace(
+                "Helvetica", "Helvetica-Bold"
+            ),
         )
 
     spatial_plot.save(
@@ -462,7 +467,6 @@ def gen_residual_map(
         if use_kriged
         else "foster_original_vs30_ln_res"
     )
-    cb_label = "ln(F19) - ln(ML)"
 
     # Load residual values
     with xr.open_dataset(dataset_ffp) as ds:
@@ -526,7 +530,7 @@ def gen_residual_map(
             text=label,
             justify="TL",
             offset="0.05c/-0.1c",
-            font=vs30.constants.GMT_FIG_FONT_LABEL.replace("Helvetica", "Helvetica-Bold")
+            font=vs30.constants.GMT_FIG_FONT_LABEL,
         )
 
     spatial_plot.save(
@@ -586,9 +590,7 @@ def input_variable_map(
 
     logger.info(f"Plotting {variable} values...")
     start = time.time()
-    spatial_plot.plot_input_variable_values(
-        variable_df, variable, region=plot_region
-    )
+    spatial_plot.plot_input_variable_values(variable_df, variable, region=plot_region)
     logger.info(f"Took: {time.time() - start} to plot {variable} values")
 
     spatial_plot.save(
@@ -644,7 +646,9 @@ def input_variable_kde_distribution(
         )
 
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-    ax.set_xlabel(x_label or vs30.constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING[variable])
+    ax.set_xlabel(
+        x_label or vs30.constants.INPUT_VARIABLE_TO_NICE_NAME_MAPPING[variable]
+    )
     ax.set_ylabel("Density")
     ax.set_xlim(min_val, max_val)
     ax.yaxis.set_ticklabels([])
@@ -826,8 +830,12 @@ def combined_dataset_comparison(
 
     comb_df = pd.concat(
         [
-            dataset_df[["vs30", "nzenvds_topo_roughness", "nz_geology_age_mid", "source"]],
-            foster_df[["vs30", "nzenvds_topo_roughness", "nz_geology_age_mid", "source"]],
+            dataset_df[
+                ["vs30", "nzenvds_topo_roughness", "nz_geology_age_mid", "source"]
+            ],
+            foster_df[
+                ["vs30", "nzenvds_topo_roughness", "nz_geology_age_mid", "source"]
+            ],
             qual_df[["vs30", "nzenvds_topo_roughness", "nz_geology_age_mid", "source"]],
         ],
         ignore_index=True,
@@ -1684,18 +1692,78 @@ def gen_one_to_one_plot(
     plt.close(fig)
 
 
-@app.command("gen-PIT-plot")
-def gen_PIT_plot(results_ffp: Path, output_dir: Path):
+@app.command("gen-SHAP-map")
+def gen_shap_map(
+    full_model_dir: Path,
+    output_dir: Path,
+    region_key: str,
+    feature: str,
+    projection: str = "M8.5c",
+    grid_spacing: str = "250e/250e",
+    show_colorbar: bool = True,
+):
     logger = mlt.utils.setup_logging()
-    _fig_settings(logger)
+    region_coords = vs30.constants.REGION_MAPPING[region_key]
 
-    results_df = pd.read_parquet(results_ffp)
+    run_config = vs30.RunConfig.from_yaml(full_model_dir / "run_config.yaml")
+    assert (
+        feature in run_config.input_variables
+    ), f"Feature '{feature}' not found in run_config.yaml"
 
-    vs30.plotting.model_perf_plots.pit_plot(
-        results_df,
-        output_dir / f"pit_plot.{vs30.constants.FIG_FORMAT}",
-        write_yaml=False,
+    # Load vs30 values
+    with xr.open_dataset(full_model_dir / "nz_vs30_results.nc") as ds:
+        shap_values = ds[f"SHAP_{feature}"]
+
+    nan_mask = shap_values.isnull().values
+    mesh_x, mesh_y = np.meshgrid(
+        shap_values.coords["x"].values, shap_values.coords["y"].values
     )
+    shap_values_df = pd.DataFrame(
+        {
+            "nztm_x": mesh_x[~nan_mask],
+            "nztm_y": mesh_y[~nan_mask],
+            "shap_value": shap_values.values[~nan_mask],
+        }
+    )
+
+    latlon_coords = coordinates.nztm_to_wgs_depth(
+        shap_values_df[["nztm_y", "nztm_x"]].values
+    )
+    shap_values_df["lat"], shap_values_df["lon"] = (
+        latlon_coords[:, 0],
+        latlon_coords[:, 1],
+    )
+
+    # Only apply the region filter if the map is not rotated
+    if region_key != "nz":
+        shap_values_df = shap_values_df.loc[
+            (shap_values_df["lon"] >= region_coords[0])
+            & (shap_values_df["lon"] <= region_coords[1])
+            & (shap_values_df["lat"] >= region_coords[2])
+            & (shap_values_df["lat"] <= region_coords[3])
+        ]
+
+    plot_region = plotting.ProjectedRegion.from_box(
+        *vs30.constants.REGION_MAPPING[region_key], projection
+    )
+    spatial_plot = vs30.plotting.spatial.SpatialPlot(
+        plot_topo=False,
+        plot_highways=False,
+        region=plot_region,
+    )
+
+    logger.info("Plotting SHAP values...")
+    start = time.time()
+    spatial_plot.plot_shap_values(
+        shap_values_df,
+        region=plot_region,
+        grid_spacing=grid_spacing,
+        show_colorbar=show_colorbar,
+        show_colorbar_label=False,
+    )
+    logger.info(f"Took: {time.time() - start} to plot SHAP values")
+
+    spatial_plot.save(output_dir / f"shap_map_{feature}.png")
 
 
 @app.command("gen-std-res-cdf-plot")
@@ -1799,7 +1867,7 @@ def gen_global_feature_importance(cv_model_results_dir: Path, output_dir: Path):
     ]
 
     global_shap_values = np.abs(shap_values.values).mean(axis=0)
-    
+
     sort_ind = np.argsort(global_shap_values)
     feature_names = np.array(feature_names)[sort_ind]
     global_shap_values = global_shap_values[sort_ind]
@@ -1823,19 +1891,24 @@ def gen_global_feature_importance(cv_model_results_dir: Path, output_dir: Path):
     )
     plt.close(fig)
 
+
 @app.command("gen-feature-trend-plots")
-def gen_feature_trend_plots(cv_model_results_dir: Path, output_dir: Path, features: list[str]):
+def gen_feature_trend_plots(
+    cv_model_results_dir: Path, output_dir: Path, features: list[str]
+):
     logger = mlt.utils.setup_logging()
     _fig_settings(logger)
     assert len(features) == 4
 
     shap_values = pd.read_pickle(cv_model_results_dir / "shap_values.pkl")
     results_df = pd.read_parquet(cv_model_results_dir / "val_results.parquet")
-    
+
     run_config = vs30.RunConfig.from_yaml(cv_model_results_dir / "run_config.yaml")
     dataset_df = pd.read_parquet(run_config.dataset_ffp)
 
-    results_df = results_df.join(dataset_df, how="left", validate="1:1", rsuffix="_dataset")
+    results_df = results_df.join(
+        dataset_df, how="left", validate="1:1", rsuffix="_dataset"
+    )
 
     # feature_names = [
     #     vs30.constants.INPUT_VAR_TO_PAPER_NICE_NAME_MAPPING[feat]
@@ -1851,7 +1924,6 @@ def gen_feature_trend_plots(cv_model_results_dir: Path, output_dir: Path, featur
 
     fig, axs = mlt.plotting.get_fig_axes(4, 2, 2, ind_figsize=vs30.constants.FIG_SIZE)
     labels = ["a)", "b)", "c)", "d)"]
-
 
     for i, feat in enumerate(features):
         cur_ax = axs[i]
@@ -1881,7 +1953,6 @@ def gen_feature_trend_plots(cv_model_results_dir: Path, output_dir: Path, featur
         if feat in x_lim_dict:
             cur_ax.set_xlim(x_lim_dict[feat])
 
-
         cur_ax.grid(linewidth=0.5, alpha=0.5, linestyle="--", zorder=0)
         cur_ax.set_xlabel(nice_feature_name)
         cur_ax.set_ylabel("SHAP Value")
@@ -1894,18 +1965,23 @@ def gen_feature_trend_plots(cv_model_results_dir: Path, output_dir: Path, featur
             horizontalalignment="left",
             verticalalignment="top",
             fontweight="bold",
-        )   
+        )
 
         if i % 2 == 1:
             cur_ax.set_ylabel("")
             cur_ax.set_yticklabels([])
 
-    y_limits = max(abs(min(ax.get_ylim()[0] for ax in axs)), abs(max(ax.get_ylim()[1] for ax in axs)))
+    y_limits = max(
+        abs(min(ax.get_ylim()[0] for ax in axs)),
+        abs(max(ax.get_ylim()[1] for ax in axs)),
+    )
     for ax in axs:
         ax.set_ylim(-y_limits, y_limits)
 
     # Leave space on the right for the shared colorbar
-    fig.subplots_adjust(left=0.09, right=0.88, top=0.99, bottom=0.08, hspace=0.2, wspace=0.05)
+    fig.subplots_adjust(
+        left=0.09, right=0.88, top=0.99, bottom=0.08, hspace=0.2, wspace=0.05
+    )
 
     cbar = fig.colorbar(
         scatter,

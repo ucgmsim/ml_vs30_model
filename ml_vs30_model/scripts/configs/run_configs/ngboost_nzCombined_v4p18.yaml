@@ -20,7 +20,7 @@ input_variables:
   - nz_geology_age_ln_mid
   - nzenvds_topo_roughness
   - mainrock_proxy
-  - nz_distance_to_coast
+  - elevation
   - subrock_median_proxy
   - nzenvds_topo_normalised_height
 
