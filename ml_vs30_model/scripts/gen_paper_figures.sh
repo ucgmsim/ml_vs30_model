@@ -45,14 +45,14 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # python "${scripts_dir}/gen_paper_figures.py" gen-vs30-hist "${dataset_ffp}" "${out_dir}"
 # export fig_size=$default_fig_size
 
-# ## Input histograms
-# echo "Generating input variable histograms..."
-# export fig_size="3.25, 2.5"
-# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" mainrock_proxy "${out_dir}" --no-show-legend --x-label "Main Rock Proxy"
-# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nzenvds_topo_roughness "${out_dir}" --no-show-legend --x-label "Topographic Roughness"
-# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nz_distance_to_coast "${out_dir}" --no-show-legend --x-label "Distance to Coast (km)"
-# python "${scripts_dir}/gen_paper_figures.py" input-variable-kde-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nz_geology_age_mid "${out_dir}" --x-label "Geological Age (Ma)"
-# export fig_size=$default_fig_size
+## Input histograms
+echo "Generating input variable histograms..."
+export fig_size="3.25, 2.5"
+python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" subrock_median_proxy "${out_dir}" --no-show-legend --x-label "Sub Rock Grain-Size Proxy" --discrete --n-bins 15
+python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nzenvds_topo_roughness "${out_dir}" --no-show-legend --x-label "Topographic Roughness"
+python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" elevation "${out_dir}" --no-show-legend --x-label "Elevation (m)"
+python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nz_geology_age_mid "${out_dir}" --x-label "Geological Age (Ma)"
+export fig_size=$default_fig_size
 
 # ### Combined dataset comparison
 # echo "Generating combined dataset comparison plots..."
@@ -95,7 +95,7 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # ## Feature trend plots
 # echo "Generating feature trend plots..."
 # export fig_size="3.25, 2.75"
-# python "${scripts_dir}/gen_paper_figures.py" gen-feature-trend-plots "${cv_model_dir}" "${out_dir}" nzenvds_topo_roughness nz_geology_age_ln_mid mainrock_proxy nz_distance_to_coast
+# python "${scripts_dir}/gen_paper_figures.py" gen-feature-trend-plots "${cv_model_dir}" "${out_dir}" nzenvds_topo_roughness nz_geology_age_ln_mid subrock_median_proxy elevation
 # export fig_size=$default_fig_size
 
 # ## Vs30 map
@@ -146,15 +146,14 @@ variables=(
   "nzenvds_topo_normalised_height"
 )
 
-
-### Input variable maps & distributions
-export fig_size="6.5, 2.75"
-for var in "${variables[@]}"; do
-    echo "Generating input variable map for ${var}..."
-    python "${scripts_dir}/gen_paper_figures.py" input-variable-map "${nz_input_dataset_ffp}" "${var}" nz_full "${out_dir}" 
-    python "${scripts_dir}/gen_paper_figures.py" gen-SHAP-map "${full_model_dir}" "${out_dir}" nz_full "${var}"
-done
-export fig_size=$default_fig_size
+# ### Input variable maps & distributions
+# export fig_size="6.5, 2.75"
+# for var in "${variables[@]}"; do
+#     echo "Generating input variable map for ${var}..."
+#     python "${scripts_dir}/gen_paper_figures.py" input-variable-map "${nz_input_dataset_ffp}" "${var}" nz_full "${out_dir}" 
+#     python "${scripts_dir}/gen_paper_figures.py" gen-SHAP-map "${full_model_dir}" "${out_dir}" nz_full "${var}"
+# done
+# export fig_size=$default_fig_size
 
 # # Predicted standard deviation
 # python "${scripts_dir}/gen_paper_figures.py" gen-pred-std-map "${full_model_dir}" "${out_dir}" "nz_full"

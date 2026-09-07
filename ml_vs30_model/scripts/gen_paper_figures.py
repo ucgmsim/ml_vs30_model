@@ -598,12 +598,14 @@ def input_variable_map(
     )
 
 
-@app.command("input-variable-kde-distribution")
-def input_variable_kde_distribution(
+@app.command("input-variable-distribution")
+def input_variable_distribution(
     dataset_ffp: Path,
     nz_dataset_ffp: Path,
     variable: vs30.constants.InputVariable,
     output_dir: Path,
+    discrete: bool = False,
+    n_bins: int = 30,
     show_legend: bool = True,
     show_rug: bool = False,
     x_label: str = None,
@@ -621,29 +623,56 @@ def input_variable_kde_distribution(
 
     fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
 
-    sns.kdeplot(
-        np.clip(dataset_df[variable].values, min_val, max_val),
-        fill=False,
-        ax=ax,
-        color="blue",
-        label="NZ Site Database",
-        linewidth=vs30.constants.FIG_LINEWIDTH,
-    )
-    sns.kdeplot(
-        np.clip(variable_da.values.flatten(), min_val, max_val),
-        fill=False,
-        ax=ax,
-        color="tab:red",
-        label="NZ Input Grid",
-        linewidth=vs30.constants.FIG_LINEWIDTH,
-    )
-    if show_rug:
-        sns.rugplot(
-            np.clip(dataset_df[variable].values, min_val, max_val),
+    if discrete:
+        dataset_values = np.clip(dataset_df[variable].values, min_val, max_val)
+        grid_values = np.clip(variable_da.values.flatten(), min_val, max_val)
+
+        bins = np.linspace(min_val, max_val, n_bins + 1)
+
+        sns.histplot(
+            dataset_values,
+            bins=bins,
             ax=ax,
-            color="tab:blue",
-            height=0.02,
+            color="blue",
+            label="NZ Site Database",
+            stat="density",
+            edgecolor="black",
+            alpha=0.5,
         )
+        sns.histplot(
+            grid_values,
+            bins=bins,
+            ax=ax,
+            color="tab:red",
+            label="NZ Input Grid",
+            stat="density",
+            edgecolor="black",
+            alpha=0.5,
+        )
+    else:
+        sns.kdeplot(
+            np.clip(dataset_df[variable].values, min_val, max_val),
+            fill=False,
+            ax=ax,
+            color="blue",
+            label="NZ Site Database",
+            linewidth=vs30.constants.FIG_LINEWIDTH,
+        )
+        sns.kdeplot(
+            np.clip(variable_da.values.flatten(), min_val, max_val),
+            fill=False,
+            ax=ax,
+            color="tab:red",
+            label="NZ Input Grid",
+            linewidth=vs30.constants.FIG_LINEWIDTH,
+        )
+        if show_rug:
+            sns.rugplot(
+                np.clip(dataset_df[variable].values, min_val, max_val),
+                ax=ax,
+                color="tab:blue",
+                height=0.02,
+            )
 
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_xlabel(
@@ -657,7 +686,7 @@ def input_variable_kde_distribution(
 
     fig.tight_layout()
     fig.savefig(
-        output_dir / f"input_var_kde_{variable}.{vs30.constants.FIG_FORMAT}",
+        output_dir / f"input_var_dist_{variable}.{vs30.constants.FIG_FORMAT}",
         dpi=vs30.constants.FIG_DPI,
     )
     plt.close(fig)

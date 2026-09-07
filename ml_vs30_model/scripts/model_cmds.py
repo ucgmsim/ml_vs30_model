@@ -294,29 +294,34 @@ def test_predictions(dataset_ffp: Path, full_model_dir: Path, test_sites_ffp: Pa
 
 
 @app.command("add-other-nz-estimates")
-def add_other_nz_estimates(dataset_ffp: Path):
+def add_other_nz_estimates(dataset_ffp: Path, add_foster: bool = False, add_jaehwi: bool = False):
     """
     Adds other Vs30 estimates for New Zealand to the provided dataset.
     """
-    mlt.utils.setup_logging()
+    logger = mlt.utils.setup_logging()
 
-    # foster_data_dir = vs30.constants.BASE_DATA_DIR / "nz_estimates/vs30map_data_2023"
-    # vs30.post_processing.add_foster_nz_estimates(dataset_ffp, foster_data_dir)
+    if not add_foster and not add_jaehwi:
+        logger.warning("No other NZ estimates specified to add. Exiting.")
+        return
 
-    foster_original_ffp = (
-        vs30.constants.BASE_DATA_DIR
-        / "nz_estimates/foster_original/foster_paper_original.tif"
-    )
-    vs30.post_processing.add_foster_original_nz_estimates(
-        dataset_ffp, foster_original_ffp
-    )
+    if add_foster:
+        foster_original_ffp = (
+            vs30.constants.BASE_DATA_DIR
+            / "nz_estimates/foster_original/foster_paper_original.tif"
+        )
+        vs30.post_processing.add_foster_original_nz_estimates(
+            dataset_ffp, foster_original_ffp
+        )
+        logger.info("Added Foster original Vs30 estimates to dataset.")
 
-    jaehwi_ffp = (
-        vs30.constants.BASE_DATA_DIR / "nz_estimates/jaehwi_26Aug/Vs30map_AUG26.tif"
-    )
-    vs30.post_processing.add_jaehwi_nz_estimates(
-        dataset_ffp, jaehwi_ffp, prefix="jw_aug26"
-    )
+    if add_jaehwi:
+        jaehwi_ffp = (
+            vs30.constants.BASE_DATA_DIR / "nz_estimates/jaehwi_26Aug/Vs30map_AUG26.tif"
+        )
+        vs30.post_processing.add_jaehwi_nz_estimates(
+            dataset_ffp, jaehwi_ffp, prefix="jw_aug26"
+        )
+        logger.info("Added Jaehwi Vs30 estimates to dataset.")
 
 
 @app.command("add-ml-model-residuals")
