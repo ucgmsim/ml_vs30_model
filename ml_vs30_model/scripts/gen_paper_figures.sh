@@ -46,13 +46,13 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # export fig_size=$default_fig_size
 
 ## Input histograms
-echo "Generating input variable histograms..."
-export fig_size="3.25, 2.5"
-python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" subrock_median_proxy "${out_dir}" --no-show-legend --x-label "Sub Rock Grain-Size Proxy" --discrete --n-bins 15
-python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nzenvds_topo_roughness "${out_dir}" --no-show-legend --x-label "Topographic Roughness"
-python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" elevation "${out_dir}" --no-show-legend --x-label "Elevation (m)"
-python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nz_geology_age_mid "${out_dir}" --x-label "Geological Age (Ma)"
-export fig_size=$default_fig_size
+# echo "Generating input variable histograms..."
+# export fig_size="3.25, 2.5"
+# python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" subrock_median_proxy "${out_dir}" --no-show-legend --x-label "Sub Rock Grain-Size Proxy" --discrete --n-bins 15
+# python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nzenvds_topo_roughness "${out_dir}" --no-show-legend --x-label "Topographic Roughness" --discrete --n-bins 15
+# python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" elevation "${out_dir}" --no-show-legend --x-label "Elevation (m)" --discrete --n-bins 15
+# python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" nz_geology_age_mid "${out_dir}" --x-label "Geological Age (Ma)" --discrete --n-bins 15
+# export fig_size=$default_fig_size
 
 # ### Combined dataset comparison
 # echo "Generating combined dataset comparison plots..."

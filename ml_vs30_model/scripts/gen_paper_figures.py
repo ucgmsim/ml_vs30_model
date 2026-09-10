@@ -644,7 +644,7 @@ def input_variable_distribution(
             bins=bins,
             ax=ax,
             color="tab:red",
-            label="NZ Input Grid",
+            label="NZ 100m Grid",
             stat="density",
             edgecolor="black",
             alpha=0.5,
@@ -926,8 +926,8 @@ def combined_dataset_comparison(
 
     ax_vs30.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax_vs30.set_xlabel("Vs30 (m/s)")
-    ax_vs30.set_ylabel("Density")
     ax_vs30.set_xlim(0, 1600)
+    ax_vs30.set_ylabel("Density")
     ax_vs30.yaxis.set_ticklabels([])
 
     # Legend
@@ -975,8 +975,8 @@ def combined_dataset_comparison(
     ax_roughness.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     # ax_roughness.set_xlabel("Slope (degrees)")
     ax_roughness.set_xlabel("Topographic Roughness")
-    ax_roughness.set_ylabel("Density")
     ax_roughness.set_xlim(0, comb_df["roughness"].max())
+    ax_roughness.set_ylabel("Density")
     ax_roughness.yaxis.set_ticklabels([])
 
     ### Geological Age
@@ -1008,8 +1008,8 @@ def combined_dataset_comparison(
 
     ax_age.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax_age.set_xlabel("Geological Age (Ma)")
-    ax_age.set_ylabel("Density")
     ax_age.set_xlim(0.1, comb_df["nz_geology_age_mid"].max())
+    ax_age.set_ylabel("Density")
     ax_age.yaxis.set_ticklabels([])
 
     fig.savefig(
