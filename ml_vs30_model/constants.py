@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 
 from pyproj import Transformer
+from shapely import Polygon
 import pandas as pd
 import numpy as np
 
@@ -223,9 +224,10 @@ INPUT_VAR_TO_PAPER_NICE_NAME_MAPPING = {
     InputVariable.NZEnvDSTopoNormalisedHeight: "Topographic Normalised Height (index)",
     InputVariable.NZEnvDSDistanceRiversVertical: "Distance to Rivers (Vertical) (m)",
     InputVariable.MainrockProxy: "Main Rock Grain-Size Proxy",
-    InputVariable.SubrockMedianProxy: "Sub Rock Grain-Size Proxy",
+    InputVariable.SubrockMedianProxy: "Sub Rock Grain-Size Proxy (Median)",
     InputVariable.NZDistanceToCoast: "Distance to Coast (km)",
     InputVariable.Elevation: "Elevation (m)",
+    InputVariable.NZEnvDSSlopeDeg: "Slope (Degrees)",
 }
 
 REVERSE_NICE_NAME_TO_INPUT_VARIABLE_MAPPING = {
@@ -832,6 +834,34 @@ REGION_COORDS = {
 }
 
 NZTM_BOUNDING_BOX = [1079100.000, 2100800.000, 4736600.000, 6229700.000]
+
+# Canterbury Plains boundary polygon, NZTM2000 (EPSG:2193)
+CANTERBURY_PLAINS_POLYGON = Polygon(
+    [
+        (1583804.083, 5219157.509),
+        (1574319.506, 5222001.994),
+        (1566683.092, 5210618.016),
+        (1554960.974, 5220532.882),
+        (1534734.470, 5210112.667),
+        (1529576.238, 5205006.865),
+        (1512281.309, 5207126.901),
+        (1485504.873, 5177280.847),
+        (1477796.198, 5167752.462),
+        (1465784.098, 5161683.063),
+        (1461740.054, 5153054.113),
+        (1463157.080, 5137104.928),
+        (1459381.483, 5128479.075),
+        (1461033.746, 5120818.984),
+        (1459118.041, 5096536.384),
+        (1461918.295, 5085313.649),
+        (1576929.755, 5145884.616),
+        (1561614.245, 5163974.442),
+        (1566323.383, 5175409.015),
+        (1582006.485, 5177236.783),
+        (1590052.512, 5180381.568),
+        (1583804.083, 5219157.509),
+    ]
+)
 
 # Geyin & Maurer model MAE values for Vs30 bins
 # Table 2 of Geyin & Maurer (2023)

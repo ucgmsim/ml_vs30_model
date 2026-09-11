@@ -7,6 +7,7 @@ from functools import partial
 import rasterio
 from rasterio import transform
 import shap
+import shapely
 import xarray as xr
 import numpy as np
 import pandas as pd
@@ -777,6 +778,14 @@ def print_vs30_bin_metrics(
             & (cur_df["lat"] <= constants.CHCH_REGION_BOUNDING_BOX[3])
         )
 
+        # Compute number of points in the Canterbury Plains
+        nztm_x, nztm_y = constants.WGS84_TO_NZTM_TRANSFORMER.transform(
+            cur_df["lon"].values, cur_df["lat"].values
+        )
+        cur_df["in_canterbury_plains"] = shapely.contains(
+            constants.CANTERBURY_PLAINS_POLYGON, shapely.points(nztm_x, nztm_y)
+        )
+
         foster_df["cur_vs30_bin"] = pd.cut(
             foster_df["vs30"], bins=bins, labels=bin_names
         )
@@ -805,6 +814,12 @@ def print_vs30_bin_metrics(
 
         display_df["n_chch_points"] = (
             cur_df.groupby("cur_vs30_bin", observed=True)["in_chch_region"]
+            .sum()
+            .map("{:d}".format)
+        )
+
+        display_df["n_canterbury_plains_points"] = (
+            cur_df.groupby("cur_vs30_bin", observed=True)["in_canterbury_plains"]
             .sum()
             .map("{:d}".format)
         )

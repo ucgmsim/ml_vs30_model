@@ -16,6 +16,8 @@ foster_tif="${VS30_MODEL_BASE_DATA_DIR}/nz_estimates/foster_original/foster_pape
 
 cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0906_132350_ngboost_v4p19"
 full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0906_132559_full_ngboostV4p19"
+cv_model_slope_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0911_122951_ngboost_v4p19_slope"
+cv_model_noSubRockProxy_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0911_124009_ngboost_v4p19_noSubRockProxy"
 
 out_dir="/Users/claudy/dev/work/tmp/vs30_plots"
 
@@ -86,10 +88,12 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # python "${scripts_dir}/gen_paper_figures.py" predicted-std-vs30 "${cv_model_dir}" "${out_dir}" 
 # export fig_size=$default_fig_size
 
-# ### Global feature importance
+### Global feature importance
 # echo "Generating global feature importance plot..."
 # export fig_size="6.5, 2.5"
 # python "${scripts_dir}/gen_paper_figures.py" gen-global-feature-importance "${cv_model_dir}" "${out_dir}"
+# python "${scripts_dir}/gen_paper_figures.py" gen-global-feature-importance "${cv_model_slope_dir}" "${out_dir}" --suffix "slope"
+# python "${scripts_dir}/gen_paper_figures.py" gen-global-feature-importance "${cv_model_noSubRockProxy_dir}" "${out_dir}" --suffix "noSubRockProxy"
 # export fig_size=$default_fig_size
 
 # ## Feature trend plots

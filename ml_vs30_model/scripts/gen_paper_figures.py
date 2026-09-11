@@ -1445,7 +1445,7 @@ def gen_residual_scatter_plot(
                     _make_scatter_proxy(test_p_cols[2]),
                 ),
             ],
-            labels=["Test Set"],
+            labels=[f"Test Set (N={len(test_results_df)})"],
             handler_map={tuple: HandlerTuple(ndivide=None, pad=0.6)},
             handlelength=2.5,
         )
@@ -1695,10 +1695,7 @@ def gen_one_to_one_plot(
                     _make_scatter_proxy(test_p_cols[2]),
                 )
             ],
-            labels=[
-                # f"Test Set (N={(test_results_df.quality_score == "Q1").sum()}/{(test_results_df.quality_score == "Q2").sum()}/{(test_results_df.quality_score == "Q3").sum()})"
-                "Test Set"
-            ],
+            labels=[f"Test Set (N={len(test_results_df)})"],
             handler_map={tuple: HandlerTuple(ndivide=None, pad=0.6)},
             handlelength=2.5,
             loc="lower left",
@@ -1884,7 +1881,7 @@ def gen_std_res_cdf_plot(results_ffp: Path, output_dir: Path):
 
 
 @app.command("gen-global-feature-importance")
-def gen_global_feature_importance(cv_model_results_dir: Path, output_dir: Path):
+def gen_global_feature_importance(cv_model_results_dir: Path, output_dir: Path, suffix: str = ""):
     logger = mlt.utils.setup_logging()
     _fig_settings(logger)
 
@@ -1914,8 +1911,9 @@ def gen_global_feature_importance(cv_model_results_dir: Path, output_dir: Path):
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
 
     fig.tight_layout()
+    suffix = f"_{suffix}" if suffix else ""
     fig.savefig(
-        output_dir / f"global_feature_importance.{vs30.constants.FIG_FORMAT}",
+        output_dir / f"global_feature_importance{suffix}.{vs30.constants.FIG_FORMAT}",
         dpi=vs30.constants.FIG_DPI,
     )
     plt.close(fig)
