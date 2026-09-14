@@ -74,7 +74,7 @@ class RunConfig:
     apply_mc_label_sampling: bool
     mc_label_sampling_n: int
     """
-    Whether to use Monte Carlo sampling of the labels, 
+    Whether to use Monte Carlo sampling of the labels,
     and if so how many samples to draw per site.
     """
 
@@ -95,6 +95,18 @@ class RunConfig:
 
     model_config: CatboostModelConfig | NGBoostModelConfig
     pre_process_categorial: bool
+
+    use_analytic_label_noise: bool = False
+    """
+    If True, fits NGBoost with an analytic label-uncertainty likelihood
+    (v = sigma_hat^2 + sigma_L^2) instead of plain Normal, replacing MC label
+    sampling. Mutually exclusive with apply_mc_label_sampling.
+    """
+    q3_sigma_l_override: float | None = None
+    """
+    Effective ln_vs30_std to use for Q3 sites when use_analytic_label_noise is
+    True. Ignored when use_analytic_label_noise is False.
+    """
 
     _scale_params: dict = None
 
@@ -231,6 +243,12 @@ class RunConfig:
             "model_config": self.model_config.to_dict(),
             "apply_mc_label_sampling": bool(self.apply_mc_label_sampling),
             "mc_label_sampling_n": int(self.mc_label_sampling_n),
+            "use_analytic_label_noise": bool(self.use_analytic_label_noise),
+            "q3_sigma_l_override": (
+                float(self.q3_sigma_l_override)
+                if self.q3_sigma_l_override is not None
+                else None
+            ),
             "apply_vs30_sample_weights": bool(self.apply_vs30_sample_weights),
             "max_vs30_weight": float(self.max_vs30_weight),
             "apply_quality_sample_weight_factor": bool(

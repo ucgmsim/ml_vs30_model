@@ -12,6 +12,8 @@ import rasterio
 from scipy import stats
 from ngboost import NGBRegressor
 from ngboost.distns import Normal
+from ngboost.distns.distn import RegressionDistn
+from ngboost.scores import LogScore
 from sklearn.tree import DecisionTreeRegressor
 
 import ml_tools as mlt
@@ -27,6 +29,65 @@ from . import utils
 pd.set_option("future.no_silent_downcasting", True)
 
 logger = logging.getLogger(__name__)
+
+LABEL_NOISE_Y_DTYPE = [("D", np.float64), ("sigma_L", np.float64)]
+
+
+def build_label_noise_y(D: np.ndarray, sigma_L: np.ndarray) -> np.ndarray:
+    """Builds the structured Y array consumed by NormalLabelNoise, carrying
+    the per-site label uncertainty sigma_L alongside the label D."""
+    Y = np.empty(len(D), dtype=LABEL_NOISE_Y_DTYPE)
+    Y["D"] = D
+    Y["sigma_L"] = sigma_L
+    return Y
+
+
+class NormalLabelNoiseLogScore(LogScore):
+    """Gaussian NLL with known per-sample label uncertainty folded into the
+    total variance, v = sigma_hat^2 + sigma_L^2."""
+
+    def score(self, Y):
+        D, v = Y["D"], self.var + Y["sigma_L"] ** 2
+        return 0.5 * (np.log(2 * np.pi * v) + (D - self.loc) ** 2 / v)
+
+    def d_score(self, Y):
+        D, v = Y["D"], self.var + Y["sigma_L"] ** 2
+        grad = np.zeros((len(D), 2))
+        grad[:, 0] = (self.loc - D) / v
+        grad[:, 1] = (self.var / v) * (1 - (D - self.loc) ** 2 / v)
+        return grad
+
+    def metric(self):
+        # sigma_L is deliberately dropped here: NGBoost's Score.grad() never
+        # passes Y into metric(), so it can only precondition on the plain
+        # Normal Fisher info. Same precedent as ngboost's own
+        # LogNormalLogScoreCensored.metric(), which drops Event/Time.
+        FI = np.zeros((self.var.shape[0], 2, 2))
+        FI[:, 0, 0] = 1.0 / self.var
+        FI[:, 1, 1] = 2.0
+        return FI
+
+
+class NormalLabelNoise(RegressionDistn):
+    """Normal distribution whose likelihood accounts for known per-site label
+    (measurement) uncertainty. Y must be built via build_label_noise_y."""
+
+    n_params = 2
+    scores = [NormalLabelNoiseLogScore]
+
+    def __init__(self, params):
+        super().__init__(params)
+        self.loc = params[0]
+        self.scale = np.exp(params[1])
+        self.var = self.scale**2
+
+    def fit(Y):
+        m, s = stats.norm.fit(Y["D"])
+        return np.array([m, np.log(s)])
+
+    @property
+    def params(self):
+        return {"loc": self.loc, "scale": self.scale}
 
 
 def cv_train(
@@ -255,6 +316,10 @@ def run_model_training(
         val_X.isna().any(axis=0).sum() == 0
     ), f"Validation features contain NaN values in columns: {val_X.columns[val_X.isna().any(axis=0)].tolist()}"
 
+    assert not (
+        run_config.apply_mc_label_sampling and run_config.use_analytic_label_noise
+    ), "MC label sampling and analytic label-noise likelihood are mutually exclusive."
+
     # Label MC sampling
     mc_train_X, mc_train_y, mc_sample_weights = None, None, None
     if run_config.apply_mc_label_sampling:
@@ -275,9 +340,34 @@ def run_model_training(
             sample_weights[:, None], run_config.mc_label_sampling_n, axis=1
         ).ravel()
 
+        train_X, train_y, sample_weights = mc_train_X, mc_train_y, mc_sample_weights
+
+    # Analytic label-noise likelihood
+    analytic_train_y, analytic_val_y = None, None
+    if run_config.use_analytic_label_noise:
+        logger.info("Using analytic label-uncertainty likelihood.")
+
+        def _effective_sigma_l(index: pd.Index) -> np.ndarray:
+            sigma_l = dataset_df.loc[index, "ln_vs30_std"].values.copy()
+            if run_config.q3_sigma_l_override is not None:
+                sigma_l[(dataset_df.loc[index, "quality_score"] == "Q3").values] = (
+                    run_config.q3_sigma_l_override
+                )
+            return sigma_l
+
+        analytic_train_y = build_label_noise_y(
+            train_y.values, _effective_sigma_l(train_y.index)
+        )
+        if val_y is not None:
+            analytic_val_y = build_label_noise_y(
+                val_y.values, _effective_sigma_l(val_y.index)
+            )
+
+        train_y, val_y = analytic_train_y, analytic_val_y
+
     logger.info("Running model training")
     ngb = NGBRegressor(
-        Dist=Normal,
+        Dist=NormalLabelNoise if run_config.use_analytic_label_noise else Normal,
         learning_rate=run_config.model_config.learning_rate,
         minibatch_frac=run_config.model_config.minibatch_frac,
         col_sample=run_config.model_config.col_sample,
@@ -290,8 +380,16 @@ def run_model_training(
         verbose=verbose,
     )
     ngb.fit(
-        mc_train_X if mc_train_X is not None else train_X,
-        mc_train_y if mc_train_y is not None else train_y,
+        # mc_train_X if mc_train_X is not None else train_X,
+        # (
+        #     mc_train_y
+        #     if mc_train_y is not None
+        #     else (analytic_train_y if analytic_train_y is not None else train_y)
+        # ),
+        # X_val=val_X if val_X is not None else None,
+        # Y_val=analytic_val_y if analytic_val_y is not None else val_y,
+        train_X,
+        train_y,
         X_val=val_X if val_X is not None else None,
         Y_val=val_y if val_y is not None else None,
         sample_weight=(
