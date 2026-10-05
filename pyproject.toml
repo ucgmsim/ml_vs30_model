@@ -19,6 +19,7 @@ dependencies = [
     "matplotlib",
     "seaborn",
     "einops",
+    "qcore-utils==2026.8.2",
 ]
 
 [tool.setuptools_scm]

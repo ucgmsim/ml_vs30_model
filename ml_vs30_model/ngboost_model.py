@@ -320,9 +320,13 @@ def run_model_training(
         run_config.apply_mc_label_sampling and run_config.use_analytic_label_noise
     ), "MC label sampling and analytic label-noise likelihood are mutually exclusive."
 
+    mod_training = run_config.apply_mc_label_sampling or run_config.use_analytic_label_noise
+    mod_train_X, mod_train_y, mod_sample_weights = None, None, None
+    mod_val_X, mod_val_y = None, None
+
     # Label MC sampling
-    mc_train_X, mc_train_y, mc_sample_weights = None, None, None
     if run_config.apply_mc_label_sampling:
+        mod_train_X, mod_train_y, mod_sample_weights = None, None, None
         logger.info(
             f"Applying Monte Carlo sampling of the labels with {run_config.mc_label_sampling_n} samples per site."
         )
@@ -332,18 +336,17 @@ def run_model_training(
             size=(len(train_y), run_config.mc_label_sampling_n),
         )
 
-        mc_train_X = np.repeat(
+        mod_train_X = np.repeat(
             train_X.values[:, None, :], run_config.mc_label_sampling_n, axis=1
         ).reshape(-1, train_X.shape[-1])
-        mc_train_y = sampled_labels.ravel()
-        mc_sample_weights = np.repeat(
+        mod_train_y = sampled_labels.ravel()
+        mod_sample_weights = np.repeat(
             sample_weights[:, None], run_config.mc_label_sampling_n, axis=1
         ).ravel()
 
-        train_X, train_y, sample_weights = mc_train_X, mc_train_y, mc_sample_weights
+        mod_val_X, mod_val_y = val_X, val_y
 
     # Analytic label-noise likelihood
-    analytic_train_y, analytic_val_y = None, None
     if run_config.use_analytic_label_noise:
         logger.info("Using analytic label-uncertainty likelihood.")
 
@@ -355,15 +358,14 @@ def run_model_training(
                 )
             return sigma_l
 
-        analytic_train_y = build_label_noise_y(
+        mod_train_y = build_label_noise_y(
             train_y.values, _effective_sigma_l(train_y.index)
         )
-        if val_y is not None:
-            analytic_val_y = build_label_noise_y(
+        mod_val_y = build_label_noise_y(
                 val_y.values, _effective_sigma_l(val_y.index)
-            )
+            ) if val_y is not None else None
 
-        train_y, val_y = analytic_train_y, analytic_val_y
+        mod_train_X, mod_val_X, mod_sample_weights = train_X, val_X, sample_weights
 
     logger.info("Running model training")
     ngb = NGBRegressor(
@@ -380,20 +382,12 @@ def run_model_training(
         verbose=verbose,
     )
     ngb.fit(
-        # mc_train_X if mc_train_X is not None else train_X,
-        # (
-        #     mc_train_y
-        #     if mc_train_y is not None
-        #     else (analytic_train_y if analytic_train_y is not None else train_y)
-        # ),
-        # X_val=val_X if val_X is not None else None,
-        # Y_val=analytic_val_y if analytic_val_y is not None else val_y,
-        train_X,
-        train_y,
-        X_val=val_X if val_X is not None else None,
-        Y_val=val_y if val_y is not None else None,
+        mod_train_X if mod_training else train_X,
+        mod_train_y if mod_training else train_y,
+        X_val=mod_val_X if mod_training else val_X,
+        Y_val=mod_val_y if mod_training else val_y,
         sample_weight=(
-            mc_sample_weights if mc_sample_weights is not None else sample_weights
+            mod_sample_weights if mod_training else sample_weights
         ),
         val_sample_weight=(
             val_df["sample_weight"].values if val_df is not None else None

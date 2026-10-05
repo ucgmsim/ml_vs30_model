@@ -294,7 +294,9 @@ def test_predictions(dataset_ffp: Path, full_model_dir: Path, test_sites_ffp: Pa
 
 
 @app.command("add-other-nz-estimates")
-def add_other_nz_estimates(dataset_ffp: Path, add_foster: bool = False, add_jaehwi: bool = False):
+def add_other_nz_estimates(
+    dataset_ffp: Path, add_foster: bool = False, add_jaehwi: bool = False
+):
     """
     Adds other Vs30 estimates for New Zealand to the provided dataset.
     """
@@ -357,6 +359,7 @@ def add_kriged_vs30_foster_original_residuals(full_model_dir: Path):
         full_model_dir / "nz_vs30_results.nc", foster_original_ffp, use_kriged=True
     )
 
+
 @app.command("add-grid-SHAP-values")
 def add_grid_SHAP_values(
     full_model_dir: Path,
@@ -371,7 +374,9 @@ def add_grid_SHAP_values(
     run_config = vs30.RunConfig.from_yaml(full_model_dir / "run_config.yaml")
     assert run_config.model_type == vs30.configs.ModelType.NGBoost
 
-    vs30.post_processing.add_grid_SHAP_values(full_model_dir, input_grid_ffp, n_procs=n_procs)
+    vs30.post_processing.add_grid_SHAP_values(
+        full_model_dir, input_grid_ffp, n_procs=n_procs
+    )
 
 
 @app.command("run-feature-selection")
@@ -402,7 +407,9 @@ def run_feature_selection(
 
 @app.command("print-vs30-bin-metrics")
 def print_vs30_bin_metrics(
-    cv_model_dir: Path, foster_results_ffp: Path | None = None, full_model_dir: Path | None = None
+    cv_model_dir: Path,
+    foster_results_ffp: Path | None = None,
+    full_model_dir: Path | None = None,
 ):
     """
     For the given CV model results, print the model performance metrics for each Vs30 bin.
@@ -418,10 +425,20 @@ def print_vs30_bin_metrics(
         if full_model_dir is not None
         else None
     )
-    vs30.post_processing.print_vs30_bin_metrics(val_results, foster_results_df=foster_results, test_results_df=test_results)
+    vs30.post_processing.print_vs30_bin_metrics(
+        val_results, foster_results_df=foster_results, test_results_df=test_results
+    )
 
 
-
+@app.command("print-quality-bin-metrics")
+def print_quality_bin_metrics(cv_model_dir: Path):
+    """
+    For the given CV model results, print the actual residual and
+    standardised residual (mean and std) for each quality bin.
+    """
+    mlt.utils.setup_logging()
+    val_results = pd.read_parquet(cv_model_dir / "val_results.parquet")
+    vs30.post_processing.print_quality_bin_metrics(val_results)
 
 
 if __name__ == "__main__":
