@@ -417,6 +417,7 @@ def run_model_training(
         )
         val_result_df["station"] = val_result_df.index.astype(str)
         val_result_df["cv_ix"] = cv_ix
+        val_result_df["sample_weight"] = val_df.loc[val_y.index, "sample_weight"]
 
         val_pred = ngb.pred_dist(val_X).params
         val_result_df["pred_vs30"] = np.exp(val_pred["loc"])

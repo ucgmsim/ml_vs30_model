@@ -1308,11 +1308,25 @@ def create_nz_vs30_histogram(
 
 
 @app.command("gen-vs30-hist")
-def gen_vs30_hist(dataset_ffp: Path, output_dir: Path):
+def gen_vs30_hist(
+    dataset_ffp: Path,
+    output_dir: Path,
+    weighted: bool = False,
+    run_config_ffp: Path | None = None,
+):
+    """
+    If weighted, bar heights are the summed sample weights, computed on the
+    full dataset using the sample weighting settings of the given run config.
+    """
     logger = mlt.utils.setup_logging()
     _fig_settings(logger)
 
     dataset_df = pd.read_parquet(dataset_ffp)
+    if weighted:
+        assert run_config_ffp is not None, "run_config_ffp is required when weighted."
+        dataset_df = vs30.pre_processing.add_sample_weights(
+            dataset_df, vs30.RunConfig.from_yaml(run_config_ffp)
+        )
 
     fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE, dpi=vs30.constants.FIG_DPI)
 
@@ -1321,8 +1335,9 @@ def gen_vs30_hist(dataset_ffp: Path, output_dir: Path):
     sns.histplot(
         dataset_df,
         x="vs30",
+        weights="sample_weight" if weighted else None,
         # bins=vs30.constants.DENSE_VS30_BINS[:-2],
-        bins=bins,
+        bins=bins.tolist(),
         ax=ax,
         hue="quality_score",
         palette=vs30.constants.QUALITY_SCORE_COLORS,
@@ -1332,12 +1347,15 @@ def gen_vs30_hist(dataset_ffp: Path, output_dir: Path):
     )
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_xlabel("Vs30 (m/s)")
-    ax.set_ylabel("Count")
+    ax.set_ylabel("Weighted count" if weighted else "Count")
     ax.set_xlim(bins.min(), bins.max())
     ax.get_legend().set_title("Quality Score")
 
     fig.tight_layout()
-    fig.savefig(output_dir / f"vs30_hist.{vs30.constants.FIG_FORMAT}")
+    fig.savefig(
+        output_dir
+        / f"vs30_hist{'_weighted' if weighted else ''}.{vs30.constants.FIG_FORMAT}"
+    )
     plt.close(fig)
 
 

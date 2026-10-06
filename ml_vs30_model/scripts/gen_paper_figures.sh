@@ -4,6 +4,7 @@
 set -e
 
 scripts_dir="/Users/claudy/dev/work/code/ml_vs30_model/ml_vs30_model/scripts"
+run_config_ffp="${scripts_dir}/configs/run_configs/ngboost_nzCombined_v4p21.yaml"
 dataset_ffp="${VS30_MODEL_BASE_DATA_DIR}/datasets/nz_combined.parquet"
 
 geyin_dataset_ffp="${VS30_MODEL_BASE_DATA_DIR}/datasets/us_geyin_maurer.parquet"
@@ -41,11 +42,12 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # echo "Generating site map..."
 # python "${scripts_dir}/gen_paper_figures.py" gen-site-map "${dataset_ffp}" "${out_dir}"
 
-# ## Site database Vs30 histogram
-# echo "Generating Vs30 histogram..."
-# export fig_size="6.5, 2.75"
-# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-hist "${dataset_ffp}" "${out_dir}"
-# export fig_size=$default_fig_size
+## Site database Vs30 histogram
+echo "Generating Vs30 histogram..."
+export fig_size="6.5, 2.75"
+python "${scripts_dir}/gen_paper_figures.py" gen-vs30-hist "${dataset_ffp}" "${out_dir}"
+python "${scripts_dir}/gen_paper_figures.py" gen-vs30-hist "${dataset_ffp}" "${out_dir}" --weighted --run-config-ffp "${run_config_ffp}"
+export fig_size=$default_fig_size
 
 ## Input histograms
 # echo "Generating input variable histograms..."

@@ -14,7 +14,6 @@ import shap
 
 from .configs import RunConfig
 from . import post_processing
-from . import constants
 
 logger = logging.getLogger(__name__)
 

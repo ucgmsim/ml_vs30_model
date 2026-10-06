@@ -435,10 +435,14 @@ def print_quality_bin_metrics(cv_model_dir: Path):
     """
     For the given CV model results, print the actual residual and
     standardised residual (mean and std) for each quality bin.
+    If weighted, uses the sample weights and skips the KS test.
     """
     mlt.utils.setup_logging()
     val_results = pd.read_parquet(cv_model_dir / "val_results.parquet")
+    print("------------- Unweighted ------------------")
     vs30.post_processing.print_quality_bin_metrics(val_results)
+    print("------------- Weighted ------------------")
+    vs30.post_processing.print_quality_bin_metrics(val_results, weighted=True)
 
 
 if __name__ == "__main__":

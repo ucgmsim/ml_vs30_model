@@ -127,92 +127,17 @@ def pre_process_vs30(values: np.ndarray | pd.Series):
     return np.log(values)
 
 
-def apply_vs30_bin_weights(
-    train_df: pd.DataFrame, run_config: RunConfig
-) -> pd.DataFrame:
-    """
-    Applies sample weights based on the Vs30 bins in the training DataFrame.
-    Note, this modifies the input dataframe directly.
-    """
-    assert (
-        "quality_score" in train_df.columns and "sample_weight" in train_df.columns
-    ), "quality_score and sample_weight columns must be present in the training DataFrame."
-
-    vs30_bin_counts = train_df["vs30_bin"].value_counts().sort_index()
-    vs30_bin_weights = (vs30_bin_counts.max() / vs30_bin_counts) - 1
-
-    train_df.loc[:, "vs30_weight"] = (
-        train_df["vs30_bin"].map(vs30_bin_weights).astype(float)
-    )
-
-    train_df.loc[:, "sample_weight"] += train_df["vs30_weight"]
-
-    return train_df
-
-
-def _get_q3_bin_weights(df: pd.DataFrame) -> pd.Series:
-    x1, x2 = 0.50, 1.0
-    y1, y2 = 0.25, 0.75
-
-    m = (y2 - y1) / (x2 - x1)
-    b = y1 - m * x1
-
-    def q3_weight_fn(x):
-        return np.clip(m * x + b, y1, y2)
-
-    return q3_weight_fn(
-        df.groupby("dense_vs30_bin", observed=True)["quality_score"]
-        .value_counts(normalize=True)
-        .loc[:, "Q3"]
-    )
-
-
-def apply_quality_score_weight_factor(
-    dataset_df: pd.DataFrame, df: pd.DataFrame, run_config: RunConfig
-) -> pd.DataFrame:
-    """
-    Applies a multiplicative weight factor to the sample weights based on the quality score.
-    Note, this modifies the input dataframe directly.
-    """
-    assert (
-        "quality_score" in df.columns and "sample_weight" in df.columns
-    ), "quality_score and sample_weight columns must be present in the training DataFrame."
-    assert df.quality_score.isin(
-        ["Q1", "Q2", "Q3"]
-    ).all(), "Quality score must be one of Q1, Q2, or Q3"
-
-    df.loc[
-        df.quality_score == "Q1", "sample_weight"
-    ] *= run_config.q1_weight_factor
-    df.loc[
-        df.quality_score == "Q2", "sample_weight"
-    ] *= run_config.q2_weight_factor
-    if run_config.q3_weight_factor == "dynamic":
-        q3_bin_weights = _get_q3_bin_weights(dataset_df)
-        df.loc[df.quality_score == "Q3", "sample_weight"] *= df.loc[
-            df.quality_score == "Q3", "dense_vs30_bin"
-        ].map(q3_bin_weights)
-    else:
-        df.loc[
-            df.quality_score == "Q3", "sample_weight"
-        ] *= run_config.q3_weight_factor
-
-    return df
-
-
-def add_sample_weights(dataset_df: pd.DataFrame, df: pd.DataFrame, run_config: RunConfig) -> pd.DataFrame:
-    """Computes sample weights based on the Vs30 values in the training DataFrame."""
+def add_sample_weights(df: pd.DataFrame, run_config: RunConfig) -> pd.DataFrame:
+    """Q3 quality factor, then inverse-frequency on quality-weighted Vs30 bin totals."""
     df.loc[:, "sample_weight"] = 1.0
+    if run_config.apply_quality_sample_weight_factor:
+        df.loc[df.quality_score == "Q3", "sample_weight"] = run_config.q3_weight_factor
 
     if run_config.apply_vs30_sample_weights:
-        df = apply_vs30_bin_weights(df, run_config)
-
-    if run_config.apply_quality_sample_weight_factor:
-        df = apply_quality_score_weight_factor(dataset_df, df, run_config)
-
-    df.loc[:, "sample_weight"] = np.clip(
-        df["sample_weight"], 1.0, run_config.max_vs30_weight
-    )
+        bin_totals = df.groupby("vs30_bin", observed=True)["sample_weight"].transform("sum")
+        df.loc[:, "sample_weight"] *= np.minimum(
+            bin_totals.max() / bin_totals, run_config.max_vs30_weight
+        )
 
     return df
 
@@ -250,8 +175,8 @@ def get_pre_processed_train_val_df(
     train_df, val_df = train_df.copy(), val_df.copy() if val_df is not None else None
 
     # Compute sample weighting
-    train_df = add_sample_weights(dataset_df, train_df, run_config)
-    val_df = add_sample_weights(dataset_df, val_df, run_config) if val_df is not None else None
+    train_df = add_sample_weights(train_df, run_config)
+    val_df = add_sample_weights(val_df, run_config) if val_df is not None else None
 
     # Pre-process
     train_X, scale_params = pre_process_features(train_df, run_config)

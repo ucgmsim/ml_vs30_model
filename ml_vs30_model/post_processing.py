@@ -828,51 +828,36 @@ def print_vs30_bin_metrics(
     print(display_df.to_string())
 
 
-def print_quality_bin_metrics(results_df: pd.DataFrame):
+def print_quality_bin_metrics(results_df: pd.DataFrame, weighted: bool = False):
     """
     Prints the actual residual (ln_residual) and standardised residual
-    (ln_residual / pred_vs30_std) mean and std, grouped by quality_score,
-    along with a KS test of the standardised residuals against N(0, 1)
-    (KS statistic and the corresponding 5% critical value, 1.36/sqrt(n)).
+    (ln_residual / pred_vs30_std) mean and std, grouped by quality_score.
+    Unweighted: also a KS test of the standardised residuals against N(0, 1)
+    (KS statistic and the 5% critical value, 1.36/sqrt(n)).
+    Weighted: mean and std are weighted by the sample_weight column, no KS test.
     """
-    cur_df = results_df.copy()
-    cur_df["z"] = cur_df["ln_residual"] / cur_df["pred_vs30_std"]
+    cur_df = results_df.assign(
+        z=results_df["ln_residual"] / results_df["pred_vs30_std"]
+    )
+
+    def summary(df: pd.DataFrame) -> pd.Series:
+        weights = df["sample_weight"] if weighted else None
+        row = {"n": len(df)}
+        for metric in ["ln_residual", "z"]:
+            mean = np.average(df[metric], weights=weights)
+            std = np.sqrt(np.cov(df[metric], aweights=weights))
+            row[metric] = f"{mean:.3f} ± {std:.3f}"
+        if not weighted:
+            row["ks_stat"] = f"{stats.kstest(df['z'], 'norm').statistic:.3f}"
+            row["ks_crit"] = f"{1.36 / np.sqrt(len(df)):.3f}"
+        return pd.Series(row)
 
     print("------------------------------------------")
-    print("Residual metrics per quality bin")
+    print(f"Residual metrics per quality bin{' (sample weighted)' if weighted else ''}")
 
-    grouped = cur_df.groupby("quality_score", observed=True)[
-        ["ln_residual", "z"]
-    ].agg(["mean", "std"])
-    counts = cur_df.groupby("quality_score", observed=True)["ln_residual"].count()
-
-    display_df = pd.DataFrame(index=grouped.index)
-    display_df["n"] = counts
-    for metric in ["ln_residual", "z"]:
-        display_df[metric] = (
-            grouped[(metric, "mean")]
-            .map("{:.3f}".format)
-            .str.cat(grouped[(metric, "std")].map(" ± {:.3f}".format))
-        )
-
-    ks_stat = cur_df.groupby("quality_score", observed=True)["z"].apply(
-        lambda z: stats.kstest(z, "norm").statistic
-    )
-    display_df["ks_stat"] = ks_stat.map("{:.3f}".format)
-    display_df["ks_crit"] = (1.36 / np.sqrt(counts)).map("{:.3f}".format)
-
-    total = pd.Series(
-        {
-            "n": len(cur_df),
-            "ln_residual": "{:.3f} ± {:.3f}".format(
-                cur_df["ln_residual"].mean(), cur_df["ln_residual"].std()
-            ),
-            "z": "{:.3f} ± {:.3f}".format(cur_df["z"].mean(), cur_df["z"].std()),
-            "ks_stat": "{:.3f}".format(stats.kstest(cur_df["z"], "norm").statistic),
-            "ks_crit": "{:.3f}".format(1.36 / np.sqrt(len(cur_df))),
-        },
-        name="Total",
-    )
-    display_df = pd.concat([display_df, total.to_frame().T])
+    display_df = cur_df.groupby("quality_score", observed=True)[
+        ["ln_residual", "z", "sample_weight"] if weighted else ["ln_residual", "z"]
+    ].apply(summary)
+    display_df = pd.concat([display_df, summary(cur_df).rename("Total").to_frame().T])
 
     print(display_df.to_string())

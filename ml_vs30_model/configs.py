@@ -79,14 +79,8 @@ class RunConfig:
     """
 
     apply_quality_sample_weight_factor: bool
-    """
-    Sample weighting based on quality score, applied
-    after all other sample weighting adjustments, as 
-    a multiplicative factor. 
-    """
-    q1_weight_factor: float
-    q2_weight_factor: float
-    q3_weight_factor: float | str
+    q3_weight_factor: float
+    """Weight of Q3 sites relative to Q1/Q2 sites within the same Vs30 bin."""
 
     n_cv_folds: int
     """Number of CV folds to use. Only applicable when using CV."""
@@ -254,13 +248,7 @@ class RunConfig:
             "apply_quality_sample_weight_factor": bool(
                 self.apply_quality_sample_weight_factor
             ),
-            "q1_weight_factor": float(self.q1_weight_factor),
-            "q2_weight_factor": float(self.q2_weight_factor),
-            "q3_weight_factor": (
-                float(self.q3_weight_factor)
-                if isinstance(self.q3_weight_factor, float)
-                else str(self.q3_weight_factor)
-            ),
+            "q3_weight_factor": float(self.q3_weight_factor),
             "pre_process_categorial": bool(self.pre_process_categorial),
         }
 

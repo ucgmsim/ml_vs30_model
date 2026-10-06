@@ -22,27 +22,6 @@ def safe_cast(arr, dtype):
     return arr.astype(dtype)
 
 
-def get_vs30_weights(df: pd.DataFrame, max_weight: int) -> pd.DataFrame:
-    """
-    Computes the additional sample weight due to Vs30,
-    to be added to the base weight of one.
-    """
-    if "vs30_bin" not in df.columns:
-        df["vs30_bin"] = pd.cut(
-            df.vs30,
-            constants.VS30_WEIGHTING_BINS,
-            labels=constants.VS30_WEIGHTING_BIN_NAMES,
-        )
-
-    vs30_bin_counts = df.vs30_bin.value_counts().sort_index()
-
-    vs30_bin_weights = np.clip(
-        (vs30_bin_counts.sum() / vs30_bin_counts) - 1, 0.0, max_weight
-    )
-    df["vs30_weight"] = df.vs30_bin.map(vs30_bin_weights).astype(np.float16)
-
-    return df
-
 
 def get_bounding_box_corners(
     lons: np.ndarray, lats: np.ndarray, width_m: float, height_m: float

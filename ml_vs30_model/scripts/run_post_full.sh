@@ -4,6 +4,8 @@ if [[ -z "$1" ]]; then
     exit 1
 fi
 
+export MPLBACKEND=Agg
+
 function csnotify {
    curl -d $1 ntfy.sh/W7T2QKNDH9Z4E3VJPRY8XACUL
 }
