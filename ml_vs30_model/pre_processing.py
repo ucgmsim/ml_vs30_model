@@ -12,6 +12,17 @@ from . import constants
 logger = logging.getLogger(__name__)
 
 
+def get_label_std(dataset_df: pd.DataFrame, run_config: RunConfig) -> pd.Series:
+    """
+    Per-site label (measurement) uncertainty, ln_vs30_std, with the
+    run config's Q3 override (q3_sigma_l_override) applied, if set.
+    """
+    label_std = dataset_df["ln_vs30_std"].copy()
+    if run_config.q3_sigma_l_override is not None:
+        label_std[dataset_df["quality_score"] == "Q3"] = run_config.q3_sigma_l_override
+    return label_std
+
+
 def normalize(
     series: pd.Series, mean: float | None = None, std: float | None = None
 ) -> pd.Series:

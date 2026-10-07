@@ -431,18 +431,28 @@ def print_vs30_bin_metrics(
 
 
 @app.command("print-quality-bin-metrics")
-def print_quality_bin_metrics(cv_model_dir: Path):
+def print_quality_bin_metrics(cv_model_dir: Path, include_label_std: bool = False):
     """
     For the given CV model results, print the actual residual and
-    standardised residual (mean and std) for each quality bin.
-    If weighted, uses the sample weights and skips the KS test.
+    standardised residual (mean and std) for each quality bin,
+    unweighted (with KS test) and sample weighted (without KS test).
+    If include_label_std, the standardised residuals also account for the
+    label uncertainty, using the run config in cv_model_dir.
     """
     mlt.utils.setup_logging()
     val_results = pd.read_parquet(cv_model_dir / "val_results.parquet")
+    run_config = vs30.RunConfig.from_yaml(cv_model_dir / "run_config.yaml")
     print("------------- Unweighted ------------------")
-    vs30.post_processing.print_quality_bin_metrics(val_results)
+    vs30.post_processing.print_quality_bin_metrics(
+        val_results, include_label_std=include_label_std, run_config=run_config
+    )
     print("------------- Weighted ------------------")
-    vs30.post_processing.print_quality_bin_metrics(val_results, weighted=True)
+    vs30.post_processing.print_quality_bin_metrics(
+        val_results,
+        weighted=True,
+        include_label_std=include_label_std,
+        run_config=run_config,
+    )
 
 
 if __name__ == "__main__":

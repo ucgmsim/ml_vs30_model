@@ -1787,15 +1787,21 @@ def gen_shap_map(
 
 
 @app.command("gen-std-res-cdf-plot")
-def gen_std_res_cdf_plot(results_ffp: Path, output_dir: Path):
+def gen_std_res_cdf_plot(
+    results_ffp: Path, output_dir: Path, include_label_std: bool = False
+):
+    """
+    If include_label_std, the standardised residuals also account for the
+    label uncertainty, using the run_config.yaml next to results_ffp.
+    """
     logger = mlt.utils.setup_logging()
     _fig_settings(logger)
 
-    results_df = pd.read_parquet(results_ffp)
-
-    std_res = (
-         np.log(results_df["vs30"]) - np.log(results_df["pred_vs30"])
-    ) / results_df["pred_vs30_std"]
+    std_res = vs30.post_processing.add_std_residuals(
+        pd.read_parquet(results_ffp),
+        include_label_std,
+        vs30.RunConfig.from_yaml(results_ffp.parent / "run_config.yaml"),
+    )["std_residual"]
     assert std_res.notnull().all(), "Standardized residuals contain NaN values"
 
     fig, ax = plt.subplots(figsize=vs30.constants.FIG_SIZE)
@@ -1848,15 +1854,15 @@ def gen_std_res_cdf_plot(results_ffp: Path, output_dir: Path):
         fontweight="bold",
     )
 
-    ax.text(
-        -0.125,
-        1.018,
-        "a)",
-        transform=ax.transAxes,
-        horizontalalignment="right",
-        verticalalignment="top",
-        fontweight="bold",
-    )
+    # ax.text(
+    #     -0.125,
+    #     1.018,
+    #     "a)",
+    #     transform=ax.transAxes,
+    #     horizontalalignment="right",
+    #     verticalalignment="top",
+    #     fontweight="bold",
+    # )
 
     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
     ax.set_xlabel("Standardized Residual")
@@ -1868,7 +1874,8 @@ def gen_std_res_cdf_plot(results_ffp: Path, output_dir: Path):
     # fig.tight_layout()
     fig.subplots_adjust(left=0.15, right=0.99, top=0.9825, bottom=0.15)
     fig.savefig(
-        output_dir / f"std_res_cdf_plot.{vs30.constants.FIG_FORMAT}",
+        output_dir
+        / f"std_res_cdf_plot{'_label_std' if include_label_std else ''}.{vs30.constants.FIG_FORMAT}",
         dpi=vs30.constants.FIG_DPI,
     )
     plt.close(fig)

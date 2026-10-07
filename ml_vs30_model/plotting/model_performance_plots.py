@@ -665,38 +665,3 @@ def quaternary_region_residual(
     )
 
 
-def pit_plot(results_df: pd.DataFrame, output_dir: Path, write_yaml: bool = True):
-    """Generates a PIT plot of the predicted vs30 distributions."""
-    std_res = (
-        np.log(results_df["pred_vs30"]) - np.log(results_df["vs30"])
-    ) / results_df["pred_vs30_std"]
-    pit_values = stats.norm.cdf(std_res)
-
-    fig, ax = plt.subplots(figsize=constants.FIG_SIZE)
-    sns.histplot(
-        pit_values,
-        bins=15,
-        ax=ax,
-        color="tab:blue",
-        edgecolor="black",
-        stat="density",
-        label="PIT Values",
-    )
-    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-    ax.axhline(1.0, color="red", linestyle="--", label="Uniform Distribution Density")
-    ax.set_xlabel("PIT Values")
-    ax.set_ylabel("Count")
-    ax.set_xlim(0, 1)
-    ax.legend()
-
-    fig.tight_layout()
-    output_ffp = output_dir / f"pit_plot.{constants.FIG_FORMAT}"
-    fig.savefig(output_ffp, dpi=constants.FIG_DPI)
-    plt.close(fig)
-
-    if write_yaml:
-        mlt.utils.write_to_yaml(
-            dict(type="pit-plot"),
-            output_ffp.with_name(output_ffp.stem + ".yaml"),
-            clobber=True,
-        )

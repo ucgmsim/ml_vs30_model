@@ -15,10 +15,10 @@ foster_nz_dataset="${VS30_MODEL_BASE_DATA_DIR}/datasets/foster.parquet"
 foster_nz_dataset_results="${VS30_MODEL_BASE_DATA_DIR}/results/foster/foster_noMVN_nzCombined.parquet"
 foster_tif="${VS30_MODEL_BASE_DATA_DIR}/nz_estimates/foster_original/foster_paper_original.tif"
 
-cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0906_132350_ngboost_v4p19"
-full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0906_132559_full_ngboostV4p19"
-cv_model_slope_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0911_122951_ngboost_v4p19_slope"
-cv_model_noSubRockProxy_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/0911_124009_ngboost_v4p19_noSubRockProxy"
+cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1006_130003_ngboost_v4p21"
+full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1006_130040_full_ngboostV4p21"
+cv_model_slope_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1007_083859_ngboost_v4p21_slope"
+cv_model_noSubRockProxy_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1007_083827_ngboost_v4p21_noSubRockProxy"
 
 out_dir="/Users/claudy/dev/work/tmp/vs30_plots"
 
@@ -42,14 +42,14 @@ export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 # echo "Generating site map..."
 # python "${scripts_dir}/gen_paper_figures.py" gen-site-map "${dataset_ffp}" "${out_dir}"
 
-## Site database Vs30 histogram
-echo "Generating Vs30 histogram..."
-export fig_size="6.5, 2.75"
-python "${scripts_dir}/gen_paper_figures.py" gen-vs30-hist "${dataset_ffp}" "${out_dir}"
-python "${scripts_dir}/gen_paper_figures.py" gen-vs30-hist "${dataset_ffp}" "${out_dir}" --weighted --run-config-ffp "${run_config_ffp}"
-export fig_size=$default_fig_size
+# ## Site database Vs30 histogram
+# echo "Generating Vs30 histogram..."
+# export fig_size="6.5, 2.75"
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-hist "${dataset_ffp}" "${out_dir}"
+# python "${scripts_dir}/gen_paper_figures.py" gen-vs30-hist "${dataset_ffp}" "${out_dir}" --weighted --run-config-ffp "${run_config_ffp}"
+# export fig_size=$default_fig_size
 
-## Input histograms
+# # Input histograms
 # echo "Generating input variable histograms..."
 # export fig_size="3.25, 2.5"
 # python "${scripts_dir}/gen_paper_figures.py" input-variable-distribution "${dataset_ffp}" "${nz_input_dataset_ffp}" subrock_median_proxy "${out_dir}" --no-show-legend --x-label "Sub Rock Grain-Size Proxy" --discrete --n-bins 15
@@ -78,11 +78,11 @@ export fig_size=$default_fig_size
 # python "${scripts_dir}/gen_paper_figures.py" gen-one-to-one-plot "${foster_nz_dataset_results}" "${out_dir}" --is-foster --no-show-legend
 # export fig_size=$default_fig_size
 
-# ### Standardized residuals CDF
-# export fig_size="3.25, 2.5"
-# echo "Generating standardized residuals CDF plot..."
-# python "${scripts_dir}/gen_paper_figures.py" gen-std-res-cdf-plot "${cv_model_dir}/val_results.parquet" "${out_dir}" 
-# export fig_size=$default_fig_size
+### Standardized residuals CDF
+export fig_size="3.25, 2.5"
+echo "Generating standardized residuals CDF plot..."
+python "${scripts_dir}/gen_paper_figures.py" gen-std-res-cdf-plot "${cv_model_dir}/val_results.parquet" "${out_dir}" 
+export fig_size=$default_fig_size
 
 # ### Predicted standard deviation vs Vs30 plot
 # export fig_size="3.25, 2.5"
@@ -90,7 +90,7 @@ export fig_size=$default_fig_size
 # python "${scripts_dir}/gen_paper_figures.py" predicted-std-vs30 "${cv_model_dir}" "${out_dir}" 
 # export fig_size=$default_fig_size
 
-### Global feature importance
+# ## Global feature importance
 # echo "Generating global feature importance plot..."
 # export fig_size="6.5, 2.5"
 # python "${scripts_dir}/gen_paper_figures.py" gen-global-feature-importance "${cv_model_dir}" "${out_dir}"
@@ -104,10 +104,14 @@ export fig_size=$default_fig_size
 # python "${scripts_dir}/gen_paper_figures.py" gen-feature-trend-plots "${cv_model_dir}" "${out_dir}" nzenvds_topo_roughness nz_geology_age_ln_mid subrock_median_proxy elevation
 # export fig_size=$default_fig_size
 
-# ## Vs30 map
+## Vs30 map
 # echo "Generating Vs30 map..."
+# export gmt_fig_font_label="10p,Helvetica-Bold,black"
+# export gmt_fig_minor_font_label="6p,Helvetica,black"
 # python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "ni" --town Taupo --town "Palmerston North" --town Napier --region Taranaki --region "East Cape" --label "a) North Island: ML Model (This Study)" --no-show-colorbar
 # python "${scripts_dir}/gen_paper_figures.py" gen-vs30-map "${full_model_dir}" "${out_dir}" "si" --town Greymouth --town Haast --town Nelson --town Blenheim --label "c) South Island: ML Model (This Study)"
+# export gmt_fig_font_label=$default_gmt_fig_font_label
+# export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 
 # ### Vs30 Subregion map
 # echo "Generating Vs30 subregion map..."
@@ -122,8 +126,12 @@ export fig_size=$default_fig_size
 
 # ## Residual map
 # echo "Generating residual map..."
+# export gmt_fig_font_label="10p,Helvetica-Bold,black"
+# export gmt_fig_minor_font_label="6p,Helvetica,black"
 # python "${scripts_dir}/gen_paper_figures.py" gen-residual-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "ni" --use-kriged --label "b) North Island: ln(Foster) - ln(ML)" --no-show-colorbar
 # python "${scripts_dir}/gen_paper_figures.py" gen-residual-map "${full_model_dir}/nz_vs30_results.nc" "${out_dir}" "si" --use-kriged --label "d) South Island: ln(Foster) - ln(ML)"
+# export gmt_fig_font_label=$default_gmt_fig_font_label
+# export gmt_fig_minor_font_label=$default_gmt_fig_minor_font_label
 
 # ### Residual Subregion map
 # echo "Generating residual subregion map..."
@@ -141,16 +149,16 @@ export fig_size=$default_fig_size
 # export fig_size=$default_fig_size
 
 
-### ------------------- Electronic Supplement - Figures -------------------
+# ### ------------------- Electronic Supplement - Figures -------------------
 
-# Input variables
-variables=(
-  "nz_geology_age_ln_mid"
-  "nzenvds_topo_roughness"
-  "elevation"
-  "subrock_median_proxy"
-  "nzenvds_topo_normalised_height"
-)
+# # Input variables
+# variables=(
+#   "nz_geology_age_ln_mid"
+#   "nzenvds_topo_roughness"
+#   "elevation"
+#   "subrock_median_proxy"
+#   "nzenvds_topo_normalised_height"
+# )
 
 # ### Input variable maps & distributions
 # export fig_size="6.5, 2.75"
@@ -163,4 +171,3 @@ variables=(
 
 # # Predicted standard deviation
 # python "${scripts_dir}/gen_paper_figures.py" gen-pred-std-map "${full_model_dir}" "${out_dir}" "nz_full"
-

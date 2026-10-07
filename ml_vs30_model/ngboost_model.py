@@ -350,19 +350,12 @@ def run_model_training(
     if run_config.use_analytic_label_noise:
         logger.info("Using analytic label-uncertainty likelihood.")
 
-        def _effective_sigma_l(index: pd.Index) -> np.ndarray:
-            sigma_l = dataset_df.loc[index, "ln_vs30_std"].values.copy()
-            if run_config.q3_sigma_l_override is not None:
-                sigma_l[(dataset_df.loc[index, "quality_score"] == "Q3").values] = (
-                    run_config.q3_sigma_l_override
-                )
-            return sigma_l
-
+        label_std = pre_processing.get_label_std(dataset_df, run_config)
         mod_train_y = build_label_noise_y(
-            train_y.values, _effective_sigma_l(train_y.index)
+            train_y.values, label_std.loc[train_y.index].values
         )
         mod_val_y = build_label_noise_y(
-                val_y.values, _effective_sigma_l(val_y.index)
+                val_y.values, label_std.loc[val_y.index].values
             ) if val_y is not None else None
 
         mod_train_X, mod_val_X, mod_sample_weights = train_X, val_X, sample_weights

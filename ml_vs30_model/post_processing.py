@@ -45,6 +45,31 @@ def add_mae(results_df: pd.DataFrame) -> pd.DataFrame:
     return results_df
 
 
+def add_std_residuals(
+    results_df: pd.DataFrame,
+    include_label_std: bool = False,
+    run_config: RunConfig | None = None,
+) -> pd.DataFrame:
+    """
+    Adds standardised residuals, (ln(vs30) - ln(pred_vs30)) / pred_vs30_std,
+    to the provided results dataframe.
+    If include_label_std, the denominator is instead
+    sqrt(pred_vs30_std^2 + label_std^2), where label_std is the per-site
+    ln_vs30_std from the run config's dataset (with its Q3 override applied, if set).
+    """
+    denom = results_df["pred_vs30_std"]
+    if include_label_std:
+        assert run_config is not None, "run_config is required when include_label_std."
+        label_std = pre_processing.get_label_std(
+            pd.read_parquet(run_config.dataset_ffp), run_config
+        ).loc[results_df.index]
+        denom = np.sqrt(denom**2 + label_std**2)
+    results_df["std_residual"] = (
+        np.log(results_df["vs30"]) - np.log(results_df["pred_vs30"])
+    ) / denom
+    return results_df
+
+
 def add_lnVs30_mse(results_df: pd.DataFrame) -> pd.DataFrame:
     """
     Adds mean squared error (MSE) to the provided results dataframe.
@@ -828,35 +853,46 @@ def print_vs30_bin_metrics(
     print(display_df.to_string())
 
 
-def print_quality_bin_metrics(results_df: pd.DataFrame, weighted: bool = False):
+def print_quality_bin_metrics(
+    results_df: pd.DataFrame,
+    weighted: bool = False,
+    include_label_std: bool = False,
+    run_config: RunConfig | None = None,
+):
     """
     Prints the actual residual (ln_residual) and standardised residual
     (ln_residual / pred_vs30_std) mean and std, grouped by quality_score.
     Unweighted: also a KS test of the standardised residuals against N(0, 1)
     (KS statistic and the 5% critical value, 1.36/sqrt(n)).
     Weighted: mean and std are weighted by the sample_weight column, no KS test.
+    If include_label_std, the standardised residuals also account for the
+    label uncertainty (see add_std_residuals), requires run_config.
     """
-    cur_df = results_df.assign(
-        z=results_df["ln_residual"] / results_df["pred_vs30_std"]
-    )
+    cur_df = add_std_residuals(results_df.copy(), include_label_std, run_config)
 
     def summary(df: pd.DataFrame) -> pd.Series:
         weights = df["sample_weight"] if weighted else None
         row = {"n": len(df)}
-        for metric in ["ln_residual", "z"]:
+        for metric in ["ln_residual", "std_residual"]:
             mean = np.average(df[metric], weights=weights)
             std = np.sqrt(np.cov(df[metric], aweights=weights))
             row[metric] = f"{mean:.3f} ± {std:.3f}"
         if not weighted:
-            row["ks_stat"] = f"{stats.kstest(df['z'], 'norm').statistic:.3f}"
+            row["ks_stat"] = f"{stats.kstest(df['std_residual'], 'norm').statistic:.3f}"
             row["ks_crit"] = f"{1.36 / np.sqrt(len(df)):.3f}"
         return pd.Series(row)
 
     print("------------------------------------------")
-    print(f"Residual metrics per quality bin{' (sample weighted)' if weighted else ''}")
+    print(
+        f"Residual metrics per quality bin"
+        f"{' (sample weighted)' if weighted else ''}"
+        f"{' (incl. label std)' if include_label_std else ''}"
+    )
 
     display_df = cur_df.groupby("quality_score", observed=True)[
-        ["ln_residual", "z", "sample_weight"] if weighted else ["ln_residual", "z"]
+        ["ln_residual", "std_residual", "sample_weight"]
+        if weighted
+        else ["ln_residual", "std_residual"]
     ].apply(summary)
     display_df = pd.concat([display_df, summary(cur_df).rename("Total").to_frame().T])
 
