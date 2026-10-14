@@ -84,7 +84,6 @@ def cv_train_ngboost(
     n_cv_folds: int | None = None,
     n_iterations: int | None = None,
     apply_vs30_sample_weights: bool | None = None,
-    apply_quality_sample_weights: bool | None = None,
     id_suffix: str | None = None,
     run_post_processing: bool = True,
     extra_input_variables: list[str] | None = None,
@@ -102,7 +101,6 @@ def cv_train_ngboost(
         rel_dataset_ffp=rel_dataset_ffp,
         n_cv_folds=n_cv_folds,
         apply_vs30_sample_weights=apply_vs30_sample_weights,
-        apply_quality_sample_weights=apply_quality_sample_weights,
         iterations=n_iterations,
         extra_input_variables=extra_input_variables,
         rel_results_dir=rel_results_dir,
@@ -152,7 +150,6 @@ def cv_train_catboost(
     n_cv_folds: int | None = None,
     n_iterations: int | None = None,
     apply_vs30_sample_weights: bool | None = None,
-    apply_quality_sample_weights: bool | None = None,
     id_suffix: str | None = None,
     run_post_processing: bool = True,
     extra_input_variables: list[str] | None = None,
@@ -171,7 +168,6 @@ def cv_train_catboost(
         apply_vs30_sample_weights=apply_vs30_sample_weights,
         iterations=n_iterations,
         extra_input_variables=extra_input_variables,
-        apply_quality_sample_weights=apply_quality_sample_weights,
     )
 
     id_suffix = f"_{id_suffix}" if id_suffix is not None else ""
@@ -453,6 +449,110 @@ def print_quality_bin_metrics(cv_model_dir: Path, include_label_std: bool = Fals
         include_label_std=include_label_std,
         run_config=run_config,
     )
+
+
+
+@app.command("print-grid-input-coverage")
+def print_grid_input_coverage(full_model_dir: Path, input_grid_ffp: Path):
+    """
+    For each input variable of the given full model, print the share of
+    NZ grid cells that fall outside the range of the training data
+    (i.e. all sites except the test sites). Only grid cells for which
+    a prediction is made (no NaN in any input) are considered.
+    """
+    mlt.utils.setup_logging()
+    run_config = vs30.RunConfig.from_yaml(full_model_dir / "run_config.yaml")
+    train_df = pd.read_parquet(run_config.dataset_ffp)
+    train_df = train_df[~train_df.index.isin(run_config.test_sites)]
+
+    # Same loading and masking as used for the NZ-wide estimation
+    with xr.open_dataset(input_grid_ffp, mode="r", mask_and_scale=False) as ds:
+        valid_mask = ds["on_land"].values.astype(bool)
+        for var in run_config.input_variables:
+            valid_mask &= ~np.isnan(ds[var].values)
+
+        rows = []
+        for var in run_config.input_variables:
+            grid_values = ds[var].values[valid_mask]
+            train_min, train_max = train_df[var].min(), train_df[var].max()
+            rows.append(
+                {
+                    "variable": var,
+                    "train_min": train_min,
+                    "train_max": train_max,
+                    "grid_p0.1": np.percentile(grid_values, 0.1),
+                    "grid_p99.9": np.percentile(grid_values, 99.9),
+                    "grid_min": grid_values.min(),
+                    "grid_max": grid_values.max(),
+                    "pct_below": 100 * np.mean(grid_values < train_min),
+                    "pct_above": 100 * np.mean(grid_values > train_max),
+                }
+            )
+
+    print(f"Number of training sites: {len(train_df)}")
+    print(f"Number of valid grid cells: {valid_mask.sum()}")
+    with pd.option_context("display.width", 200, "display.max_columns", None):
+        print(pd.DataFrame(rows).set_index("variable").round(3))
+
+
+@app.command("q3-sigma-sweep")
+def q3_sigma_sweep(
+    run_config_ffp: Path,
+    q3_sigma_l: list[float] = typer.Option(..., help="Q3 sigma_L override values"),
+    seeds: list[int] = typer.Option(..., help="Seeds, used for every override value"),
+    sweep_dir: Path | None = None,
+    n_procs: int = 1,
+    n_iterations: int | None = None,
+):
+    """
+    Q3 label uncertainty calibration sweep: one CV run (no post-processing,
+    model saving or SHAP) of the given run config per (seed, q3_sigma_l) pair.
+    Every override value uses the same seeds, so the CV folds are paired across values.
+    Runs that already have a val_results.parquet are skipped, so an interrupted
+    sweep is resumed by passing its sweep_dir.
+    Finally summarises the sweep, see post_processing.summarise_q3_sigma_sweep.
+    """
+    mlt.utils.setup_logging()
+    if sweep_dir is None:
+        sweep_dir = (
+            vs30.RunConfig.from_yaml(run_config_ffp).results_dir
+            / f"{mlt.utils.create_run_id(True)}_q3_sigma_sweep"
+        )
+
+    for seed in seeds:
+        for cur_q3_sigma_l in q3_sigma_l:
+            run_dir = sweep_dir / f"seed{seed}_q3sl{cur_q3_sigma_l:.3f}"
+            if (run_dir / "val_results.parquet").exists():
+                print(f"Skipping {run_dir.name}, already exists")
+                continue
+
+            run_config = vs30.RunConfig.from_config_kwargs(
+                run_config_ffp, seed=seed, q3_sigma_l_override=cur_q3_sigma_l, iterations=n_iterations
+            )
+            assert (
+                run_config.use_analytic_label_noise
+            ), "The Q3 sigma_L override is only used with the analytic label-noise likelihood."
+            vs30.ngboost_model.cv_train(
+                run_config,
+                run_dir,
+                run_post_processing=False,
+                n_procs=n_procs,
+                save_model=False,
+                compute_shap=False,
+            )
+
+    vs30.post_processing.summarise_q3_sigma_sweep(sweep_dir)
+
+
+
+@app.command("summarise-q3-sigma-sweep")
+def summarise_q3_sigma_sweep(sweep_dir: Path):
+    """
+    Re-runs the summary of an existing q3-sigma-sweep results dir,
+    see post_processing.summarise_q3_sigma_sweep.
+    """
+    mlt.utils.setup_logging()
+    vs30.post_processing.summarise_q3_sigma_sweep(sweep_dir)
 
 
 if __name__ == "__main__":

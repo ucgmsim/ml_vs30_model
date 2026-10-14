@@ -11,6 +11,7 @@ import shapely
 import xarray as xr
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from scipy import stats
 from catboost import CatBoostRegressor
 from ngboost import NGBRegressor
@@ -56,6 +57,7 @@ def add_std_residuals(
     If include_label_std, the denominator is instead
     sqrt(pred_vs30_std^2 + label_std^2), where label_std is the per-site
     ln_vs30_std from the run config's dataset (with its Q3 override applied, if set).
+    The denominator is also stored, as pred_total_std.
     """
     denom = results_df["pred_vs30_std"]
     if include_label_std:
@@ -64,6 +66,7 @@ def add_std_residuals(
             pd.read_parquet(run_config.dataset_ffp), run_config
         ).loc[results_df.index]
         denom = np.sqrt(denom**2 + label_std**2)
+    results_df["pred_total_std"] = denom
     results_df["std_residual"] = (
         np.log(results_df["vs30"]) - np.log(results_df["pred_vs30"])
     ) / denom
@@ -897,3 +900,119 @@ def print_quality_bin_metrics(
     display_df = pd.concat([display_df, summary(cur_df).rename("Total").to_frame().T])
 
     print(display_df.to_string())
+
+
+def quality_bin_calibration_metrics(
+    results_df: pd.DataFrame, run_config: RunConfig
+) -> pd.DataFrame:
+    """
+    Calibration metrics, per quality_score and in total, of the predictive
+    distribution of the measured ln(vs30), i.e. including the label uncertainty
+    (see add_std_residuals).
+
+    Columns:
+    - n
+    - nll: mean negative log-likelihood of the measured ln(vs30)
+    - z_mean, z_std: standardised residual mean and std
+    - ks_stat, ks_crit: KS test of z against N(0, 1), and its 5% critical value
+    - cov_68, cov_95: fraction of sites within the 68% and 95% intervals
+    - z_mean_w, z_std_w: sample weighted z mean and std
+    - sigma_hat_median: median predicted std (excl. label uncertainty)
+    """
+    cur_df = add_std_residuals(
+        results_df.copy(), include_label_std=True, run_config=run_config
+    )
+
+    def metrics(df: pd.DataFrame) -> pd.Series:
+        z = df["std_residual"]
+        return pd.Series(
+            {
+                "n": len(df),
+                "nll": (np.log(df["pred_total_std"]) - stats.norm.logpdf(z)).mean(),
+                "z_mean": z.mean(),
+                "z_std": z.std(),
+                "ks_stat": stats.kstest(z, "norm").statistic,
+                "ks_crit": 1.36 / np.sqrt(len(df)),
+                "cov_68": (z.abs() <= 1.0).mean(),
+                "cov_95": (z.abs() <= 1.96).mean(),
+                "z_mean_w": np.average(z, weights=df["sample_weight"]),
+                "z_std_w": np.sqrt(np.cov(z, aweights=df["sample_weight"])),
+                "sigma_hat_median": df["pred_vs30_std"].median(),
+            }
+        )
+
+    metric_df = cur_df.groupby("quality_score", observed=True)[
+        ["std_residual", "pred_total_std", "pred_vs30_std", "sample_weight"]
+    ].apply(metrics)
+    return pd.concat([metric_df, metrics(cur_df).rename("Total").to_frame().T])
+
+
+def summarise_q3_sigma_sweep(sweep_dir: Path) -> pd.DataFrame:
+    """
+    Summarises a Q3 sigma_L sweep (model_cmds.py q3-sigma-sweep): calibration
+    metrics per (seed, q3_sigma_l, quality class) are saved to sweep_metrics.csv,
+    and the seed-averaged metrics vs q3_sigma_l are written to
+    q3_sigma_sweep_summary.md (and printed) and plotted (q3_sigma_sweep.png).
+    Returns the per-run metrics.
+
+    Pick the override with the lowest Q1 NLL, as long as the model's
+    sigma_hat (sigma_hat_median) stays realistic.
+    """
+    metric_dfs = []
+    for run_dir in sorted(sweep_dir.glob("seed*_q3sl*")):
+        run_config = RunConfig.from_yaml(run_dir / "run_config.yaml")
+        metric_dfs.append(
+            quality_bin_calibration_metrics(
+                pd.read_parquet(run_dir / "val_results.parquet"), run_config
+            )
+            .rename_axis("quality_score")
+            .reset_index()
+            .assign(seed=run_config.seed, q3_sigma_l=run_config.q3_sigma_l_override)
+        )
+    metric_df = pd.concat(metric_dfs, ignore_index=True)
+    metric_df.to_csv(sweep_dir / "sweep_metrics.csv", index=False)
+
+    mean_df = metric_df.groupby(["quality_score", "q3_sigma_l"]).mean(numeric_only=True)
+    summary = [
+        "# Q3 sigma_L sweep summary",
+        "",
+        f"Seeds: {', '.join(str(seed) for seed in sorted(metric_df['seed'].unique()))}",
+        "",
+        f"Q1 NLL minimum at {mean_df.loc['Q1', 'nll'].idxmin()}",
+    ]
+    for quality_score in ["Q1", "Q2", "Q3", "Total"]:
+        cur_df = mean_df.loc[
+            quality_score,
+            ["z_mean_w", "z_std_w", "sigma_hat_median"]
+            if quality_score == "Total"
+            else ["nll", "z_mean", "z_std", "ks_stat", "ks_crit", "cov_68", "cov_95", "sigma_hat_median"],
+        ]
+        summary += [
+            "",
+            f"## {quality_score} (mean over seeds)",
+            "",
+            "```",
+            cur_df.round(3).to_string(),
+            "```",
+        ]
+    summary = "\n".join(summary) + "\n"
+    (sweep_dir / "q3_sigma_sweep_summary.md").write_text(summary)
+    print(summary)
+
+    fig, axs = plt.subplots(1, 3, figsize=(15, 4))
+    for quality_score in ["Q1", "Q2", "Q3"]:
+        cur_df = mean_df.loc[quality_score]
+        axs[0].plot(cur_df.index, cur_df["nll"], marker="o", label=quality_score)
+        axs[1].plot(cur_df.index, cur_df["z_std"], marker="o", label=quality_score)
+        axs[2].plot(cur_df.index, cur_df["sigma_hat_median"], marker="o", label=quality_score)
+    axs[1].axhline(1.0, color="k", linestyle="--", linewidth=0.75)
+    for ax, ylabel in zip(axs, ["Mean NLL", "z std", "Median sigma_hat"]):
+        ax.set_xlabel("Q3 sigma_L override")
+        ax.set_ylabel(ylabel)
+        ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+        ax.legend()
+    fig.tight_layout()
+    fig.savefig(sweep_dir / "q3_sigma_sweep.png", dpi=150)
+    plt.close(fig)
+
+    return metric_df
