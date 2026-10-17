@@ -1368,6 +1368,7 @@ def gen_residual_scatter_plot(
     is_foster: bool = False,
     full_model_dir: Path = None,
     hide_x_label: bool = False,
+    log_x_axis: bool = False
 ):
     logger = mlt.utils.setup_logging()
     _fig_settings(logger)
@@ -1486,6 +1487,10 @@ def gen_residual_scatter_plot(
     )
 
     ax.legend(loc="lower right")
+
+    if log_x_axis:
+        ax.set_xscale("log")
+        ax.set_xlim(100, 1550)
 
     fig.tight_layout()
     fig.savefig(
