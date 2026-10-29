@@ -332,12 +332,12 @@ def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
 
 
 @app.command("add-krigged-vs30")
-def add_krigged_vs30(full_model_dir: Path):
+def add_krigged_vs30(full_model_dir: Path, fix_nugget: bool = True):
     """
     Adds krigged Vs30 estimates to the dataset used for the full model.
     """
     mlt.utils.setup_logging()
-    vs30.post_processing.add_krigged_vs30(full_model_dir)
+    vs30.post_processing.add_krigged_vs30(full_model_dir, fix_nugget=fix_nugget)
 
 
 @app.command("add-kriged-vs30-foster-original-residuals")
@@ -432,8 +432,6 @@ def print_quality_bin_metrics(cv_model_dir: Path, include_label_std: bool = Fals
     For the given CV model results, print the actual residual and
     standardised residual (mean and std) for each quality bin,
     unweighted (with KS test) and sample weighted (without KS test).
-    If include_label_std, the standardised residuals also account for the
-    label uncertainty, using the run config in cv_model_dir.
     """
     mlt.utils.setup_logging()
     val_results = pd.read_parquet(cv_model_dir / "val_results.parquet")
@@ -457,8 +455,6 @@ def print_grid_input_coverage(full_model_dir: Path, input_grid_ffp: Path):
     """
     For each input variable of the given full model, print the share of
     NZ grid cells that fall outside the range of the training data
-    (i.e. all sites except the test sites). Only grid cells for which
-    a prediction is made (no NaN in any input) are considered.
     """
     mlt.utils.setup_logging()
     run_config = vs30.RunConfig.from_yaml(full_model_dir / "run_config.yaml")
@@ -507,10 +503,6 @@ def q3_sigma_sweep(
     """
     Q3 label uncertainty calibration sweep: one CV run (no post-processing,
     model saving or SHAP) of the given run config per (seed, q3_sigma_l) pair.
-    Every override value uses the same seeds, so the CV folds are paired across values.
-    Runs that already have a val_results.parquet are skipped, so an interrupted
-    sweep is resumed by passing its sweep_dir.
-    Finally summarises the sweep, see post_processing.summarise_q3_sigma_sweep.
     """
     mlt.utils.setup_logging()
     if sweep_dir is None:

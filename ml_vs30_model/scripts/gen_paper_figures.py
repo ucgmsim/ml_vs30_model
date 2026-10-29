@@ -102,9 +102,9 @@ def gen_site_map(dataset_ffp: Path, output_dir: Path):
     legend_spec = io.StringIO()
     legend_spec.write("H 12p,Helvetica-Bold Site Quality\n")
     legend_spec.write("D 0.1i 1p\n")
-    legend_spec.write("S 0.1i c 0.25c black 0.4p,black 0.4i Q1 (N=115)\n")
-    legend_spec.write("S 0.1i d 0.25c black 0.4p,black 0.4i Q2 (N=40)\n")
-    legend_spec.write("S 0.1i t 0.25c black 0.5p,black 0.4i Q3 (N=717)\n")
+    legend_spec.write(f"S 0.1i c 0.25c black 0.4p,black 0.4i Q1 (N={q1_mask.sum()})\n")
+    legend_spec.write(f"S 0.1i d 0.25c black 0.4p,black 0.4i Q2 (N={q2_mask.sum()})\n")
+    legend_spec.write(f"S 0.1i t 0.25c black 0.5p,black 0.4i Q3 (N={q3_mask.sum()})\n")
     spatial_plot.fig.legend(
         spec=legend_spec, position="JTR+jTR+o0.2c", box="+gwhite+p1p"
     )

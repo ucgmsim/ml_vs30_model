@@ -14,9 +14,41 @@ drop_sites:
   - 017A  # Same as GISS
   - 249A  # Same as 642H
   - 642G  # Same as 642H
-  - 646A  # Same as 646C
+  - 646A  # Same as 646B
   - D10C  # Same as CCPS
   - 044A  # Same as SKFS
+  # Co-located duplicates (< 10 m apart, identical VS30)
+  - 051D  # Same as 051B
+  - 266A  # Same as 051B
+  - 914B  # Same as 914A
+  - 027G  # Same as 027F
+  - 259A  # Same as 046A
+  - 935B  # Same as 935A
+  - 935C  # Same as 935A
+  - 027C  # Same as 027A
+  - 039E  # Same as 039D
+  - 042A  # Same as HSES
+  - 048D  # Same as 048C
+  - 267A  # Same as 052A
+  - 112B  # Same as 112A
+  - 642A  # Same as 642H
+  - 646C  # Same as 646B
+  - 921A  # Same as 648A
+  - STKS  # Same as D13C
+  - MTPS  # Same as D15C
+  - DALS  # Same as D04C
+  - EKS1  # Same as TRMS
+  - TA2S  # Same as MWFS
+  - TON8  # Same as NTVZ
+  - OPZ   # Same as HHSZ
+  # Co-located, conflicting VS30: keep the latest station
+  - 465A  # Conflicts with DAVS (latest)
+  - 465B  # Conflicts with DAVS (latest)
+  - 918B  # Conflicts with WEL (latest)
+  - 918C  # Conflicts with WEL (latest)
+  - EYRS  # Conflicts with EYCZ (latest)
+  - KAAZ  # Conflicts with KAPS (latest)
+  - RCS2  # Conflicts with SEDS
 
 drop_quality_score: null
 

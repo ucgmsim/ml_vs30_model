@@ -12,7 +12,7 @@ apply_mc_label_sampling: false
 mc_label_sampling_n: 50
 
 use_analytic_label_noise: true
-q3_sigma_l_override: 0.15
+q3_sigma_l_override: 0.125
 
 rel_dataset_ffp: datasets/nz_combined.parquet
 rel_test_sites_ffp: datasets/nz_site_db_test_sites/test_sites.npy

@@ -15,10 +15,10 @@ foster_nz_dataset="${VS30_MODEL_BASE_DATA_DIR}/datasets/foster.parquet"
 foster_nz_dataset_results="${VS30_MODEL_BASE_DATA_DIR}/results/foster/foster_noMVN_nzCombined.parquet"
 foster_tif="${VS30_MODEL_BASE_DATA_DIR}/nz_estimates/foster_original/foster_paper_original.tif"
 
-cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1015_085735_ngboost_v4p22"
-full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1015_085844_full_ngboostV4p22"
-cv_model_slope_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1015_090353_ngboost_v4p22_slope"
-cv_model_noSubRockProxy_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1015_090017_ngboost_v4p22_noSubRockProxy"
+cv_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1028_130656_ngboost_v4p22"
+full_model_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1028_130945_full_ngboostV4p22"
+cv_model_slope_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1028_130833_ngboost_v4p22_slope"
+cv_model_noSubRockProxy_dir="${VS30_MODEL_BASE_DATA_DIR}/results/ind_results/1028_130858_ngboost_v4p22_noSubRockProxy"
 
 out_dir="/Users/claudy/dev/work/tmp/vs30_plots"
 
@@ -81,13 +81,7 @@ export fig_size=$default_fig_size
 ### Standardized residuals CDF
 export fig_size="3.25, 2.5"
 echo "Generating standardized residuals CDF plot..."
-python "${scripts_dir}/gen_paper_figures.py" gen-std-res-cdf-plot "${cv_model_dir}/val_results.parquet" "${out_dir}" 
-export fig_size=$default_fig_size
-
-### Predicted standard deviation vs Vs30 plot
-export fig_size="3.25, 2.5"
-echo "Generating predicted standard deviation vs Vs30 plot..."
-python "${scripts_dir}/gen_paper_figures.py" predicted-std-vs30 "${cv_model_dir}" "${out_dir}" 
+python "${scripts_dir}/gen_paper_figures.py" gen-std-res-cdf-plot "${cv_model_dir}/val_results.parquet" "${out_dir}" --include-label-std
 export fig_size=$default_fig_size
 
 ## Global feature importance

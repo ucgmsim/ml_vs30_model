@@ -549,7 +549,7 @@ def add_ml_model_residuals(dataset_ffp: Path, other_dataset_ffp: Path):
     ds.to_netcdf(dataset_ffp, mode="a")
 
 
-def add_krigged_vs30(full_model_dir: Path):
+def add_krigged_vs30(full_model_dir: Path, fix_nugget: bool = True):
     """
     Post-proccessing step for the final model!
     Updates the Vs30 estimates with krigged estimates
@@ -578,15 +578,6 @@ def add_krigged_vs30(full_model_dir: Path):
         full_model_dir / "nz_vs30_results.nc"
     )
 
-    # with xr.open_dataset(full_model_dir / "nz_vs30_results.nc") as nz_ds:
-    # nz_vs30_da = nz_ds.vs30
-
-    # grid_x, grid_y = np.meshgrid(nz_vs30_da.x.values, nz_vs30_da.y.values)
-    # nan_mask = nz_vs30_da.isnull().values
-    # target_locs = np.column_stack((grid_x[~nan_mask], grid_y[~nan_mask]))
-
-    # target_locs = coords[~nan_mask]
-
     # Compute standardized residuals
     ln_residual_mean = results_df["ln_residual"].mean()
     ln_residual_std = results_df["ln_residual"].std()
@@ -596,7 +587,7 @@ def add_krigged_vs30(full_model_dir: Path):
 
     # Fit the variogram model to the standardized residuals
     logger.info("Fitting variogram model to standardized residuals...")
-    model_type = "powered_exponential"
+    model_type = "exponential"
     distance_type = "cartesian"
     h_lag, n_obs, gamma, params_nug, r2_wls, r2_ols = variofit(
         values=results_df["ln_residual_z"],
@@ -610,7 +601,7 @@ def add_krigged_vs30(full_model_dir: Path):
         weight_params=None,
         xmax_factor=100,
         fix_sill=True,
-        fix_nugget=True,
+        fix_nugget=fix_nugget,
         plot=True,
         plot_path=full_model_dir / "kriging_variogram.png",
         transform="correlation",
@@ -651,20 +642,6 @@ def add_krigged_vs30(full_model_dir: Path):
     kriging_df.to_parquet(full_model_dir / "kriging_estimates.parquet", index=False)
 
     kriged_vs30 = np.exp(np.log(nz_vs30_da.values[~nan_mask]) + est)
-
-    kriged_vs30_da = xr.DataArray(
-        data=np.full(nz_vs30_da.shape, np.nan),
-        coords=[nz_vs30_da.y.values, nz_vs30_da.x.values],
-        dims=["y", "x"],
-    )
-    kriged_vs30_da.values[~nan_mask] = kriged_vs30
-
-    kriged_vs30_std_da = xr.DataArray(
-        data=np.full(nz_vs30_da.shape, np.nan),
-        coords=[nz_vs30_da.y.values, nz_vs30_da.x.values],
-        dims=["y", "x"],
-    )
-    kriged_vs30_std_da.values[~nan_mask] = std
 
     ds = _create_dataset_from_estimates(
         nz_vs30_da, nan_mask, kriged_vs30, "kriged", std_estimate=std
